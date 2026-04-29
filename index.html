@@ -1,0 +1,1555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Radiant — Booking Platform</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --r-gold: #C9A96E;
+  --r-gold-light: #F0E0C0;
+  --r-gold-dark: #8B6B3A;
+  --r-cream: #FAF8F4;
+  --r-charcoal: #1C1C1E;
+  --r-warm-gray: #6B6560;
+  --r-border: rgba(201,169,110,0.25);
+  --r-surface: #FFFFFF;
+  --r-surface2: #F7F4EF;
+  --r-green: #3D6B4F;
+  --r-green-light: #E8F2EC;
+  --r-red: #9B3A3A;
+  --r-red-light: #F5EBEB;
+  --r-blue: #2D5B8A;
+  --r-blue-light: #E8EFF7;
+  --sidebar-w: 230px;
+  --header-h: 62px;
+}
+
+html, body { height: 100%; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--r-cream);
+  color: var(--r-charcoal);
+  font-size: 14px;
+  overflow: hidden;
+}
+
+.app { display: flex; height: 100vh; }
+
+/* ── SIDEBAR ── */
+.sidebar {
+  width: var(--sidebar-w);
+  background: var(--r-charcoal);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.sidebar-logo {
+  padding: 22px 20px 18px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.logo-wordmark {
+  font-family: 'Playfair Display', serif;
+  font-size: 22px;
+  color: var(--r-gold);
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+.logo-sub {
+  font-size: 10px;
+  color: rgba(255,255,255,0.35);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+
+.view-toggle {
+  display: flex;
+  gap: 6px;
+  padding: 14px 14px 6px;
+}
+
+.toggle-btn {
+  flex: 1;
+  padding: 7px 0;
+  border-radius: 7px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: none;
+  color: rgba(255,255,255,0.4);
+  font-size: 11.5px;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  transition: all 0.15s;
+}
+
+.toggle-btn.active {
+  background: rgba(201,169,110,0.2);
+  border-color: var(--r-gold);
+  color: var(--r-gold);
+}
+
+.sidebar-section { padding: 14px 12px 6px; }
+
+.sidebar-section-label {
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.28);
+  padding: 0 8px;
+  margin-bottom: 5px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: rgba(255,255,255,0.5);
+  font-size: 13.5px;
+  transition: all 0.15s;
+  margin-bottom: 1px;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.nav-item:hover { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.85); }
+.nav-item.active { background: rgba(201,169,110,0.16); color: var(--r-gold); }
+
+.nav-icon { font-size: 15px; width: 18px; text-align: center; flex-shrink: 0; opacity: 0.8; }
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 16px 14px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+.user-pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 9px;
+  background: rgba(255,255,255,0.05);
+}
+
+.avatar {
+  border-radius: 50%;
+  background: var(--r-gold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 500;
+  color: var(--r-charcoal);
+  flex-shrink: 0;
+}
+
+/* ── MAIN ── */
+.main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+
+.topbar {
+  height: var(--header-h);
+  background: var(--r-surface);
+  border-bottom: 1px solid rgba(0,0,0,0.07);
+  display: flex;
+  align-items: center;
+  padding: 0 28px;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.topbar-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 19px;
+  font-weight: 500;
+}
+
+.topbar-spacer { flex: 1; }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 18px;
+  border-radius: 8px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: none;
+  white-space: nowrap;
+}
+
+.btn-primary { background: var(--r-gold); color: var(--r-charcoal); }
+.btn-primary:hover { background: #b8924f; }
+.btn-outline { background: none; border: 1px solid rgba(0,0,0,0.14); color: var(--r-charcoal); }
+.btn-outline:hover { border-color: var(--r-gold); color: var(--r-gold-dark); }
+.btn-ghost { background: none; border: none; color: var(--r-warm-gray); padding: 7px 10px; }
+.btn-ghost:hover { color: var(--r-charcoal); }
+.btn-sm { padding: 6px 14px; font-size: 12.5px; }
+.btn-danger { background: var(--r-red-light); color: var(--r-red); border: 1px solid rgba(155,58,58,0.18); }
+.btn-danger:hover { background: #efd8d8; }
+
+.content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 28px 30px;
+}
+
+/* ── CARDS ── */
+.card {
+  background: var(--r-surface);
+  border-radius: 14px;
+  border: 1px solid rgba(0,0,0,0.07);
+  overflow: hidden;
+}
+
+.card-header {
+  padding: 16px 22px;
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card-title { font-size: 14px; font-weight: 500; }
+.card-sub { font-size: 12px; color: var(--r-warm-gray); margin-top: 2px; }
+
+/* ── STATS ── */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.stat-card {
+  background: var(--r-surface);
+  border-radius: 14px;
+  border: 1px solid rgba(0,0,0,0.07);
+  padding: 20px 22px;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: var(--r-warm-gray);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-family: 'Playfair Display', serif;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.stat-delta { font-size: 11.5px; color: var(--r-green); margin-top: 5px; }
+
+/* ── LAYOUT ── */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.three-col { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+
+/* ── TABLE ── */
+table { width: 100%; border-collapse: collapse; }
+th {
+  padding: 11px 18px;
+  text-align: left;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--r-warm-gray);
+  background: var(--r-surface2);
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+  font-weight: 500;
+}
+td {
+  padding: 13px 18px;
+  border-bottom: 1px solid rgba(0,0,0,0.045);
+  font-size: 13.5px;
+  vertical-align: middle;
+}
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: rgba(201,169,110,0.03); }
+
+/* ── BADGES ── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11.5px;
+  font-weight: 500;
+}
+.badge-green { background: var(--r-green-light); color: var(--r-green); }
+.badge-gold { background: var(--r-gold-light); color: var(--r-gold-dark); }
+.badge-blue { background: var(--r-blue-light); color: var(--r-blue); }
+.badge-red { background: var(--r-red-light); color: var(--r-red); }
+.badge-gray { background: var(--r-surface2); color: var(--r-warm-gray); }
+
+/* ── ROOM CARDS ── */
+.room-card {
+  background: var(--r-surface);
+  border-radius: 14px;
+  border: 1px solid rgba(0,0,0,0.07);
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.room-card:hover { border-color: var(--r-gold); box-shadow: 0 4px 20px rgba(201,169,110,0.12); transform: translateY(-1px); }
+.room-visual { height: 88px; display: flex; align-items: center; justify-content: center; font-size: 30px; }
+.room-card-body { padding: 14px 16px; }
+.room-name { font-size: 14px; font-weight: 500; margin-bottom: 3px; }
+.room-detail { font-size: 12px; color: var(--r-warm-gray); }
+
+/* ── BOOKING ITEMS ── */
+.booking-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 22px;
+  border-bottom: 1px solid rgba(0,0,0,0.045);
+}
+.booking-item:last-child { border-bottom: none; }
+
+.date-box {
+  width: 46px; height: 46px;
+  border-radius: 10px;
+  background: var(--r-gold-light);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.date-day { font-size: 18px; font-family: 'Playfair Display', serif; font-weight: 600; color: var(--r-gold-dark); line-height: 1; }
+.date-mon { font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--r-gold-dark); }
+
+/* ── FORM ── */
+.form-row { margin-bottom: 16px; }
+.form-label { font-size: 11.5px; font-weight: 500; color: var(--r-warm-gray); margin-bottom: 6px; display: block; letter-spacing: 0.04em; text-transform: uppercase; }
+.form-input {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 9px;
+  border: 1px solid rgba(0,0,0,0.13);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  color: var(--r-charcoal);
+  background: var(--r-surface);
+  transition: border-color 0.15s;
+  outline: none;
+}
+.form-input:focus { border-color: var(--r-gold); box-shadow: 0 0 0 3px rgba(201,169,110,0.1); }
+textarea.form-input { resize: vertical; }
+.form-two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+/* ── TABS ── */
+.tabs { display: flex; border-bottom: 1px solid rgba(0,0,0,0.08); margin-bottom: 20px; }
+.tab {
+  padding: 10px 20px;
+  font-size: 13.5px;
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: var(--r-warm-gray);
+  font-family: 'DM Sans', sans-serif;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: all 0.15s;
+}
+.tab.active { color: var(--r-charcoal); border-bottom-color: var(--r-gold); font-weight: 500; }
+.tab:hover { color: var(--r-charcoal); }
+
+/* ── TIME SLOTS ── */
+.time-slots { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 10px 0; }
+.time-slot {
+  padding: 9px 4px;
+  border-radius: 8px;
+  border: 1px solid var(--r-border);
+  text-align: center;
+  cursor: pointer;
+  font-size: 12.5px;
+  transition: all 0.15s;
+  background: var(--r-surface);
+  font-family: 'DM Sans', sans-serif;
+}
+.time-slot:hover { border-color: var(--r-gold); color: var(--r-gold-dark); }
+.time-slot.selected { background: var(--r-gold); border-color: var(--r-gold); color: var(--r-charcoal); font-weight: 500; }
+.time-slot.booked { background: var(--r-surface2); color: rgba(0,0,0,0.22); cursor: not-allowed; border-color: transparent; }
+
+/* ── MODAL ── */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(28,28,30,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+.modal-overlay.open { opacity: 1; pointer-events: all; }
+
+.modal {
+  background: var(--r-surface);
+  border-radius: 18px;
+  width: 500px;
+  max-width: 96vw;
+  max-height: 90vh;
+  overflow-y: auto;
+  transform: translateY(14px) scale(0.98);
+  transition: transform 0.22s;
+}
+.modal-overlay.open .modal { transform: translateY(0) scale(1); }
+
+.modal-header {
+  padding: 22px 26px 18px;
+  border-bottom: 1px solid rgba(0,0,0,0.07);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+.modal-title { font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 500; }
+.modal-body { padding: 22px 26px; }
+.modal-footer { padding: 16px 26px; border-top: 1px solid rgba(0,0,0,0.07); display: flex; gap: 10px; justify-content: flex-end; }
+.close-btn { background: none; border: none; cursor: pointer; color: var(--r-warm-gray); font-size: 20px; padding: 2px 6px; border-radius: 6px; }
+.close-btn:hover { background: var(--r-surface2); }
+
+/* ── CALENDAR OPTIONS ── */
+.cal-option {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid rgba(0,0,0,0.09);
+  border-radius: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-bottom: 10px;
+}
+.cal-option:hover { border-color: var(--r-gold); background: rgba(201,169,110,0.04); }
+.cal-icon { font-size: 24px; width: 30px; text-align: center; }
+
+/* ── INVITE PILL ── */
+.invite-pill {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--r-surface2);
+  border: 1px dashed rgba(201,169,110,0.45);
+  border-radius: 11px;
+  padding: 13px 16px;
+  margin-bottom: 10px;
+}
+
+/* ── TOAST ── */
+.toast {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  background: var(--r-charcoal);
+  color: #fff;
+  padding: 13px 20px;
+  border-radius: 11px;
+  font-size: 13.5px;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transform: translateY(70px);
+  opacity: 0;
+  transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1);
+  border-left: 3px solid var(--r-gold);
+  max-width: 320px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+}
+.toast.show { transform: translateY(0); opacity: 1; }
+
+/* ── PAGE HEADER ── */
+.page-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 26px; }
+.page-title { font-family: 'Playfair Display', serif; font-size: 24px; font-weight: 500; }
+.page-sub { font-size: 13px; color: var(--r-warm-gray); margin-top: 4px; }
+.gold-line { width: 30px; height: 2px; background: var(--r-gold); border-radius: 2px; margin-top: 8px; }
+
+/* ── WELCOME BANNER ── */
+.welcome-banner {
+  background: var(--r-charcoal);
+  border-radius: 16px;
+  padding: 26px 30px;
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  overflow: hidden;
+}
+.welcome-banner::after {
+  content: '';
+  position: absolute;
+  right: -30px; top: -30px;
+  width: 160px; height: 160px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(201,169,110,0.18) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* ── VIEWS ── */
+.view-section { display: none; }
+.view-section.active { display: block; }
+
+/* ── NOTIFICATION BADGE ── */
+.notif-dot {
+  width: 7px; height: 7px;
+  background: var(--r-gold);
+  border-radius: 50%;
+  display: inline-block;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+/* ── LOGIN ── */
+#login-screen {
+  position: fixed; inset: 0;
+  background: var(--r-charcoal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.login-card {
+  background: var(--r-surface);
+  border-radius: 20px;
+  width: 420px;
+  padding: 40px;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.4);
+}
+
+.login-logo {
+  font-family: 'Playfair Display', serif;
+  font-size: 28px;
+  color: var(--r-gold);
+  margin-bottom: 4px;
+}
+
+.login-sub {
+  font-size: 12px;
+  color: var(--r-warm-gray);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 32px;
+}
+
+.login-divider {
+  display: flex;
+  gap: 10px;
+  margin: 10px 0 20px;
+}
+
+.login-role-btn {
+  flex: 1;
+  padding: 10px;
+  border-radius: 9px;
+  border: 1px solid rgba(0,0,0,0.12);
+  background: none;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+  color: var(--r-warm-gray);
+}
+.login-role-btn.active { border-color: var(--r-gold); background: rgba(201,169,110,0.08); color: var(--r-charcoal); font-weight: 500; }
+
+/* ── SETTINGS INTEGRATION CARD ── */
+.integration-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: var(--r-surface2);
+  border-radius: 11px;
+  margin-bottom: 10px;
+}
+
+/* ── NOTIFICATION ITEM ── */
+.notif-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+}
+.notif-item:last-child { border-bottom: none; }
+.notif-dot-lg { width: 9px; height: 9px; background: var(--r-gold); border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
+
+/* scrollbar */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 10px; }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════ LOGIN SCREEN ══════════════════ -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">Radiant</div>
+    <div class="login-sub">Booking Platform</div>
+
+    <div class="form-row">
+      <label class="form-label">Sign in as</label>
+      <div class="login-divider">
+        <button class="login-role-btn active" id="role-admin" onclick="setLoginRole('admin')">Administrator</button>
+        <button class="login-role-btn" id="role-practitioner" onclick="setLoginRole('practitioner')">Practitioner</button>
+        <button class="login-role-btn" id="role-member" onclick="setLoginRole('member')">Member</button>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label class="form-label">Email</label>
+      <input type="email" class="form-input" id="login-email" placeholder="your@email.com">
+    </div>
+    <div class="form-row" style="margin-bottom:24px;">
+      <label class="form-label">Password</label>
+      <input type="password" class="form-input" id="login-password" placeholder="••••••••">
+    </div>
+
+    <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;" onclick="doLogin()">Sign In to Radiant</button>
+
+    <p style="text-align:center;font-size:12px;color:var(--r-warm-gray);margin-top:18px;">
+      Demo: click any role above then Sign In
+    </p>
+  </div>
+</div>
+
+<!-- ══════════════════ APP SHELL ══════════════════ -->
+<div class="app" id="app-shell" style="display:none;">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-wordmark">Radiant</div>
+      <div class="logo-sub">Booking Platform</div>
+    </div>
+
+    <div class="view-toggle" id="role-toggle" style="display:none;">
+      <button class="toggle-btn active" id="toggle-admin" onclick="switchRole('admin')">Admin</button>
+      <button class="toggle-btn" id="toggle-client" onclick="switchRole('client')">Client</button>
+    </div>
+
+    <div id="admin-nav">
+      <div class="sidebar-section">
+        <div class="sidebar-section-label">Overview</div>
+        <button class="nav-item active" onclick="showView('dashboard')">
+          <span class="nav-icon">◈</span> Dashboard
+        </button>
+        <button class="nav-item" onclick="showView('bookings')">
+          <span class="nav-icon">◷</span> All Bookings
+        </button>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-section-label">Management</div>
+        <button class="nav-item" onclick="showView('rooms')">
+          <span class="nav-icon">⬡</span> Rooms &amp; Spaces
+        </button>
+        <button class="nav-item" onclick="showView('members')">
+          <span class="nav-icon">◎</span> Members
+        </button>
+        <button class="nav-item" onclick="showView('invite')">
+          <span class="nav-icon">✦</span> Invite Users
+        </button>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-section-label">System</div>
+        <button class="nav-item" onclick="showView('notifications')">
+          <span class="nav-icon">◉</span> Notifications <span class="notif-dot"></span>
+        </button>
+        <button class="nav-item" onclick="showView('settings')">
+          <span class="nav-icon">⚙</span> Settings
+        </button>
+      </div>
+    </div>
+
+    <div id="client-nav" style="display:none;">
+      <div class="sidebar-section">
+        <button class="nav-item active" onclick="showClientView('my-bookings')">
+          <span class="nav-icon">◈</span> My Bookings
+        </button>
+        <button class="nav-item" onclick="showClientView('book-room')">
+          <span class="nav-icon">⬡</span> Book a Room
+        </button>
+        <button class="nav-item" onclick="showClientView('profile')">
+          <span class="nav-icon">◎</span> My Profile
+        </button>
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="user-pill">
+        <div class="avatar" id="sidebar-avatar" style="width:32px;height:32px;font-size:12px;">SA</div>
+        <div>
+          <div style="font-size:13px;color:rgba(255,255,255,0.8);font-weight:500;" id="sidebar-name">Sarah A.</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.35);" id="sidebar-role">Administrator</div>
+        </div>
+        <button class="btn btn-ghost" style="margin-left:auto;padding:4px 6px;font-size:12px;color:rgba(255,255,255,0.3);" onclick="doLogout()">↩</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-title" id="topbar-title">Dashboard</div>
+      <div class="topbar-spacer"></div>
+      <button class="btn btn-outline btn-sm" onclick="openModal('notif-modal')">🔔 Alerts</button>
+      <button class="btn btn-primary btn-sm" id="topbar-cta" onclick="openModal('new-booking-modal')">+ New Booking</button>
+    </div>
+
+    <div class="content">
+
+      <!-- ════ ADMIN VIEWS ════ -->
+
+      <!-- DASHBOARD -->
+      <div class="view-section active" id="view-dashboard">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Today's Bookings</div>
+            <div class="stat-value">7</div>
+            <div class="stat-delta">↑ 2 from yesterday</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Active Members</div>
+            <div class="stat-value">142</div>
+            <div class="stat-delta">↑ 8 this month</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Rooms Available</div>
+            <div class="stat-value">3/6</div>
+            <div class="stat-delta">3 currently occupied</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Pending Invites</div>
+            <div class="stat-value">14</div>
+            <div class="stat-delta">4 expired</div>
+          </div>
+        </div>
+
+        <div class="two-col">
+          <div class="card">
+            <div class="card-header">
+              <div><div class="card-title">Upcoming Bookings</div><div class="card-sub">Next 7 days</div></div>
+              <button class="btn btn-ghost btn-sm" onclick="showView('bookings')">View all →</button>
+            </div>
+            <div class="booking-item">
+              <div class="date-box"><div class="date-day">30</div><div class="date-mon">Apr</div></div>
+              <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">Amber Room — Dr. Chen</div><div style="font-size:12px;color:var(--r-warm-gray);">10:00–12:00 · Practitioner</div></div>
+              <span class="badge badge-green">Confirmed</span>
+            </div>
+            <div class="booking-item">
+              <div class="date-box"><div class="date-day">30</div><div class="date-mon">Apr</div></div>
+              <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">Jade Suite — Priya N.</div><div style="font-size:12px;color:var(--r-warm-gray);">14:00–16:00 · Member</div></div>
+              <span class="badge badge-gold">Pending</span>
+            </div>
+            <div class="booking-item">
+              <div class="date-box"><div class="date-day">2</div><div class="date-mon">May</div></div>
+              <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">Pearl Room — Marcus L.</div><div style="font-size:12px;color:var(--r-warm-gray);">09:00–11:00 · Practitioner</div></div>
+              <span class="badge badge-green">Confirmed</span>
+            </div>
+            <div class="booking-item">
+              <div class="date-box"><div class="date-day">3</div><div class="date-mon">May</div></div>
+              <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">Amber Room — Sophie W.</div><div style="font-size:12px;color:var(--r-warm-gray);">11:00–13:00 · Member</div></div>
+              <span class="badge badge-green">Confirmed</span>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div><div class="card-title">Pending Invitations</div><div class="card-sub">Awaiting acceptance</div></div>
+              <button class="btn btn-ghost btn-sm" onclick="showView('invite')">Manage →</button>
+            </div>
+            <div style="padding:14px 18px;">
+              <div class="invite-pill">
+                <div class="avatar" style="width:34px;height:34px;font-size:12px;background:var(--r-gold-light);color:var(--r-gold-dark);">JT</div>
+                <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">james.t@email.com</div><div style="font-size:12px;color:var(--r-warm-gray);">Practitioner · 2 days ago</div></div>
+                <span class="badge badge-gold">Pending</span>
+              </div>
+              <div class="invite-pill">
+                <div class="avatar" style="width:34px;height:34px;font-size:12px;background:var(--r-blue-light);color:var(--r-blue);">NR</div>
+                <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">n.roberts@email.com</div><div style="font-size:12px;color:var(--r-warm-gray);">Member · 5 days ago</div></div>
+                <span class="badge badge-gold">Pending</span>
+              </div>
+              <div class="invite-pill" style="opacity:0.55;">
+                <div class="avatar" style="width:34px;height:34px;font-size:12px;background:var(--r-surface2);color:var(--r-warm-gray);">MK</div>
+                <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">m.krishna@email.com</div><div style="font-size:12px;color:var(--r-red);">Expired · 9 days ago</div></div>
+                <span class="badge badge-red">Expired</span>
+              </div>
+              <button class="btn btn-outline" style="width:100%;justify-content:center;margin-top:6px;" onclick="openModal('invite-modal')">+ Send New Invite</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ALL BOOKINGS -->
+      <div class="view-section" id="view-bookings">
+        <div class="page-header">
+          <div><div class="page-title">All Bookings</div><div class="gold-line"></div><div class="page-sub">Manage all room reservations</div></div>
+          <button class="btn btn-primary" onclick="openModal('new-booking-modal')">+ New Booking</button>
+        </div>
+        <div class="tabs">
+          <button class="tab active" onclick="filterTab(this)">All</button>
+          <button class="tab" onclick="filterTab(this)">Confirmed</button>
+          <button class="tab" onclick="filterTab(this)">Pending</button>
+          <button class="tab" onclick="filterTab(this)">Cancelled</button>
+        </div>
+        <div class="card">
+          <table>
+            <thead><tr><th>Room</th><th>Member</th><th>Type</th><th>Date &amp; Time</th><th>Duration</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody id="bookings-table">
+              <tr><td><strong>Amber Room</strong></td><td>Dr. Linda Chen</td><td><span class="badge badge-blue">Practitioner</span></td><td>30 Apr · 10:00–12:00</td><td>2 hrs</td><td><span class="badge badge-green">Confirmed</span></td><td><button class="btn btn-ghost btn-sm" onclick="openModal('new-booking-modal')">Edit</button></td></tr>
+              <tr><td><strong>Jade Suite</strong></td><td>Priya Nair</td><td><span class="badge badge-gold">Member</span></td><td>30 Apr · 14:00–16:00</td><td>2 hrs</td><td><span class="badge badge-gold">Pending</span></td><td><button class="btn btn-ghost btn-sm" onclick="openModal('new-booking-modal')">Edit</button></td></tr>
+              <tr><td><strong>Pearl Room</strong></td><td>Marcus Liu</td><td><span class="badge badge-blue">Practitioner</span></td><td>2 May · 09:00–11:00</td><td>2 hrs</td><td><span class="badge badge-green">Confirmed</span></td><td><button class="btn btn-ghost btn-sm" onclick="openModal('new-booking-modal')">Edit</button></td></tr>
+              <tr><td><strong>Amber Room</strong></td><td>Sophie Walsh</td><td><span class="badge badge-gold">Member</span></td><td>3 May · 11:00–13:00</td><td>2 hrs</td><td><span class="badge badge-green">Confirmed</span></td><td><button class="btn btn-ghost btn-sm" onclick="openModal('new-booking-modal')">Edit</button></td></tr>
+              <tr><td><strong>Onyx Studio</strong></td><td>Tom Reeves</td><td><span class="badge badge-gray">Guest</span></td><td>5 May · 15:00–16:00</td><td>1 hr</td><td><span class="badge badge-red">Cancelled</span></td><td><button class="btn btn-ghost btn-sm" onclick="openModal('new-booking-modal')">Edit</button></td></tr>
+              <tr><td><strong>Quartz Suite</strong></td><td>Dr. Linda Chen</td><td><span class="badge badge-blue">Practitioner</span></td><td>7 May · 13:00–15:00</td><td>2 hrs</td><td><span class="badge badge-green">Confirmed</span></td><td><button class="btn btn-ghost btn-sm" onclick="openModal('new-booking-modal')">Edit</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ROOMS -->
+      <div class="view-section" id="view-rooms">
+        <div class="page-header">
+          <div><div class="page-title">Rooms &amp; Spaces</div><div class="gold-line"></div><div class="page-sub">Manage your bookable spaces</div></div>
+          <button class="btn btn-primary" onclick="openModal('add-room-modal')">+ Add Room</button>
+        </div>
+        <div class="three-col">
+          <div class="room-card" onclick="openModal('new-booking-modal')">
+            <div class="room-visual" style="background:#F5EFE4;">🌅</div>
+            <div class="room-card-body">
+              <div class="room-name">Amber Room</div>
+              <div class="room-detail">Capacity: 4 · Ground floor</div>
+              <div style="font-size:12px;color:var(--r-green);font-weight:500;margin-top:8px;">● Available now</div>
+            </div>
+          </div>
+          <div class="room-card">
+            <div class="room-visual" style="background:#EBF2EE;">🌿</div>
+            <div class="room-card-body">
+              <div class="room-name">Jade Suite</div>
+              <div class="room-detail">Capacity: 2 · First floor</div>
+              <div style="font-size:12px;color:var(--r-red);font-weight:500;margin-top:8px;">● Booked until 16:00</div>
+            </div>
+          </div>
+          <div class="room-card" onclick="openModal('new-booking-modal')">
+            <div class="room-visual" style="background:#F0EDF5;">✨</div>
+            <div class="room-card-body">
+              <div class="room-name">Pearl Room</div>
+              <div class="room-detail">Capacity: 6 · First floor</div>
+              <div style="font-size:12px;color:var(--r-green);font-weight:500;margin-top:8px;">● Available now</div>
+            </div>
+          </div>
+          <div class="room-card" onclick="openModal('new-booking-modal')">
+            <div class="room-visual" style="background:#EAF0F5;">💠</div>
+            <div class="room-card-body">
+              <div class="room-name">Sapphire Lounge</div>
+              <div class="room-detail">Capacity: 8 · Ground floor</div>
+              <div style="font-size:12px;color:var(--r-green);font-weight:500;margin-top:8px;">● Available now</div>
+            </div>
+          </div>
+          <div class="room-card">
+            <div class="room-visual" style="background:#F5F0E8;">🪨</div>
+            <div class="room-card-body">
+              <div class="room-name">Onyx Studio</div>
+              <div class="room-detail">Capacity: 3 · Basement</div>
+              <div style="font-size:12px;color:var(--r-red);font-weight:500;margin-top:8px;">● Booked until 18:00</div>
+            </div>
+          </div>
+          <div class="room-card" onclick="openModal('new-booking-modal')">
+            <div class="room-visual" style="background:#F2EEF5;">🔮</div>
+            <div class="room-card-body">
+              <div class="room-name">Quartz Suite</div>
+              <div class="room-detail">Capacity: 2 · Second floor</div>
+              <div style="font-size:12px;color:var(--r-green);font-weight:500;margin-top:8px;">● Available now</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MEMBERS -->
+      <div class="view-section" id="view-members">
+        <div class="page-header">
+          <div><div class="page-title">Members</div><div class="gold-line"></div><div class="page-sub">Manage users and access levels</div></div>
+          <div style="display:flex;gap:10px;">
+            <button class="btn btn-outline" onclick="openModal('invite-modal')">✉ Invite</button>
+            <button class="btn btn-primary" onclick="openModal('add-user-modal')">+ Add User</button>
+          </div>
+        </div>
+        <div class="tabs">
+          <button class="tab active" onclick="filterTab(this)">All</button>
+          <button class="tab" onclick="filterTab(this)">Practitioners</button>
+          <button class="tab" onclick="filterTab(this)">Members</button>
+          <button class="tab" onclick="filterTab(this)">Guests</button>
+        </div>
+        <div class="card">
+          <table>
+            <thead><tr><th>Name</th><th>Email</th><th>Type</th><th>Joined</th><th>Bookings</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              <tr><td><div style="display:flex;align-items:center;gap:10px;"><div class="avatar" style="width:30px;height:30px;font-size:11px;">LC</div>Dr. Linda Chen</div></td><td style="color:var(--r-warm-gray);">l.chen@clinic.co</td><td><span class="badge badge-blue">Practitioner</span></td><td style="color:var(--r-warm-gray);">Jan 2024</td><td>48</td><td><span class="badge badge-green">Active</span></td><td><button class="btn btn-ghost btn-sm">Manage</button></td></tr>
+              <tr><td><div style="display:flex;align-items:center;gap:10px;"><div class="avatar" style="width:30px;height:30px;font-size:11px;background:var(--r-blue-light);color:var(--r-blue);">PN</div>Priya Nair</div></td><td style="color:var(--r-warm-gray);">priya.n@email.com</td><td><span class="badge badge-gold">Member</span></td><td style="color:var(--r-warm-gray);">Mar 2024</td><td>12</td><td><span class="badge badge-green">Active</span></td><td><button class="btn btn-ghost btn-sm">Manage</button></td></tr>
+              <tr><td><div style="display:flex;align-items:center;gap:10px;"><div class="avatar" style="width:30px;height:30px;font-size:11px;background:var(--r-green-light);color:var(--r-green);">ML</div>Marcus Liu</div></td><td style="color:var(--r-warm-gray);">m.liu@wellness.io</td><td><span class="badge badge-blue">Practitioner</span></td><td style="color:var(--r-warm-gray);">Feb 2024</td><td>31</td><td><span class="badge badge-green">Active</span></td><td><button class="btn btn-ghost btn-sm">Manage</button></td></tr>
+              <tr><td><div style="display:flex;align-items:center;gap:10px;"><div class="avatar" style="width:30px;height:30px;font-size:11px;background:var(--r-gold-light);color:var(--r-gold-dark);">SW</div>Sophie Walsh</div></td><td style="color:var(--r-warm-gray);">s.walsh@email.com</td><td><span class="badge badge-gold">Member</span></td><td style="color:var(--r-warm-gray);">Apr 2024</td><td>9</td><td><span class="badge badge-green">Active</span></td><td><button class="btn btn-ghost btn-sm">Manage</button></td></tr>
+              <tr><td><div style="display:flex;align-items:center;gap:10px;"><div class="avatar" style="width:30px;height:30px;font-size:11px;background:var(--r-red-light);color:var(--r-red);">TR</div>Tom Reeves</div></td><td style="color:var(--r-warm-gray);">t.reeves@gmail.com</td><td><span class="badge badge-gray">Guest</span></td><td style="color:var(--r-warm-gray);">Apr 2024</td><td>2</td><td><span class="badge badge-red">Inactive</span></td><td><button class="btn btn-ghost btn-sm">Manage</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- INVITE -->
+      <div class="view-section" id="view-invite">
+        <div class="page-header">
+          <div><div class="page-title">Invite Users</div><div class="gold-line"></div><div class="page-sub">Send email invitations to new members</div></div>
+        </div>
+        <div class="two-col">
+          <div class="card">
+            <div class="card-header"><div class="card-title">New Invitation</div></div>
+            <div style="padding:20px 22px;">
+              <div class="form-row"><label class="form-label">Email Address</label><input type="email" class="form-input" placeholder="member@email.com" id="invite-email"></div>
+              <div class="form-row"><label class="form-label">User Type</label>
+                <select class="form-input" id="invite-type">
+                  <option>Practitioner</option><option>Member</option><option>Guest</option><option>Administrator</option>
+                </select>
+              </div>
+              <div class="form-row"><label class="form-label">Personal Note (optional)</label><textarea class="form-input" rows="3" placeholder="Add a welcome message…"></textarea></div>
+              <div class="form-row">
+                <label class="form-label">Permissions</label>
+                <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px;">
+                  <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer;"><input type="checkbox" checked> Room bookings</label>
+                  <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer;"><input type="checkbox" checked> Calendar invites</label>
+                  <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer;"><input type="checkbox"> Admin panel access</label>
+                </div>
+              </div>
+              <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="sendInviteFromPage()">Send Invitation</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">Sent Invitations</div></div>
+            <div style="padding:14px 18px;">
+              <div class="invite-pill">
+                <div class="avatar" style="width:34px;height:34px;font-size:12px;background:var(--r-gold-light);color:var(--r-gold-dark);">JT</div>
+                <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">james.t@email.com</div><div style="font-size:12px;color:var(--r-warm-gray);">Practitioner · expires in 5 days</div></div>
+                <button class="btn btn-ghost btn-sm" onclick="showToast('📧 Invite resent!')">Resend</button>
+              </div>
+              <div class="invite-pill">
+                <div class="avatar" style="width:34px;height:34px;font-size:12px;background:var(--r-blue-light);color:var(--r-blue);">NR</div>
+                <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">n.roberts@email.com</div><div style="font-size:12px;color:var(--r-warm-gray);">Member · expires in 2 days</div></div>
+                <button class="btn btn-ghost btn-sm" onclick="showToast('📧 Invite resent!')">Resend</button>
+              </div>
+              <div class="invite-pill" style="opacity:0.55;">
+                <div class="avatar" style="width:34px;height:34px;font-size:12px;background:var(--r-surface2);color:var(--r-warm-gray);">MK</div>
+                <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">m.krishna@email.com</div><div style="font-size:12px;color:var(--r-red);">Expired · 4 days ago</div></div>
+                <button class="btn btn-ghost btn-sm" onclick="showToast('📧 Invite resent!')">Resend</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- NOTIFICATIONS -->
+      <div class="view-section" id="view-notifications">
+        <div class="page-header">
+          <div><div class="page-title">Notifications</div><div class="gold-line"></div><div class="page-sub">Recent activity and alerts</div></div>
+          <button class="btn btn-outline btn-sm" onclick="showToast('✓ All marked as read')">Mark all read</button>
+        </div>
+        <div class="card" style="padding:4px 22px;">
+          <div class="notif-item">
+            <div class="notif-dot-lg"></div>
+            <div><div style="font-size:13.5px;font-weight:500;">New booking: Amber Room</div><div style="font-size:12px;color:var(--r-warm-gray);margin-top:2px;">Dr. Linda Chen booked 30 Apr 10:00–12:00 · 5 mins ago</div></div>
+          </div>
+          <div class="notif-item">
+            <div class="notif-dot-lg"></div>
+            <div><div style="font-size:13.5px;font-weight:500;">Invitation accepted</div><div style="font-size:12px;color:var(--r-warm-gray);margin-top:2px;">Sophie Walsh joined as a Member · 1 hour ago</div></div>
+          </div>
+          <div class="notif-item">
+            <div class="notif-dot-lg" style="background:var(--r-red);"></div>
+            <div><div style="font-size:13.5px;font-weight:500;">Booking cancelled</div><div style="font-size:12px;color:var(--r-warm-gray);margin-top:2px;">Tom Reeves cancelled Onyx Studio 5 May · 2 hours ago</div></div>
+          </div>
+          <div class="notif-item" style="opacity:0.5;">
+            <div style="width:9px;height:9px;border-radius:50%;background:var(--r-surface2);border:1px solid var(--r-warm-gray);flex-shrink:0;margin-top:5px;"></div>
+            <div><div style="font-size:13.5px;">Reminder sent: Pearl Room tomorrow</div><div style="font-size:12px;color:var(--r-warm-gray);margin-top:2px;">Auto 24hr reminder to Marcus Liu · Yesterday</div></div>
+          </div>
+          <div class="notif-item" style="opacity:0.5;">
+            <div style="width:9px;height:9px;border-radius:50%;background:var(--r-surface2);border:1px solid var(--r-warm-gray);flex-shrink:0;margin-top:5px;"></div>
+            <div><div style="font-size:13.5px;">Invite expired: m.krishna@email.com</div><div style="font-size:12px;color:var(--r-warm-gray);margin-top:2px;">Guest invitation not accepted · 4 days ago</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SETTINGS -->
+      <div class="view-section" id="view-settings">
+        <div class="page-header">
+          <div><div class="page-title">Settings</div><div class="gold-line"></div><div class="page-sub">Integrations, notifications &amp; platform config</div></div>
+        </div>
+        <div class="two-col">
+          <div class="card">
+            <div class="card-header"><div class="card-title">Calendar Integrations</div></div>
+            <div style="padding:16px 22px;">
+              <div class="integration-row">
+                <div style="display:flex;align-items:center;gap:12px;"><span style="font-size:22px;">📅</span><div><div style="font-size:13.5px;font-weight:500;">Google Calendar</div><div style="font-size:12px;color:var(--r-warm-gray);">Auto-send invites on booking</div></div></div>
+                <span class="badge badge-green">Connected</span>
+              </div>
+              <div class="integration-row">
+                <div style="display:flex;align-items:center;gap:12px;"><span style="font-size:22px;">📆</span><div><div style="font-size:13.5px;font-weight:500;">Outlook / Microsoft 365</div><div style="font-size:12px;color:var(--r-warm-gray);">Send via MAPI / Graph API</div></div></div>
+                <button class="btn btn-outline btn-sm" onclick="showToast('🔗 Opening OAuth flow…')">Connect</button>
+              </div>
+              <div class="integration-row">
+                <div style="display:flex;align-items:center;gap:12px;"><span style="font-size:22px;">📬</span><div><div style="font-size:13.5px;font-weight:500;">Email (SMTP / SendGrid)</div><div style="font-size:12px;color:var(--r-warm-gray);">booking@radiant.co</div></div></div>
+                <span class="badge badge-green">Connected</span>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">Notification Rules</div></div>
+            <div style="padding:16px 22px;display:flex;flex-direction:column;gap:10px;">
+              <label style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--r-surface2);border-radius:9px;cursor:pointer;">
+                <div><div style="font-size:13.5px;font-weight:500;">Booking confirmation</div><div style="font-size:12px;color:var(--r-warm-gray);">Instant email on booking</div></div>
+                <input type="checkbox" checked>
+              </label>
+              <label style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--r-surface2);border-radius:9px;cursor:pointer;">
+                <div><div style="font-size:13.5px;font-weight:500;">24hr reminder</div><div style="font-size:12px;color:var(--r-warm-gray);">Email day before session</div></div>
+                <input type="checkbox" checked>
+              </label>
+              <label style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--r-surface2);border-radius:9px;cursor:pointer;">
+                <div><div style="font-size:13.5px;font-weight:500;">1hr reminder</div><div style="font-size:12px;color:var(--r-warm-gray);">Email 1 hour before session</div></div>
+                <input type="checkbox" checked>
+              </label>
+              <label style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--r-surface2);border-radius:9px;cursor:pointer;">
+                <div><div style="font-size:13.5px;font-weight:500;">Cancellation alert</div><div style="font-size:12px;color:var(--r-warm-gray);">Notify admin on cancellations</div></div>
+                <input type="checkbox" checked>
+              </label>
+              <button class="btn btn-primary btn-sm" onclick="showToast('✓ Settings saved')">Save Settings</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════ CLIENT VIEWS ════ -->
+
+      <!-- MY BOOKINGS -->
+      <div class="view-section" id="view-my-bookings">
+        <div class="welcome-banner">
+          <div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:5px;">Welcome back</div>
+            <div style="font-family:'Playfair Display',serif;font-size:22px;color:#fff;" id="client-welcome-name">Dr. Linda Chen</div>
+            <div style="font-size:12px;color:var(--r-gold);margin-top:5px;" id="client-welcome-role">Practitioner Member</div>
+          </div>
+          <button class="btn btn-primary" onclick="showClientView('book-room')">Book a Room →</button>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:24px;">
+          <div class="stat-card"><div class="stat-label">Upcoming</div><div class="stat-value">3</div></div>
+          <div class="stat-card"><div class="stat-label">This Month</div><div class="stat-value">8</div></div>
+          <div class="stat-card"><div class="stat-label">Total Bookings</div><div class="stat-value">48</div></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">Upcoming Sessions</div></div>
+          <div class="booking-item">
+            <div class="date-box"><div class="date-day">30</div><div class="date-mon">Apr</div></div>
+            <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">Amber Room</div><div style="font-size:12px;color:var(--r-warm-gray);">10:00–12:00 · Ground floor</div></div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-outline btn-sm" onclick="openModal('cal-modal')">📅 Add to Cal</button>
+              <button class="btn btn-danger btn-sm">Cancel</button>
+            </div>
+          </div>
+          <div class="booking-item">
+            <div class="date-box"><div class="date-day">2</div><div class="date-mon">May</div></div>
+            <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">Pearl Room</div><div style="font-size:12px;color:var(--r-warm-gray);">09:00–11:00 · First floor</div></div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-outline btn-sm" onclick="openModal('cal-modal')">📅 Add to Cal</button>
+              <button class="btn btn-danger btn-sm">Cancel</button>
+            </div>
+          </div>
+          <div class="booking-item">
+            <div class="date-box"><div class="date-day">7</div><div class="date-mon">May</div></div>
+            <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">Jade Suite</div><div style="font-size:12px;color:var(--r-warm-gray);">14:00–16:00 · First floor</div></div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-outline btn-sm" onclick="openModal('cal-modal')">📅 Add to Cal</button>
+              <button class="btn btn-danger btn-sm">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- BOOK A ROOM -->
+      <div class="view-section" id="view-book-room">
+        <div class="page-header">
+          <div><div class="page-title">Book a Room</div><div class="gold-line"></div></div>
+        </div>
+        <div class="two-col">
+          <div class="card">
+            <div class="card-header"><div class="card-title">Select a Room</div></div>
+            <div style="padding:12px 18px;display:flex;flex-direction:column;gap:8px;">
+              <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.borderColor='var(--r-gold)'" onmouseout="this.style.borderColor='rgba(0,0,0,0.08)'" onclick="selectRoomOption(this,'Amber Room')">
+                <span style="font-size:22px;">🌅</span>
+                <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">Amber Room</div><div style="font-size:12px;color:var(--r-warm-gray);">Capacity 4 · Ground floor</div></div>
+                <span class="badge badge-green">Free</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;opacity:0.45;cursor:not-allowed;">
+                <span style="font-size:22px;">🌿</span>
+                <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">Jade Suite</div><div style="font-size:12px;color:var(--r-warm-gray);">Capacity 2 · First floor</div></div>
+                <span class="badge badge-red">Booked</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.borderColor='var(--r-gold)'" onmouseout="this.style.borderColor='rgba(0,0,0,0.08)'" onclick="selectRoomOption(this,'Pearl Room')">
+                <span style="font-size:22px;">✨</span>
+                <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">Pearl Room</div><div style="font-size:12px;color:var(--r-warm-gray);">Capacity 6 · First floor</div></div>
+                <span class="badge badge-green">Free</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.borderColor='var(--r-gold)'" onmouseout="this.style.borderColor='rgba(0,0,0,0.08)'" onclick="selectRoomOption(this,'Sapphire Lounge')">
+                <span style="font-size:22px;">💠</span>
+                <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">Sapphire Lounge</div><div style="font-size:12px;color:var(--r-warm-gray);">Capacity 8 · Ground floor</div></div>
+                <span class="badge badge-green">Free</span>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">Date &amp; Time</div></div>
+            <div style="padding:18px 22px;">
+              <div class="form-row"><label class="form-label">Date</label><input type="date" class="form-input" id="booking-date-input"></div>
+              <div class="form-row">
+                <label class="form-label">Available Slots</label>
+                <div class="time-slots">
+                  <div class="time-slot booked">08:00</div>
+                  <div class="time-slot" onclick="selectSlot(this)">09:00</div>
+                  <div class="time-slot booked">10:00</div>
+                  <div class="time-slot" onclick="selectSlot(this)">11:00</div>
+                  <div class="time-slot" onclick="selectSlot(this)">12:00</div>
+                  <div class="time-slot" onclick="selectSlot(this)">13:00</div>
+                  <div class="time-slot booked">14:00</div>
+                  <div class="time-slot" onclick="selectSlot(this)">15:00</div>
+                  <div class="time-slot" onclick="selectSlot(this)">16:00</div>
+                  <div class="time-slot" onclick="selectSlot(this)">17:00</div>
+                  <div class="time-slot booked">18:00</div>
+                  <div class="time-slot" onclick="selectSlot(this)">19:00</div>
+                </div>
+              </div>
+              <div class="form-row"><label class="form-label">Duration</label>
+                <select class="form-input"><option>1 hour</option><option selected>2 hours</option><option>3 hours</option><option>Half day (4hrs)</option><option>Full day</option></select>
+              </div>
+              <div class="form-row"><label class="form-label">Notes</label><textarea class="form-input" rows="2" placeholder="Any special requirements…"></textarea></div>
+              <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="confirmClientBooking()">Confirm Booking</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PROFILE -->
+      <div class="view-section" id="view-profile">
+        <div class="page-header"><div><div class="page-title">My Profile</div><div class="gold-line"></div></div></div>
+        <div class="two-col">
+          <div class="card">
+            <div class="card-header"><div class="card-title">Personal Details</div></div>
+            <div style="padding:22px;">
+              <div style="display:flex;align-items:center;gap:16px;margin-bottom:22px;">
+                <div class="avatar" style="width:58px;height:58px;font-size:18px;" id="profile-avatar">LC</div>
+                <div><div style="font-size:17px;font-family:'Playfair Display',serif;font-weight:500;" id="profile-name">Dr. Linda Chen</div><span class="badge badge-blue" style="margin-top:5px;" id="profile-badge">Practitioner</span></div>
+              </div>
+              <div class="form-row"><label class="form-label">Full Name</label><input type="text" class="form-input" value="Dr. Linda Chen"></div>
+              <div class="form-row"><label class="form-label">Email</label><input type="email" class="form-input" value="l.chen@clinic.co"></div>
+              <div class="form-row"><label class="form-label">Phone</label><input type="tel" class="form-input" value="+44 7700 900123"></div>
+              <button class="btn btn-primary btn-sm" onclick="showToast('✓ Profile updated')">Save Changes</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">Calendar &amp; Notifications</div></div>
+            <div style="padding:18px 22px;display:flex;flex-direction:column;gap:10px;">
+              <label style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--r-surface2);border-radius:9px;cursor:pointer;">
+                <div style="display:flex;align-items:center;gap:10px;"><span>📅</span> Google Calendar</div>
+                <input type="checkbox" checked>
+              </label>
+              <label style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--r-surface2);border-radius:9px;cursor:pointer;">
+                <div style="display:flex;align-items:center;gap:10px;"><span>📆</span> Outlook</div>
+                <input type="checkbox">
+              </label>
+              <label style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--r-surface2);border-radius:9px;cursor:pointer;">
+                <div style="display:flex;align-items:center;gap:10px;"><span>📧</span> Email reminders</div>
+                <input type="checkbox" checked>
+              </label>
+              <label style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--r-surface2);border-radius:9px;cursor:pointer;">
+                <div style="display:flex;align-items:center;gap:10px;"><span>🔔</span> SMS alerts</div>
+                <input type="checkbox">
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<!-- ══════════════ MODALS ══════════════ -->
+
+<!-- NEW BOOKING -->
+<div class="modal-overlay" id="new-booking-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div><div class="modal-title">New Booking</div><div style="font-size:13px;color:var(--r-warm-gray);margin-top:3px;">Create a room reservation</div></div>
+      <button class="close-btn" onclick="closeModal('new-booking-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-two">
+        <div class="form-row"><label class="form-label">Member</label>
+          <select class="form-input"><option>Dr. Linda Chen</option><option>Priya Nair</option><option>Marcus Liu</option><option>Sophie Walsh</option></select>
+        </div>
+        <div class="form-row"><label class="form-label">Room</label>
+          <select class="form-input"><option>Amber Room</option><option>Pearl Room</option><option>Sapphire Lounge</option><option>Quartz Suite</option></select>
+        </div>
+      </div>
+      <div class="form-two">
+        <div class="form-row"><label class="form-label">Date</label><input type="date" class="form-input"></div>
+        <div class="form-row"><label class="form-label">Start Time</label>
+          <select class="form-input"><option>09:00</option><option>10:00</option><option>11:00</option><option>12:00</option><option>13:00</option><option>14:00</option><option>15:00</option><option>16:00</option></select>
+        </div>
+      </div>
+      <div class="form-row"><label class="form-label">Duration</label>
+        <select class="form-input"><option>1 hour</option><option selected>2 hours</option><option>3 hours</option><option>Half day</option><option>Full day</option></select>
+      </div>
+      <div style="background:var(--r-surface2);border-radius:10px;padding:14px 16px;margin-top:4px;">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.07em;color:var(--r-warm-gray);font-weight:500;margin-bottom:10px;">Automatic Notifications</div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:8px;cursor:pointer;"><input type="checkbox" checked> Send booking confirmation email</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;"><input type="checkbox" checked> Send calendar invite (Google / Outlook)</label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('new-booking-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmAdminBooking()">Confirm Booking</button>
+    </div>
+  </div>
+</div>
+
+<!-- INVITE -->
+<div class="modal-overlay" id="invite-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div><div class="modal-title">Send Invitation</div><div style="font-size:13px;color:var(--r-warm-gray);margin-top:3px;">Invite someone to join Radiant</div></div>
+      <button class="close-btn" onclick="closeModal('invite-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row"><label class="form-label">Email Address</label><input type="email" class="form-input" placeholder="name@email.com"></div>
+      <div class="form-row"><label class="form-label">User Type</label>
+        <select class="form-input"><option>Practitioner</option><option>Member</option><option>Guest</option><option>Administrator</option></select>
+      </div>
+      <div class="form-row"><label class="form-label">Personal Note</label><textarea class="form-input" rows="2" placeholder="Optional welcome message…"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('invite-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="sendInviteModal()">Send Invite</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD USER -->
+<div class="modal-overlay" id="add-user-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div><div class="modal-title">Add New User</div></div>
+      <button class="close-btn" onclick="closeModal('add-user-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-two">
+        <div class="form-row"><label class="form-label">First Name</label><input type="text" class="form-input" placeholder="First name"></div>
+        <div class="form-row"><label class="form-label">Last Name</label><input type="text" class="form-input" placeholder="Last name"></div>
+      </div>
+      <div class="form-row"><label class="form-label">Email</label><input type="email" class="form-input" placeholder="email@domain.com"></div>
+      <div class="form-two">
+        <div class="form-row"><label class="form-label">User Type</label>
+          <select class="form-input"><option>Practitioner</option><option>Member</option><option>Guest</option><option>Administrator</option></select>
+        </div>
+        <div class="form-row"><label class="form-label">Phone</label><input type="tel" class="form-input" placeholder="+44…"></div>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer;"><input type="checkbox" checked> Send welcome email with login link</label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('add-user-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="addUser()">Add User</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD ROOM -->
+<div class="modal-overlay" id="add-room-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div><div class="modal-title">Add New Room</div></div>
+      <button class="close-btn" onclick="closeModal('add-room-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row"><label class="form-label">Room Name</label><input type="text" class="form-input" placeholder="e.g. Rose Suite"></div>
+      <div class="form-two">
+        <div class="form-row"><label class="form-label">Capacity</label><input type="number" class="form-input" placeholder="4"></div>
+        <div class="form-row"><label class="form-label">Floor / Location</label><input type="text" class="form-input" placeholder="Ground floor"></div>
+      </div>
+      <div class="form-row"><label class="form-label">Accessible to</label>
+        <select class="form-input"><option>All members</option><option>Practitioners only</option><option>Members &amp; Practitioners</option><option>Admin only</option></select>
+      </div>
+      <div class="form-row"><label class="form-label">Notes</label><textarea class="form-input" rows="2" placeholder="Equipment, access codes, etc."></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('add-room-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="addRoom()">Add Room</button>
+    </div>
+  </div>
+</div>
+
+<!-- CALENDAR -->
+<div class="modal-overlay" id="cal-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div><div class="modal-title">Booking Confirmed!</div><div style="font-size:13px;color:var(--r-warm-gray);margin-top:3px;">Add this session to your calendar</div></div>
+      <button class="close-btn" onclick="closeModal('cal-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--r-green-light);border-radius:11px;padding:14px 18px;margin-bottom:18px;display:flex;align-items:center;gap:10px;">
+        <span style="font-size:20px;">✅</span>
+        <div><div style="font-size:13.5px;font-weight:500;color:var(--r-green);">Booking confirmed</div><div style="font-size:12px;color:var(--r-green);">A confirmation email has been sent</div></div>
+      </div>
+      <p style="font-size:13.5px;color:var(--r-warm-gray);margin-bottom:14px;">Add to your calendar:</p>
+      <div class="cal-option" onclick="showToast('📅 Opening Google Calendar…');closeModal('cal-modal')">
+        <span class="cal-icon">📅</span>
+        <div><div style="font-size:14px;font-weight:500;">Google Calendar</div><div style="font-size:12px;color:var(--r-warm-gray);">Opens in a new tab</div></div>
+        <span style="margin-left:auto;color:var(--r-warm-gray);">→</span>
+      </div>
+      <div class="cal-option" onclick="showToast('📆 Downloading .ics file…');closeModal('cal-modal')">
+        <span class="cal-icon">📆</span>
+        <div><div style="font-size:14px;font-weight:500;">Outlook / Apple Calendar</div><div style="font-size:12px;color:var(--r-warm-gray);">Download .ics file</div></div>
+        <span style="margin-left:auto;color:var(--r-warm-gray);">→</span>
+      </div>
+      <div class="cal-option" onclick="showToast('📧 Calendar invite sent to your email!');closeModal('cal-modal')">
+        <span class="cal-icon">📧</span>
+        <div><div style="font-size:14px;font-weight:500;">Send via Email</div><div style="font-size:12px;color:var(--r-warm-gray);">Receive invite at your registered email</div></div>
+        <span style="margin-left:auto;color:var(--r-warm-gray);">→</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('cal-modal')">Skip for now</button>
+    </div>
+  </div>
+</div>
+
+<!-- NOTIFICATIONS MODAL -->
+<div class="modal-overlay" id="notif-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div><div class="modal-title">Recent Alerts</div></div>
+      <button class="close-btn" onclick="closeModal('notif-modal')">✕</button>
+    </div>
+    <div class="modal-body" style="padding:10px 26px 22px;">
+      <div class="notif-item"><div class="notif-dot-lg"></div><div><div style="font-size:13.5px;font-weight:500;">New booking: Amber Room</div><div style="font-size:12px;color:var(--r-warm-gray);margin-top:2px;">Dr. Linda Chen · 5 mins ago</div></div></div>
+      <div class="notif-item"><div class="notif-dot-lg"></div><div><div style="font-size:13.5px;font-weight:500;">Invitation accepted</div><div style="font-size:12px;color:var(--r-warm-gray);margin-top:2px;">Sophie Walsh joined · 1 hour ago</div></div></div>
+      <div class="notif-item"><div class="notif-dot-lg" style="background:var(--r-red);"></div><div><div style="font-size:13.5px;font-weight:500;">Booking cancelled</div><div style="font-size:12px;color:var(--r-warm-gray);margin-top:2px;">Tom Reeves · Onyx Studio · 2 hrs ago</div></div></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('notif-modal');showView('notifications')">View all →</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ── STATE ──
+let currentRole = 'admin';
+let loginRole = 'admin';
+
+const users = {
+  admin: { name: 'Sarah Allen', initials: 'SA', role: 'Administrator', avatar: '#C9A96E' },
+  practitioner: { name: 'Dr. Linda Chen', initials: 'LC', role: 'Practitioner', avatar: '#C9A96E' },
+  member: { name: 'Priya Nair', initials: 'PN', role: 'Member', avatar: '#B5D4F4' }
+};
+
+// ── LOGIN ──
+function setLoginRole(role) {
+  loginRole = role;
+  document.querySelectorAll('.login-role-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('role-' + role).classList.add('active');
+}
+
+function doLogin() {
+  const shell = document.getElementById('app-shell');
+  const login = document.getElementById('login-screen');
+  login.style.opacity = '0';
+  login.style.transition = 'opacity 0.3s';
+  setTimeout(() => { login.style.display = 'none'; }, 300);
+  shell.style.display = 'flex';
+
+  const u = users[loginRole];
+  document.getElementById('sidebar-name').textContent = u.name.split(' ')[0] + ' ' + (u.name.split(' ')[1]?.[0] || '') + '.';
+  document.getElementById('sidebar-role').textContent = u.role;
+  document.getElementById('sidebar-avatar').textContent = u.initials;
+
+  if (loginRole === 'admin') {
+    document.getElementById('role-toggle').style.display = 'flex';
+    setupAdminView();
+  } else {
+    document.getElementById('role-toggle').style.display = 'none';
+    setupClientView(loginRole);
+  }
+}
+
+function doLogout() {
+  document.getElementById('app-shell').style.display = 'none';
+  const login = document.getElementById('login-screen');
+  login.style.display = 'flex';
+  login.style.opacity = '0';
+  setTimeout(() => { login.style.opacity = '1'; login.style.transition = 'opacity 0.3s'; }, 10);
+}
+
+// ── ROLE SWITCH ──
+function switchRole(role) {
+  currentRole = role;
+  document.getElementById('toggle-admin').classList.toggle('active', role === 'admin');
+  document.getElementById('toggle-client').classList.toggle('active', role === 'client');
+  document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
+  if (role === 'admin') { setupAdminView(); }
+  else { setupClientView('practitioner'); }
+}
+
+function setupAdminView() {
+  document.getElementById('admin-nav').style.display = 'block';
+  document.getElementById('client-nav').style.display = 'none';
+  document.getElementById('topbar-cta').textContent = '+ New Booking';
+  document.getElementById('topbar-cta').onclick = () => openModal('new-booking-modal');
+  showView('dashboard');
+}
+
+function setupClientView(type) {
+  document.getElementById('admin-nav').style.display = 'none';
+  document.getElementById('client-nav').style.display = 'block';
+  document.getElementById('topbar-cta').textContent = '+ Book Room';
+  document.getElementById('topbar-cta').onclick = () => showClientView('book-room');
+
+  const u = type === 'member' ? users.member : users.practitioner;
+  document.getElementById('client-welcome-name').textContent = u.name;
+  document.getElementById('client-welcome-role').textContent = u.role + ' Member';
+
+  showClientView('my-bookings');
+}
+
+// ── NAVIGATION ──
+const adminViews = { dashboard:'Dashboard', bookings:'All Bookings', rooms:'Rooms & Spaces', members:'Members', invite:'Invite Users', notifications:'Notifications', settings:'Settings' };
+const clientViews = { 'my-bookings':'My Bookings', 'book-room':'Book a Room', profile:'My Profile' };
+
+function showView(name) {
+  document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
+  const el = document.getElementById('view-' + name);
+  if (el) el.classList.add('active');
+  document.getElementById('topbar-title').textContent = adminViews[name] || name;
+  document.querySelectorAll('#admin-nav .nav-item').forEach(n => n.classList.remove('active'));
+  const navItems = document.querySelectorAll('#admin-nav .nav-item');
+  const idx = Object.keys(adminViews).indexOf(name);
+  if (navItems[idx]) navItems[idx].classList.add('active');
+}
+
+function showClientView(name) {
+  document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
+  const el = document.getElementById('view-' + name);
+  if (el) el.classList.add('active');
+  document.getElementById('topbar-title').textContent = clientViews[name] || name;
+  document.querySelectorAll('#client-nav .nav-item').forEach(n => n.classList.remove('active'));
+  const navItems = document.querySelectorAll('#client-nav .nav-item');
+  const idx = Object.keys(clientViews).indexOf(name);
+  if (navItems[idx]) navItems[idx].classList.add('active');
+}
+
+// ── MODALS ──
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+document.querySelectorAll('.modal-overlay').forEach(o => {
+  o.addEventListener('click', e => { if (e.target === o) o.classList.remove('open'); });
+});
+
+// ── BOOKING ACTIONS ──
+function confirmAdminBooking() {
+  closeModal('new-booking-modal');
+  setTimeout(() => openModal('cal-modal'), 280);
+}
+
+function confirmClientBooking() {
+  openModal('cal-modal');
+}
+
+function sendInviteModal() {
+  closeModal('invite-modal');
+  showToast('✉ Invitation sent successfully!');
+}
+
+function sendInviteFromPage() {
+  const email = document.getElementById('invite-email').value;
+  const type = document.getElementById('invite-type').value;
+  showToast('✉ Invite sent to ' + (email || 'member') + ' as ' + type);
+}
+
+function addUser() {
+  closeModal('add-user-modal');
+  showToast('✓ User added — welcome email sent!');
+}
+
+function addRoom() {
+  closeModal('add-room-modal');
+  showToast('✓ Room added successfully!');
+}
+
+// ── TIME SLOTS ──
+function selectSlot(el) {
+  document.querySelectorAll('.time-slot:not(.booked)').forEach(s => s.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+// ── ROOM SELECTION ──
+function selectRoomOption(el, name) {
+  document.querySelectorAll('#view-book-room [onclick^="selectRoomOption"]').forEach(r => {
+    r.style.borderColor = 'rgba(0,0,0,0.08)';
+    r.style.background = '';
+  });
+  el.style.borderColor = 'var(--r-gold)';
+  el.style.background = 'rgba(201,169,110,0.05)';
+  showToast('🏠 ' + name + ' selected');
+}
+
+// ── TABS ──
+function filterTab(el) {
+  el.closest('.tabs').querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+}
+
+// ── TOAST ──
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 3400);
+}
+
+// ── INIT ──
+document.getElementById('booking-date-input') && (document.getElementById('booking-date-input').valueAsDate = new Date());
+</script>
+</body>
+</html>
