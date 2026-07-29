@@ -10,20 +10,21 @@
 <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&family=Montserrat:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300&display=swap" rel="stylesheet">
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --r-gold: #C9A96E;
-  --r-gold-light: #F0E0C0;
-  --r-gold-dark: #8B6B3A;
-  --r-cream: #FAF8F4;
-  --r-charcoal: #1C1C1E;
-  --r-warm-gray: #6B6560;
-  --r-border: rgba(201,169,110,0.25);
+  --r-gold: #B5A078;        /* Brushed Brass — accent */
+  --r-gold-light: #F0EAD9;
+  --r-gold-dark: #8A7550;
+  --r-cream: #FAFAF5;       /* Soft Cream — background */
+  --r-charcoal: #1A1A1A;    /* Deep Charcoal */
+  --r-warm-gray: #8C857B;   /* Pantone 403C — primary brand colour */
+  --r-stone: #E6E1DA;       /* Warm Stone */
+  --r-border: rgba(181,160,120,0.28);
   --r-surface: #FFFFFF;
-  --r-surface2: #F7F4EF;
+  --r-surface2: #F3F0EA;
   --r-green: #3D6B4F;
   --r-green-light: #E8F2EC;
   --r-red: #9B3A3A;
@@ -37,7 +38,7 @@
 html, body { height: 100%; }
 
 body {
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'Montserrat', sans-serif;
   background: var(--r-cream);
   color: var(--r-charcoal);
   font-size: 14px;
@@ -91,7 +92,7 @@ body {
   color: rgba(255,255,255,0.4);
   font-size: 11.5px;
   cursor: pointer;
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'Montserrat', sans-serif;
   transition: all 0.15s;
 }
 
@@ -127,7 +128,7 @@ body {
   background: none;
   width: 100%;
   text-align: left;
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'Montserrat', sans-serif;
 }
 
 .nav-item:hover { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.85); }
@@ -189,7 +190,7 @@ body {
   gap: 7px;
   padding: 9px 18px;
   border-radius: 8px;
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'Montserrat', sans-serif;
   font-size: 13.5px;
   font-weight: 500;
   cursor: pointer;
@@ -316,7 +317,19 @@ tr:hover td { background: rgba(201,169,110,0.03); }
   transition: all 0.2s;
 }
 .room-card:hover { border-color: var(--r-gold); box-shadow: 0 4px 20px rgba(201,169,110,0.12); transform: translateY(-1px); }
-.room-visual { height: 88px; display: flex; align-items: center; justify-content: center; font-size: 30px; }
+.room-visual { height: 88px; display: flex; align-items: center; justify-content: center; background: var(--r-surface2); }
+.room-monogram {
+  width: 46px; height: 46px;
+  border: 1.5px solid var(--r-gold);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  font-weight: 500;
+  font-size: 19px;
+  color: var(--r-gold-dark);
+  background: var(--r-surface);
+}
 .room-card-body { padding: 14px 16px; }
 .room-name { font-size: 14px; font-weight: 500; margin-bottom: 3px; }
 .room-detail { font-size: 12px; color: var(--r-warm-gray); }
@@ -352,7 +365,7 @@ tr:hover td { background: rgba(201,169,110,0.03); }
   padding: 10px 14px;
   border-radius: 9px;
   border: 1px solid rgba(0,0,0,0.13);
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'Montserrat', sans-serif;
   font-size: 14px;
   color: var(--r-charcoal);
   background: var(--r-surface);
@@ -372,7 +385,7 @@ textarea.form-input { resize: vertical; }
   border: none;
   background: none;
   color: var(--r-warm-gray);
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'Montserrat', sans-serif;
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
   transition: all 0.15s;
@@ -391,7 +404,7 @@ textarea.form-input { resize: vertical; }
   font-size: 12.5px;
   transition: all 0.15s;
   background: var(--r-surface);
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'Montserrat', sans-serif;
 }
 .time-slot:hover { border-color: var(--r-gold); color: var(--r-gold-dark); }
 .time-slot.selected { background: var(--r-gold); border-color: var(--r-gold); color: var(--r-charcoal); font-weight: 500; }
@@ -449,7 +462,7 @@ textarea.form-input { resize: vertical; }
   margin-bottom: 10px;
 }
 .cal-option:hover { border-color: var(--r-gold); background: rgba(201,169,110,0.04); }
-.cal-icon { font-size: 24px; width: 30px; text-align: center; }
+.cal-icon { width: 22px; height: 22px; flex-shrink: 0; color: var(--r-gold-dark); display: inline-flex; }
 
 /* ── INVITE PILL ── */
 .invite-pill {
@@ -684,7 +697,7 @@ textarea.form-input { resize: vertical; }
   border-radius: 9px;
   border: 1px solid rgba(0,0,0,0.12);
   background: none;
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'Montserrat', sans-serif;
   font-size: 13px;
   cursor: pointer;
   transition: all 0.15s;
@@ -965,7 +978,7 @@ textarea.form-input { resize: vertical; }
       <button class="menu-toggle" id="menu-toggle-btn" onclick="toggleSidebar()" aria-label="Open menu">☰</button>
       <div class="topbar-title" id="topbar-title">Dashboard</div>
       <div class="topbar-spacer"></div>
-      <button class="btn btn-outline btn-sm" onclick="openModal('notif-modal')">🔔 Alerts</button>
+      <button class="btn btn-outline btn-sm" onclick="openModal('notif-modal')"><span style="width:14px;height:14px;display:inline-flex;margin-right:5px;vertical-align:-2px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="100%" height="100%"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg></span>Alerts</button>
       <button class="btn btn-primary btn-sm" id="topbar-cta" onclick="openModal('new-booking-modal')">+ New Booking</button>
     </div>
 
@@ -1067,7 +1080,7 @@ textarea.form-input { resize: vertical; }
         <div class="page-header">
           <div><div class="page-title">Members</div><div class="gold-line"></div><div class="page-sub">Manage users and access levels</div></div>
           <div style="display:flex;gap:10px;">
-            <button class="btn btn-outline" onclick="openModal('invite-modal')">✉ Invite</button>
+            <button class="btn btn-outline" onclick="openModal('invite-modal')"><span style="width:14px;height:14px;display:inline-flex;margin-right:5px;vertical-align:-2px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="100%" height="100%"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></span>Invite</button>
             <button class="btn btn-primary" onclick="openModal('add-user-modal')">+ Add User</button>
           </div>
         </div>
@@ -1150,15 +1163,15 @@ textarea.form-input { resize: vertical; }
             <div class="card-header"><div class="card-title">Calendar Integrations</div></div>
             <div style="padding:16px 22px;">
               <div class="integration-row">
-                <div style="display:flex;align-items:center;gap:12px;"><span style="font-size:22px;">📅</span><div><div style="font-size:13.5px;font-weight:500;">Google Calendar</div><div style="font-size:12px;color:var(--r-warm-gray);">Auto-sync bookings to your calendar</div></div></div>
+                <div style="display:flex;align-items:center;gap:12px;"><span style="width:20px;height:20px;color:var(--r-gold-dark);display:inline-flex;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="100%" height="100%"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg></span><div><div style="font-size:13.5px;font-weight:500;">Google Calendar</div><div style="font-size:12px;color:var(--r-warm-gray);">Auto-sync bookings to your calendar</div></div></div>
                 <span id="gcal-status-slot"><span class="badge badge-gray">Checking…</span></span>
               </div>
               <div class="integration-row">
-                <div style="display:flex;align-items:center;gap:12px;"><span style="font-size:22px;">📆</span><div><div style="font-size:13.5px;font-weight:500;">Outlook / Microsoft 365</div><div style="font-size:12px;color:var(--r-warm-gray);">Send via MAPI / Graph API</div></div></div>
-                <button class="btn btn-outline btn-sm" onclick="showToast('🔗 Opening OAuth flow…')">Connect</button>
+                <div style="display:flex;align-items:center;gap:12px;"><span style="width:20px;height:20px;color:var(--r-gold-dark);display:inline-flex;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="100%" height="100%"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg></span><div><div style="font-size:13.5px;font-weight:500;">Outlook / Microsoft 365</div><div style="font-size:12px;color:var(--r-warm-gray);">Send via MAPI / Graph API</div></div></div>
+                <button class="btn btn-outline btn-sm" onclick="showToast('Opening OAuth flow…')">Connect</button>
               </div>
               <div class="integration-row">
-                <div style="display:flex;align-items:center;gap:12px;"><span style="font-size:22px;">📬</span><div><div style="font-size:13.5px;font-weight:500;">Email (SMTP / SendGrid)</div><div style="font-size:12px;color:var(--r-warm-gray);">booking@radiant.co</div></div></div>
+                <div style="display:flex;align-items:center;gap:12px;"><span style="width:20px;height:20px;color:var(--r-gold-dark);display:inline-flex;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="100%" height="100%"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></span><div><div style="font-size:13.5px;font-weight:500;">Email (SMTP / SendGrid)</div><div style="font-size:12px;color:var(--r-warm-gray);">booking@radiant.co</div></div></div>
                 <span class="badge badge-green">Connected</span>
               </div>
             </div>
@@ -1211,7 +1224,7 @@ textarea.form-input { resize: vertical; }
             <div class="date-box"><div class="date-day">30</div><div class="date-mon">Apr</div></div>
             <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">Amber Room</div><div style="font-size:12px;color:var(--r-warm-gray);">10:00–12:00 · Ground floor</div></div>
             <div style="display:flex;gap:8px;">
-              <button class="btn btn-outline btn-sm" onclick="openModal('cal-modal')">📅 Add to Cal</button>
+              <button class="btn btn-outline btn-sm" onclick="openModal('cal-modal')">Add to Cal</button>
               <button class="btn btn-danger btn-sm">Cancel</button>
             </div>
           </div>
@@ -1219,7 +1232,7 @@ textarea.form-input { resize: vertical; }
             <div class="date-box"><div class="date-day">2</div><div class="date-mon">May</div></div>
             <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">Pearl Room</div><div style="font-size:12px;color:var(--r-warm-gray);">09:00–11:00 · First floor</div></div>
             <div style="display:flex;gap:8px;">
-              <button class="btn btn-outline btn-sm" onclick="openModal('cal-modal')">📅 Add to Cal</button>
+              <button class="btn btn-outline btn-sm" onclick="openModal('cal-modal')">Add to Cal</button>
               <button class="btn btn-danger btn-sm">Cancel</button>
             </div>
           </div>
@@ -1227,7 +1240,7 @@ textarea.form-input { resize: vertical; }
             <div class="date-box"><div class="date-day">7</div><div class="date-mon">May</div></div>
             <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">Jade Suite</div><div style="font-size:12px;color:var(--r-warm-gray);">14:00–16:00 · First floor</div></div>
             <div style="display:flex;gap:8px;">
-              <button class="btn btn-outline btn-sm" onclick="openModal('cal-modal')">📅 Add to Cal</button>
+              <button class="btn btn-outline btn-sm" onclick="openModal('cal-modal')">Add to Cal</button>
               <button class="btn btn-danger btn-sm">Cancel</button>
             </div>
           </div>
@@ -1298,19 +1311,19 @@ textarea.form-input { resize: vertical; }
             <div class="card-header"><div class="card-title">Calendar &amp; Notifications</div></div>
             <div style="padding:18px 22px;display:flex;flex-direction:column;gap:10px;">
               <label style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--r-surface2);border-radius:9px;cursor:pointer;">
-                <div style="display:flex;align-items:center;gap:10px;"><span>📅</span> Google Calendar</div>
+                <div>Google Calendar</div>
                 <input type="checkbox" checked>
               </label>
               <label style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--r-surface2);border-radius:9px;cursor:pointer;">
-                <div style="display:flex;align-items:center;gap:10px;"><span>📆</span> Outlook</div>
+                <div>Outlook</div>
                 <input type="checkbox">
               </label>
               <label style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--r-surface2);border-radius:9px;cursor:pointer;">
-                <div style="display:flex;align-items:center;gap:10px;"><span>📧</span> Email reminders</div>
+                <div>Email reminders</div>
                 <input type="checkbox" checked>
               </label>
               <label style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--r-surface2);border-radius:9px;cursor:pointer;">
-                <div style="display:flex;align-items:center;gap:10px;"><span>🔔</span> SMS alerts</div>
+                <div>SMS alerts</div>
                 <input type="checkbox">
               </label>
             </div>
@@ -1446,22 +1459,22 @@ textarea.form-input { resize: vertical; }
     </div>
     <div class="modal-body">
       <div style="background:var(--r-green-light);border-radius:11px;padding:14px 18px;margin-bottom:18px;display:flex;align-items:center;gap:10px;">
-        <span style="font-size:20px;">✅</span>
+        <span style="width:20px;height:20px;color:var(--r-green);display:inline-flex;flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="100%" height="100%"><circle cx="12" cy="12" r="10"/><path d="M8 12l3 3 5-6"/></svg></span>
         <div><div style="font-size:13.5px;font-weight:500;color:var(--r-green);">Booking confirmed</div><div style="font-size:12px;color:var(--r-green);">A confirmation email has been sent</div></div>
       </div>
       <p style="font-size:13.5px;color:var(--r-warm-gray);margin-bottom:14px;">Add to your calendar:</p>
-      <div class="cal-option" onclick="showToast('📅 Opening Google Calendar…');closeModal('cal-modal')">
-        <span class="cal-icon">📅</span>
+      <div class="cal-option" onclick="showToast('Opening Google Calendar…');closeModal('cal-modal')">
+        <span class="cal-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="100%" height="100%"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg></span>
         <div><div style="font-size:14px;font-weight:500;">Google Calendar</div><div style="font-size:12px;color:var(--r-warm-gray);">Opens in a new tab</div></div>
         <span style="margin-left:auto;color:var(--r-warm-gray);">→</span>
       </div>
-      <div class="cal-option" onclick="showToast('📆 Downloading .ics file…');closeModal('cal-modal')">
-        <span class="cal-icon">📆</span>
+      <div class="cal-option" onclick="showToast('Downloading .ics file…');closeModal('cal-modal')">
+        <span class="cal-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="100%" height="100%"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg></span>
         <div><div style="font-size:14px;font-weight:500;">Outlook / Apple Calendar</div><div style="font-size:12px;color:var(--r-warm-gray);">Download .ics file</div></div>
         <span style="margin-left:auto;color:var(--r-warm-gray);">→</span>
       </div>
-      <div class="cal-option" onclick="showToast('📧 Calendar invite sent to your email!');closeModal('cal-modal')">
-        <span class="cal-icon">📧</span>
+      <div class="cal-option" onclick="showToast('Calendar invite sent to your email!');closeModal('cal-modal')">
+        <span class="cal-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="100%" height="100%"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></span>
         <div><div style="font-size:14px;font-weight:500;">Send via Email</div><div style="font-size:12px;color:var(--r-warm-gray);">Receive invite at your registered email</div></div>
         <span style="margin-left:auto;color:var(--r-warm-gray);">→</span>
       </div>
@@ -1499,8 +1512,8 @@ let currentRole = 'admin';
 let loginRole = 'admin';
 
 const users = {
-  admin: { name: 'Sarah Allen', initials: 'SA', role: 'Administrator', avatar: '#C9A96E', email: 'sarah@radiantfr.com' },
-  practitioner: { name: 'Dr. Linda Chen', initials: 'LC', role: 'Practitioner', avatar: '#C9A96E', email: 'l.chen@clinic.co' },
+  admin: { name: 'Sarah Allen', initials: 'SA', role: 'Administrator', avatar: '#B5A078', email: 'sarah@radiantfr.com' },
+  practitioner: { name: 'Dr. Linda Chen', initials: 'LC', role: 'Practitioner', avatar: '#B5A078', email: 'l.chen@clinic.co' },
   member: { name: 'Priya Nair', initials: 'PN', role: 'Member', avatar: '#B5D4F4', email: 'priya.n@email.com' }
 };
 
@@ -1570,7 +1583,7 @@ function populateBookingModalSelects() {
     memberSel.innerHTML = state.members.map(m => `<option value="${m.id}">${m.first_name} ${m.last_name}</option>`).join('');
   }
   if (roomSel) {
-    roomSel.innerHTML = state.rooms.map(r => `<option value="${r.id}">${r.emoji || ''} ${r.name}</option>`).join('');
+    roomSel.innerHTML = state.rooms.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
   }
 }
 
@@ -1640,10 +1653,9 @@ function renderRoomsGrid() {
     grid.innerHTML = `<div style="grid-column:1/-1;color:var(--r-warm-gray);padding:20px;">No rooms yet — click "+ Add Room" to create one.</div>`;
     return;
   }
-  const bgByEmoji = { '🌅': '#F5EFE4', '🌿': '#EBF2EE', '✨': '#F0EDF5', '💠': '#EAF0F5', '🪨': '#F5F0E8', '🔮': '#F2EEF5' };
   grid.innerHTML = state.rooms.map(r => `
     <div class="room-card" onclick="openModal('new-booking-modal')">
-      <div class="room-visual" style="background:${bgByEmoji[r.emoji] || '#F5F0E8'};">${r.emoji || '🏠'}</div>
+      <div class="room-visual"><div class="room-monogram">${(r.name || '?').charAt(0)}</div></div>
       <div class="room-card-body">
         <div class="room-name">${r.name}</div>
         <div class="room-detail">Capacity: ${r.capacity} · ${r.floor || ''}</div>
@@ -1660,8 +1672,8 @@ function renderBookRoomList() {
     return;
   }
   list.innerHTML = state.rooms.map(r => `
-    <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.borderColor='var(--r-gold)'" onmouseout="this.style.borderColor='rgba(0,0,0,0.08)'" onclick="selectRoomOption(this,'${r.name}','${r.id}')">
-      <span style="font-size:22px;">${r.emoji || '🏠'}</span>
+    <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--r-stone);border-radius:10px;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.borderColor='var(--r-gold)'" onmouseout="this.style.borderColor='var(--r-stone)'" onclick="selectRoomOption(this,'${r.name}','${r.id}')">
+      <div class="room-monogram" style="width:34px;height:34px;font-size:14px;">${(r.name || '?').charAt(0)}</div>
       <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">${r.name}</div><div style="font-size:12px;color:var(--r-warm-gray);">Capacity ${r.capacity} · ${r.floor || ''}</div></div>
       <span class="badge badge-green">Free</span>
     </div>`).join('');
@@ -1742,7 +1754,7 @@ function renderSentInvitesWidget() {
 async function resendInvite(email, user_type) {
   try {
     const result = await api('/invites', { method: 'POST', body: JSON.stringify({ email, user_type }) });
-    showToast(result.email_sent ? '📧 Invite resent!' : '✓ New invite created (email not sent)');
+    showToast(result.email_sent ? '✓ Invite resent' : '✓ New invite created (email not sent)');
     await loadAppData();
   } catch (e) {
     showToast('⚠ ' + e.message);
@@ -1819,7 +1831,7 @@ function checkCalendarRedirectStatus() {
   const params = new URLSearchParams(window.location.search);
   const cal = params.get('calendar');
   if (!cal) return;
-  if (cal === 'connected') showToast('✅ Google Calendar connected!');
+  if (cal === 'connected') showToast('✓ Google Calendar connected!');
   else if (cal === 'error') showToast('⚠ Google Calendar connection failed: ' + (params.get('reason') || 'unknown error'));
   // clean the URL so refreshing doesn't re-show the toast
   window.history.replaceState({}, '', window.location.pathname);
@@ -2011,7 +2023,7 @@ async function sendInviteModal() {
   try {
     const result = await api('/invites', { method: 'POST', body: JSON.stringify({ email, user_type, personal_note }) });
     closeModal('invite-modal');
-    showToast(result.email_sent ? '✉ Invitation sent successfully!' : '✓ Invite created (email not sent — check Resend setup)');
+    showToast(result.email_sent ? '✓ Invitation sent successfully!' : '✓ Invite created (email not sent — check Resend setup)');
   } catch (e) {
     showToast('⚠ ' + e.message);
   } finally {
@@ -2027,7 +2039,7 @@ async function sendInviteFromPage() {
 
   try {
     const result = await api('/invites', { method: 'POST', body: JSON.stringify({ email, user_type, personal_note }) });
-    showToast(result.email_sent ? `✉ Invite sent to ${email}` : `✓ Invite created for ${email} (email not sent)`);
+    showToast(result.email_sent ? `✓ Invite sent to ${email}` : `✓ Invite created for ${email} (email not sent)`);
     document.getElementById('invite-email').value = '';
     document.getElementById('invite-note').value = '';
   } catch (e) {
@@ -2061,7 +2073,7 @@ function selectRoomOption(el, name, roomId) {
   });
   el.style.borderColor = 'var(--r-gold)';
   el.style.background = 'rgba(201,169,110,0.05)';
-  showToast('🏠 ' + name + ' selected');
+  showToast(name + ' selected');
 }
 
 // ── TABS ──
