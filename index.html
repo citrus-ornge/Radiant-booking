@@ -2018,7 +2018,7 @@ async function checkInviteParam() {
   pendingInviteToken = token;
 
   try {
-    const res = await fetch('/api/invites/' + encodeURIComponent(token));
+    const res = await fetch('/api/invites?token=' + encodeURIComponent(token));
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Invite not found');
 
