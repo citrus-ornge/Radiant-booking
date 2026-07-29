@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Radiant — Booking Platform</title>
+<link rel="icon" type="image/x-icon" href="/assets/favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
@@ -527,14 +531,63 @@ textarea.form-input { resize: vertical; }
 /* ── LOGIN ── */
 #login-screen {
   position: fixed; inset: 0;
-  background: var(--r-charcoal);
+  background:
+    radial-gradient(ellipse 900px 700px at 12% -8%, rgba(155,44,74,0.35) 0%, transparent 60%),
+    radial-gradient(ellipse 800px 650px at 100% 108%, rgba(31,111,107,0.30) 0%, transparent 60%),
+    linear-gradient(160deg, #201F1C 0%, #17322F 100%);
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   z-index: 200;
+  overflow: hidden;
+}
+
+#login-screen::before,
+#login-screen::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  pointer-events: none;
+}
+#login-screen::before {
+  width: 420px; height: 420px;
+  background: rgba(201,169,110,0.14);
+  top: -120px; right: 8%;
+}
+#login-screen::after {
+  width: 380px; height: 380px;
+  background: rgba(155,44,74,0.18);
+  bottom: -140px; left: 6%;
+}
+
+.login-tagline-wrap {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  margin-bottom: 26px;
+  padding: 0 20px;
+}
+.login-tagline {
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  font-weight: 500;
+  font-size: 26px;
+  color: rgba(250,248,244,0.92);
+  letter-spacing: 0.01em;
+}
+.login-tagline-sub {
+  font-size: 11.5px;
+  color: rgba(250,248,244,0.5);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  margin-top: 8px;
 }
 
 .login-card {
+  position: relative;
+  z-index: 1;
   background: var(--r-surface);
   border-radius: 20px;
   width: 420px;
@@ -696,6 +749,10 @@ textarea.form-input { resize: vertical; }
 
 <!-- ══════════════════ LOGIN SCREEN ══════════════════ -->
 <div id="login-screen">
+  <div class="login-tagline-wrap">
+    <div class="login-tagline">You, younger.</div>
+    <div class="login-tagline-sub">Est. 2012 · Ringmer &amp; Heathfield</div>
+  </div>
   <div class="login-card">
     <div class="login-logo">Radiant</div>
     <div class="login-sub">Booking Platform</div>
@@ -847,25 +904,8 @@ textarea.form-input { resize: vertical; }
               <div><div class="card-title">Upcoming Bookings</div><div class="card-sub">Next 7 days</div></div>
               <button class="btn btn-ghost btn-sm" onclick="showView('bookings')">View all →</button>
             </div>
-            <div class="booking-item">
-              <div class="date-box"><div class="date-day">30</div><div class="date-mon">Apr</div></div>
-              <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">Amber Room — Dr. Chen</div><div style="font-size:12px;color:var(--r-warm-gray);">10:00–12:00 · Practitioner</div></div>
-              <span class="badge badge-green">Confirmed</span>
-            </div>
-            <div class="booking-item">
-              <div class="date-box"><div class="date-day">30</div><div class="date-mon">Apr</div></div>
-              <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">Jade Suite — Priya N.</div><div style="font-size:12px;color:var(--r-warm-gray);">14:00–16:00 · Member</div></div>
-              <span class="badge badge-gold">Pending</span>
-            </div>
-            <div class="booking-item">
-              <div class="date-box"><div class="date-day">2</div><div class="date-mon">May</div></div>
-              <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">Pearl Room — Marcus L.</div><div style="font-size:12px;color:var(--r-warm-gray);">09:00–11:00 · Practitioner</div></div>
-              <span class="badge badge-green">Confirmed</span>
-            </div>
-            <div class="booking-item">
-              <div class="date-box"><div class="date-day">3</div><div class="date-mon">May</div></div>
-              <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">Amber Room — Sophie W.</div><div style="font-size:12px;color:var(--r-warm-gray);">11:00–13:00 · Member</div></div>
-              <span class="badge badge-green">Confirmed</span>
+            <div id="upcoming-bookings-widget">
+              <div style="padding:18px 22px;color:var(--r-warm-gray);font-size:13px;">Loading…</div>
             </div>
           </div>
 
@@ -874,22 +914,8 @@ textarea.form-input { resize: vertical; }
               <div><div class="card-title">Pending Invitations</div><div class="card-sub">Awaiting acceptance</div></div>
               <button class="btn btn-ghost btn-sm" onclick="showView('invite')">Manage →</button>
             </div>
-            <div style="padding:14px 18px;">
-              <div class="invite-pill">
-                <div class="avatar" style="width:34px;height:34px;font-size:12px;background:var(--r-gold-light);color:var(--r-gold-dark);">JT</div>
-                <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">james.t@email.com</div><div style="font-size:12px;color:var(--r-warm-gray);">Practitioner · 2 days ago</div></div>
-                <span class="badge badge-gold">Pending</span>
-              </div>
-              <div class="invite-pill">
-                <div class="avatar" style="width:34px;height:34px;font-size:12px;background:var(--r-blue-light);color:var(--r-blue);">NR</div>
-                <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">n.roberts@email.com</div><div style="font-size:12px;color:var(--r-warm-gray);">Member · 5 days ago</div></div>
-                <span class="badge badge-gold">Pending</span>
-              </div>
-              <div class="invite-pill" style="opacity:0.55;">
-                <div class="avatar" style="width:34px;height:34px;font-size:12px;background:var(--r-surface2);color:var(--r-warm-gray);">MK</div>
-                <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">m.krishna@email.com</div><div style="font-size:12px;color:var(--r-red);">Expired · 9 days ago</div></div>
-                <span class="badge badge-red">Expired</span>
-              </div>
+            <div style="padding:14px 18px;" id="pending-invites-widget">
+              <div style="color:var(--r-warm-gray);font-size:13px;">Loading…</div>
               <button class="btn btn-outline" style="width:100%;justify-content:center;margin-top:6px;" onclick="openModal('invite-modal')">+ Send New Invite</button>
             </div>
           </div>
@@ -996,22 +1022,8 @@ textarea.form-input { resize: vertical; }
           </div>
           <div class="card">
             <div class="card-header"><div class="card-title">Sent Invitations</div></div>
-            <div style="padding:14px 18px;">
-              <div class="invite-pill">
-                <div class="avatar" style="width:34px;height:34px;font-size:12px;background:var(--r-gold-light);color:var(--r-gold-dark);">JT</div>
-                <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">james.t@email.com</div><div style="font-size:12px;color:var(--r-warm-gray);">Practitioner · expires in 5 days</div></div>
-                <button class="btn btn-ghost btn-sm" onclick="showToast('📧 Invite resent!')">Resend</button>
-              </div>
-              <div class="invite-pill">
-                <div class="avatar" style="width:34px;height:34px;font-size:12px;background:var(--r-blue-light);color:var(--r-blue);">NR</div>
-                <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">n.roberts@email.com</div><div style="font-size:12px;color:var(--r-warm-gray);">Member · expires in 2 days</div></div>
-                <button class="btn btn-ghost btn-sm" onclick="showToast('📧 Invite resent!')">Resend</button>
-              </div>
-              <div class="invite-pill" style="opacity:0.55;">
-                <div class="avatar" style="width:34px;height:34px;font-size:12px;background:var(--r-surface2);color:var(--r-warm-gray);">MK</div>
-                <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">m.krishna@email.com</div><div style="font-size:12px;color:var(--r-red);">Expired · 4 days ago</div></div>
-                <button class="btn btn-ghost btn-sm" onclick="showToast('📧 Invite resent!')">Resend</button>
-              </div>
+            <div style="padding:14px 18px;" id="sent-invites-widget">
+              <div style="color:var(--r-warm-gray);font-size:13px;">Loading…</div>
             </div>
           </div>
         </div>
@@ -1023,27 +1035,8 @@ textarea.form-input { resize: vertical; }
           <div><div class="page-title">Notifications</div><div class="gold-line"></div><div class="page-sub">Recent activity and alerts</div></div>
           <button class="btn btn-outline btn-sm" onclick="showToast('✓ All marked as read')">Mark all read</button>
         </div>
-        <div class="card" style="padding:4px 22px;">
-          <div class="notif-item">
-            <div class="notif-dot-lg"></div>
-            <div><div style="font-size:13.5px;font-weight:500;">New booking: Amber Room</div><div style="font-size:12px;color:var(--r-warm-gray);margin-top:2px;">Dr. Linda Chen booked 30 Apr 10:00–12:00 · 5 mins ago</div></div>
-          </div>
-          <div class="notif-item">
-            <div class="notif-dot-lg"></div>
-            <div><div style="font-size:13.5px;font-weight:500;">Invitation accepted</div><div style="font-size:12px;color:var(--r-warm-gray);margin-top:2px;">Sophie Walsh joined as a Member · 1 hour ago</div></div>
-          </div>
-          <div class="notif-item">
-            <div class="notif-dot-lg" style="background:var(--r-red);"></div>
-            <div><div style="font-size:13.5px;font-weight:500;">Booking cancelled</div><div style="font-size:12px;color:var(--r-warm-gray);margin-top:2px;">Tom Reeves cancelled Onyx Studio 5 May · 2 hours ago</div></div>
-          </div>
-          <div class="notif-item" style="opacity:0.5;">
-            <div style="width:9px;height:9px;border-radius:50%;background:var(--r-surface2);border:1px solid var(--r-warm-gray);flex-shrink:0;margin-top:5px;"></div>
-            <div><div style="font-size:13.5px;">Reminder sent: Pearl Room tomorrow</div><div style="font-size:12px;color:var(--r-warm-gray);margin-top:2px;">Auto 24hr reminder to Marcus Liu · Yesterday</div></div>
-          </div>
-          <div class="notif-item" style="opacity:0.5;">
-            <div style="width:9px;height:9px;border-radius:50%;background:var(--r-surface2);border:1px solid var(--r-warm-gray);flex-shrink:0;margin-top:5px;"></div>
-            <div><div style="font-size:13.5px;">Invite expired: m.krishna@email.com</div><div style="font-size:12px;color:var(--r-warm-gray);margin-top:2px;">Guest invitation not accepted · 4 days ago</div></div>
-          </div>
+        <div class="card" style="padding:4px 22px;" id="notifications-feed">
+          <div style="padding:16px 0;color:var(--r-warm-gray);font-size:13px;">Loading…</div>
         </div>
       </div>
 
@@ -1428,12 +1421,13 @@ async function api(path, options = {}) {
 
 async function loadAppData() {
   try {
-    const [roomsRes, membersRes, bookingsRes] = await Promise.all([
-      api('/rooms'), api('/members'), api('/bookings'),
+    const [roomsRes, membersRes, bookingsRes, invitesRes] = await Promise.all([
+      api('/rooms'), api('/members'), api('/bookings'), api('/invites'),
     ]);
     state.rooms = roomsRes.rooms || [];
     state.members = membersRes.members || [];
     state.bookings = bookingsRes.bookings || [];
+    state.invites = invitesRes.invites || [];
 
     // Map the logged-in demo persona to its real Supabase member row by email
     const u = users[loginRole === 'admin' ? 'admin' : loginRole];
@@ -1445,6 +1439,10 @@ async function loadAppData() {
     renderRoomsGrid();
     renderBookRoomList();
     renderGoogleCalendarStatus();
+    renderUpcomingBookingsWidget();
+    renderPendingInvitesWidget();
+    renderSentInvitesWidget();
+    renderNotificationsFeed();
   } catch (e) {
     showToast('⚠ Could not load live data: ' + e.message);
   }
@@ -1552,6 +1550,125 @@ function renderBookRoomList() {
       <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">${r.name}</div><div style="font-size:12px;color:var(--r-warm-gray);">Capacity ${r.capacity} · ${r.floor || ''}</div></div>
       <span class="badge badge-green">Free</span>
     </div>`).join('');
+}
+
+function timeAgo(iso) {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.round(diffMs / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} min${mins === 1 ? '' : 's'} ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs} hour${hrs === 1 ? '' : 's'} ago`;
+  const days = Math.round(hrs / 24);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
+}
+
+function inviteInitials(email) {
+  return (email || '??').slice(0, 2).toUpperCase();
+}
+
+function renderUpcomingBookingsWidget() {
+  const el = document.getElementById('upcoming-bookings-widget');
+  if (!el) return;
+  const now = new Date();
+  const upcoming = state.bookings
+    .filter(b => b.status !== 'cancelled' && new Date(b.start_time) >= now)
+    .sort((a, b) => new Date(a.start_time) - new Date(b.start_time))
+    .slice(0, 4);
+  if (upcoming.length === 0) {
+    el.innerHTML = `<div style="padding:18px 22px;color:var(--r-warm-gray);font-size:13px;">No upcoming bookings.</div>`;
+    return;
+  }
+  el.innerHTML = upcoming.map(b => {
+    const d = new Date(b.start_time);
+    const day = d.toLocaleDateString('en-GB', { day: 'numeric' });
+    const mon = d.toLocaleDateString('en-GB', { month: 'short' });
+    const time = fmtDateTime(b.start_time).split(' · ')[1] || '';
+    const who = b.member ? (b.member.first_name + ' ' + b.member.last_name[0] + '.') : '—';
+    return `
+    <div class="booking-item">
+      <div class="date-box"><div class="date-day">${day}</div><div class="date-mon">${mon}</div></div>
+      <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">${b.room ? b.room.name : '—'} — ${who}</div><div style="font-size:12px;color:var(--r-warm-gray);">${time} · ${b.member ? b.member.user_type.charAt(0).toUpperCase() + b.member.user_type.slice(1) : ''}</div></div>
+      ${statusBadge(b.status)}
+    </div>`;
+  }).join('');
+}
+
+function renderPendingInvitesWidget() {
+  const el = document.getElementById('pending-invites-widget');
+  if (!el) return;
+  const pending = state.invites.filter(i => i.status !== 'accepted').slice(0, 3);
+  const listHtml = pending.length === 0
+    ? `<div style="color:var(--r-warm-gray);font-size:13px;padding:4px 0 10px;">No pending invites.</div>`
+    : pending.map(i => `
+      <div class="invite-pill" style="${i.status === 'expired' ? 'opacity:0.55;' : ''}">
+        <div class="avatar" style="width:34px;height:34px;font-size:12px;background:var(--r-gold-light);color:var(--r-gold-dark);">${inviteInitials(i.email)}</div>
+        <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">${i.email}</div><div style="font-size:12px;color:${i.status === 'expired' ? 'var(--r-red)' : 'var(--r-warm-gray)'};">${i.user_type.charAt(0).toUpperCase() + i.user_type.slice(1)} · ${i.status === 'expired' ? 'expired' : 'sent'} ${timeAgo(i.invited_at)}</div></div>
+        <span class="badge ${i.status === 'expired' ? 'badge-red' : 'badge-gold'}">${i.status.charAt(0).toUpperCase() + i.status.slice(1)}</span>
+      </div>`).join('');
+  el.innerHTML = listHtml + `<button class="btn btn-outline" style="width:100%;justify-content:center;margin-top:6px;" onclick="openModal('invite-modal')">+ Send New Invite</button>`;
+}
+
+function renderSentInvitesWidget() {
+  const el = document.getElementById('sent-invites-widget');
+  if (!el) return;
+  if (state.invites.length === 0) {
+    el.innerHTML = `<div style="color:var(--r-warm-gray);font-size:13px;">No invites sent yet.</div>`;
+    return;
+  }
+  el.innerHTML = state.invites.map(i => `
+    <div class="invite-pill" style="${i.status === 'expired' ? 'opacity:0.55;' : ''}">
+      <div class="avatar" style="width:34px;height:34px;font-size:12px;background:var(--r-gold-light);color:var(--r-gold-dark);">${inviteInitials(i.email)}</div>
+      <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">${i.email}</div><div style="font-size:12px;color:${i.status === 'expired' ? 'var(--r-red)' : 'var(--r-warm-gray)'};">${i.user_type.charAt(0).toUpperCase() + i.user_type.slice(1)} · ${i.status === 'expired' ? 'expired' : i.status}</div></div>
+      <button class="btn btn-ghost btn-sm" onclick="resendInvite('${i.email}','${i.user_type}')">Resend</button>
+    </div>`).join('');
+}
+
+async function resendInvite(email, user_type) {
+  try {
+    const result = await api('/invites', { method: 'POST', body: JSON.stringify({ email, user_type }) });
+    showToast(result.email_sent ? '📧 Invite resent!' : '✓ New invite created (email not sent)');
+    await loadAppData();
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  }
+}
+
+function renderNotificationsFeed() {
+  const el = document.getElementById('notifications-feed');
+  if (!el) return;
+  const events = [];
+  state.bookings.forEach(b => {
+    if (!b.room || !b.member) return;
+    if (b.status === 'cancelled') {
+      events.push({ ts: b.created_at, title: 'Booking cancelled', sub: `${b.member.first_name} ${b.member.last_name} · ${b.room.name} · ${fmtDateTime(b.start_time)}`, dotColor: 'var(--r-red)' });
+    } else {
+      events.push({ ts: b.created_at, title: `New booking: ${b.room.name}`, sub: `${b.member.first_name} ${b.member.last_name} booked ${fmtDateTime(b.start_time)}`, dotColor: null });
+    }
+  });
+  state.invites.forEach(i => {
+    if (i.status === 'expired') {
+      events.push({ ts: i.expires_at, title: `Invite expired: ${i.email}`, sub: `${i.user_type.charAt(0).toUpperCase() + i.user_type.slice(1)} invitation not accepted`, dim: true });
+    } else {
+      events.push({ ts: i.invited_at, title: `Invitation sent: ${i.email}`, sub: `${i.user_type.charAt(0).toUpperCase() + i.user_type.slice(1)} · awaiting response`, dim: true });
+    }
+  });
+  events.sort((a, b) => new Date(b.ts) - new Date(a.ts));
+  const top = events.slice(0, 8);
+  if (top.length === 0) {
+    el.innerHTML = `<div style="padding:16px 0;color:var(--r-warm-gray);font-size:13px;">No activity yet.</div>`;
+    return;
+  }
+  el.innerHTML = top.map(e => e.dim
+    ? `<div class="notif-item" style="opacity:0.5;">
+         <div style="width:9px;height:9px;border-radius:50%;background:var(--r-surface2);border:1px solid var(--r-warm-gray);flex-shrink:0;margin-top:5px;"></div>
+         <div><div style="font-size:13.5px;">${e.title}</div><div style="font-size:12px;color:var(--r-warm-gray);margin-top:2px;">${e.sub} · ${timeAgo(e.ts)}</div></div>
+       </div>`
+    : `<div class="notif-item">
+         <div class="notif-dot-lg" style="${e.dotColor ? 'background:' + e.dotColor + ';' : ''}"></div>
+         <div><div style="font-size:13.5px;font-weight:500;">${e.title}</div><div style="font-size:12px;color:var(--r-warm-gray);margin-top:2px;">${e.sub} · ${timeAgo(e.ts)}</div></div>
+       </div>`
+  ).join('');
 }
 
 function renderGoogleCalendarStatus() {
