@@ -1,5 +1,5 @@
-const { getSupabase } = require('../_lib/supabase');
-const { sendInvite } = require('../_lib/email');
+const { getSupabase } = require('./_lib/supabase');
+const { sendInvite } = require('./_lib/email');
 
 module.exports = async (req, res) => {
   const supabase = getSupabase();

@@ -1,4 +1,4 @@
-const { getSupabase } = require('../_lib/supabase');
+const { getSupabase } = require('./_lib/supabase');
 
 module.exports = async (req, res) => {
   const supabase = getSupabase();
