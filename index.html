@@ -931,55 +931,8 @@ textarea.form-input { resize: vertical; }
           <div><div class="page-title">Rooms &amp; Spaces</div><div class="gold-line"></div><div class="page-sub">Manage your bookable spaces</div></div>
           <button class="btn btn-primary" onclick="openModal('add-room-modal')">+ Add Room</button>
         </div>
-        <div class="three-col">
-          <div class="room-card" onclick="openModal('new-booking-modal')">
-            <div class="room-visual" style="background:#F5EFE4;">🌅</div>
-            <div class="room-card-body">
-              <div class="room-name">Amber Room</div>
-              <div class="room-detail">Capacity: 4 · Ground floor</div>
-              <div style="font-size:12px;color:var(--r-green);font-weight:500;margin-top:8px;">● Available now</div>
-            </div>
-          </div>
-          <div class="room-card">
-            <div class="room-visual" style="background:#EBF2EE;">🌿</div>
-            <div class="room-card-body">
-              <div class="room-name">Jade Suite</div>
-              <div class="room-detail">Capacity: 2 · First floor</div>
-              <div style="font-size:12px;color:var(--r-red);font-weight:500;margin-top:8px;">● Booked until 16:00</div>
-            </div>
-          </div>
-          <div class="room-card" onclick="openModal('new-booking-modal')">
-            <div class="room-visual" style="background:#F0EDF5;">✨</div>
-            <div class="room-card-body">
-              <div class="room-name">Pearl Room</div>
-              <div class="room-detail">Capacity: 6 · First floor</div>
-              <div style="font-size:12px;color:var(--r-green);font-weight:500;margin-top:8px;">● Available now</div>
-            </div>
-          </div>
-          <div class="room-card" onclick="openModal('new-booking-modal')">
-            <div class="room-visual" style="background:#EAF0F5;">💠</div>
-            <div class="room-card-body">
-              <div class="room-name">Sapphire Lounge</div>
-              <div class="room-detail">Capacity: 8 · Ground floor</div>
-              <div style="font-size:12px;color:var(--r-green);font-weight:500;margin-top:8px;">● Available now</div>
-            </div>
-          </div>
-          <div class="room-card">
-            <div class="room-visual" style="background:#F5F0E8;">🪨</div>
-            <div class="room-card-body">
-              <div class="room-name">Onyx Studio</div>
-              <div class="room-detail">Capacity: 3 · Basement</div>
-              <div style="font-size:12px;color:var(--r-red);font-weight:500;margin-top:8px;">● Booked until 18:00</div>
-            </div>
-          </div>
-          <div class="room-card" onclick="openModal('new-booking-modal')">
-            <div class="room-visual" style="background:#F2EEF5;">🔮</div>
-            <div class="room-card-body">
-              <div class="room-name">Quartz Suite</div>
-              <div class="room-detail">Capacity: 2 · Second floor</div>
-              <div style="font-size:12px;color:var(--r-green);font-weight:500;margin-top:8px;">● Available now</div>
-            </div>
-          </div>
+        <div class="three-col" id="rooms-grid">
+          <div style="grid-column:1/-1;color:var(--r-warm-gray);padding:20px;">Loading rooms…</div>
         </div>
       </div>
 
@@ -1196,27 +1149,8 @@ textarea.form-input { resize: vertical; }
         <div class="two-col">
           <div class="card">
             <div class="card-header"><div class="card-title">Select a Room</div></div>
-            <div style="padding:12px 18px;display:flex;flex-direction:column;gap:8px;">
-              <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.borderColor='var(--r-gold)'" onmouseout="this.style.borderColor='rgba(0,0,0,0.08)'" onclick="selectRoomOption(this,'Amber Room')">
-                <span style="font-size:22px;">🌅</span>
-                <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">Amber Room</div><div style="font-size:12px;color:var(--r-warm-gray);">Capacity 4 · Ground floor</div></div>
-                <span class="badge badge-green">Free</span>
-              </div>
-              <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;opacity:0.45;cursor:not-allowed;">
-                <span style="font-size:22px;">🌿</span>
-                <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">Jade Suite</div><div style="font-size:12px;color:var(--r-warm-gray);">Capacity 2 · First floor</div></div>
-                <span class="badge badge-red">Booked</span>
-              </div>
-              <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.borderColor='var(--r-gold)'" onmouseout="this.style.borderColor='rgba(0,0,0,0.08)'" onclick="selectRoomOption(this,'Pearl Room')">
-                <span style="font-size:22px;">✨</span>
-                <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">Pearl Room</div><div style="font-size:12px;color:var(--r-warm-gray);">Capacity 6 · First floor</div></div>
-                <span class="badge badge-green">Free</span>
-              </div>
-              <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.borderColor='var(--r-gold)'" onmouseout="this.style.borderColor='rgba(0,0,0,0.08)'" onclick="selectRoomOption(this,'Sapphire Lounge')">
-                <span style="font-size:22px;">💠</span>
-                <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">Sapphire Lounge</div><div style="font-size:12px;color:var(--r-warm-gray);">Capacity 8 · Ground floor</div></div>
-                <span class="badge badge-green">Free</span>
-              </div>
+            <div style="padding:12px 18px;display:flex;flex-direction:column;gap:8px;" id="book-room-list">
+              <div style="color:var(--r-warm-gray);padding:8px;">Loading rooms…</div>
             </div>
           </div>
           <div class="card">
@@ -1508,6 +1442,8 @@ async function loadAppData() {
     populateBookingModalSelects();
     renderBookingsTable();
     renderMembersTable();
+    renderRoomsGrid();
+    renderBookRoomList();
     renderGoogleCalendarStatus();
   } catch (e) {
     showToast('⚠ Could not load live data: ' + e.message);
@@ -1582,6 +1518,40 @@ function renderMembersTable() {
       <td><button class="btn btn-ghost btn-sm">Manage</button></td>
     </tr>`;
   }).join('');
+}
+
+function renderRoomsGrid() {
+  const grid = document.getElementById('rooms-grid');
+  if (!grid) return;
+  if (state.rooms.length === 0) {
+    grid.innerHTML = `<div style="grid-column:1/-1;color:var(--r-warm-gray);padding:20px;">No rooms yet — click "+ Add Room" to create one.</div>`;
+    return;
+  }
+  const bgByEmoji = { '🌅': '#F5EFE4', '🌿': '#EBF2EE', '✨': '#F0EDF5', '💠': '#EAF0F5', '🪨': '#F5F0E8', '🔮': '#F2EEF5' };
+  grid.innerHTML = state.rooms.map(r => `
+    <div class="room-card" onclick="openModal('new-booking-modal')">
+      <div class="room-visual" style="background:${bgByEmoji[r.emoji] || '#F5F0E8'};">${r.emoji || '🏠'}</div>
+      <div class="room-card-body">
+        <div class="room-name">${r.name}</div>
+        <div class="room-detail">Capacity: ${r.capacity} · ${r.floor || ''}</div>
+        <div style="font-size:12px;color:var(--r-green);font-weight:500;margin-top:8px;">● Available now</div>
+      </div>
+    </div>`).join('');
+}
+
+function renderBookRoomList() {
+  const list = document.getElementById('book-room-list');
+  if (!list) return;
+  if (state.rooms.length === 0) {
+    list.innerHTML = `<div style="color:var(--r-warm-gray);padding:8px;">No rooms available.</div>`;
+    return;
+  }
+  list.innerHTML = state.rooms.map(r => `
+    <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid rgba(0,0,0,0.08);border-radius:10px;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.borderColor='var(--r-gold)'" onmouseout="this.style.borderColor='rgba(0,0,0,0.08)'" onclick="selectRoomOption(this,'${r.name}','${r.id}')">
+      <span style="font-size:22px;">${r.emoji || '🏠'}</span>
+      <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">${r.name}</div><div style="font-size:12px;color:var(--r-warm-gray);">Capacity ${r.capacity} · ${r.floor || ''}</div></div>
+      <span class="badge badge-green">Free</span>
+    </div>`).join('');
 }
 
 function renderGoogleCalendarStatus() {
@@ -1850,8 +1820,10 @@ function selectSlot(el) {
 }
 
 // ── ROOM SELECTION ──
-function selectRoomOption(el, name) {
-  document.querySelectorAll('#view-book-room [onclick^="selectRoomOption"]').forEach(r => {
+let selectedClientRoomId = null;
+function selectRoomOption(el, name, roomId) {
+  selectedClientRoomId = roomId || null;
+  document.querySelectorAll('#book-room-list > div').forEach(r => {
     r.style.borderColor = 'rgba(0,0,0,0.08)';
     r.style.background = '';
   });
