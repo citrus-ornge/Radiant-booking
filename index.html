@@ -1367,7 +1367,8 @@ textarea.form-input { resize: vertical; }
                 <select class="form-input" id="client-duration"><option value="1">1 hour</option><option value="2" selected>2 hours</option><option value="3">3 hours</option><option value="4">Half day (4hrs)</option><option value="8">Full day</option></select>
               </div>
               <div class="form-row"><label class="form-label">Notes</label><textarea class="form-input" id="client-notes" rows="2" placeholder="Any special requirements…"></textarea></div>
-              <button class="btn btn-primary" style="width:100%;justify-content:center;position:sticky;bottom:12px;box-shadow:0 4px 16px rgba(0,0,0,0.15);z-index:5;" id="client-book-btn" onclick="confirmClientBooking()">Confirm Booking</button>
+              <div style="height:64px;"></div>
+              <button class="btn btn-primary" style="position:fixed;left:16px;right:16px;bottom:16px;max-width:400px;margin:0 auto;justify-content:center;box-shadow:0 6px 20px rgba(0,0,0,0.25);z-index:50;" id="client-book-btn" onclick="confirmClientBooking()">Confirm Booking</button>
             </div>
           </div>
         </div>
@@ -1652,10 +1653,8 @@ textarea.form-input { resize: vertical; }
       <div><div class="modal-title">Recent Alerts</div></div>
       <button class="close-btn" onclick="closeModal('notif-modal')">✕</button>
     </div>
-    <div class="modal-body" style="padding:10px 26px 22px;">
-      <div class="notif-item"><div class="notif-dot-lg"></div><div><div style="font-size:13.5px;font-weight:500;">New booking: Amber Room</div><div style="font-size:12px;color:var(--r-warm-gray);margin-top:2px;">Dr. Linda Chen · 5 mins ago</div></div></div>
-      <div class="notif-item"><div class="notif-dot-lg"></div><div><div style="font-size:13.5px;font-weight:500;">Invitation accepted</div><div style="font-size:12px;color:var(--r-warm-gray);margin-top:2px;">Sophie Walsh joined · 1 hour ago</div></div></div>
-      <div class="notif-item"><div class="notif-dot-lg" style="background:var(--r-red);"></div><div><div style="font-size:13.5px;font-weight:500;">Booking cancelled</div><div style="font-size:12px;color:var(--r-warm-gray);margin-top:2px;">Tom Reeves · Onyx Studio · 2 hrs ago</div></div></div>
+    <div class="modal-body" style="padding:10px 26px 22px;" id="notif-modal-body">
+      <div style="padding:16px 0;color:var(--r-warm-gray);font-size:13px;">Loading…</div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('notif-modal');showView('notifications')">View all →</button>
@@ -2005,9 +2004,7 @@ async function resendInvite(email, user_type) {
   }
 }
 
-function renderNotificationsFeed() {
-  const el = document.getElementById('notifications-feed');
-  if (!el) return;
+function buildNotificationEvents() {
   const events = [];
   state.bookings.forEach(b => {
     if (!b.room || !b.member) return;
@@ -2025,12 +2022,16 @@ function renderNotificationsFeed() {
     }
   });
   events.sort((a, b) => new Date(b.ts) - new Date(a.ts));
-  const top = events.slice(0, 8);
-  if (top.length === 0) {
+  return events;
+}
+
+function renderEventsInto(el, events) {
+  if (!el) return;
+  if (events.length === 0) {
     el.innerHTML = `<div style="padding:16px 0;color:var(--r-warm-gray);font-size:13px;">No activity yet.</div>`;
     return;
   }
-  el.innerHTML = top.map(e => e.dim
+  el.innerHTML = events.map(e => e.dim
     ? `<div class="notif-item" style="opacity:0.5;">
          <div style="width:9px;height:9px;border-radius:50%;background:var(--r-surface2);border:1px solid var(--r-warm-gray);flex-shrink:0;margin-top:5px;"></div>
          <div><div style="font-size:13.5px;">${e.title}</div><div style="font-size:12px;color:var(--r-warm-gray);margin-top:2px;">${e.sub} · ${timeAgo(e.ts)}</div></div>
@@ -2040,6 +2041,12 @@ function renderNotificationsFeed() {
          <div><div style="font-size:13.5px;font-weight:500;">${e.title}</div><div style="font-size:12px;color:var(--r-warm-gray);margin-top:2px;">${e.sub} · ${timeAgo(e.ts)}</div></div>
        </div>`
   ).join('');
+}
+
+function renderNotificationsFeed() {
+  const events = buildNotificationEvents();
+  renderEventsInto(document.getElementById('notifications-feed'), events.slice(0, 8));
+  renderEventsInto(document.getElementById('notif-modal-body'), events.slice(0, 3));
 }
 
 function renderGoogleCalendarStatus() {
