@@ -1002,7 +1002,7 @@ textarea.form-input { resize: vertical; }
           <div class="table-scroll">
           <table>
             <thead><tr><th>Name</th><th>Email</th><th>Type</th><th>Joined</th><th>Bookings</th><th>Status</th><th></th></tr></thead>
-            <tbody>
+            <tbody id="members-table">
               <tr><td><div style="display:flex;align-items:center;gap:10px;"><div class="avatar" style="width:30px;height:30px;font-size:11px;">LC</div>Dr. Linda Chen</div></td><td style="color:var(--r-warm-gray);">l.chen@clinic.co</td><td><span class="badge badge-blue">Practitioner</span></td><td style="color:var(--r-warm-gray);">Jan 2024</td><td>48</td><td><span class="badge badge-green">Active</span></td><td><button class="btn btn-ghost btn-sm">Manage</button></td></tr>
               <tr><td><div style="display:flex;align-items:center;gap:10px;"><div class="avatar" style="width:30px;height:30px;font-size:11px;background:var(--r-blue-light);color:var(--r-blue);">PN</div>Priya Nair</div></td><td style="color:var(--r-warm-gray);">priya.n@email.com</td><td><span class="badge badge-gold">Member</span></td><td style="color:var(--r-warm-gray);">Mar 2024</td><td>12</td><td><span class="badge badge-green">Active</span></td><td><button class="btn btn-ghost btn-sm">Manage</button></td></tr>
               <tr><td><div style="display:flex;align-items:center;gap:10px;"><div class="avatar" style="width:30px;height:30px;font-size:11px;background:var(--r-green-light);color:var(--r-green);">ML</div>Marcus Liu</div></td><td style="color:var(--r-warm-gray);">m.liu@wellness.io</td><td><span class="badge badge-blue">Practitioner</span></td><td style="color:var(--r-warm-gray);">Feb 2024</td><td>31</td><td><span class="badge badge-green">Active</span></td><td><button class="btn btn-ghost btn-sm">Manage</button></td></tr>
@@ -1026,10 +1026,10 @@ textarea.form-input { resize: vertical; }
               <div class="form-row"><label class="form-label">Email Address</label><input type="email" class="form-input" placeholder="member@email.com" id="invite-email"></div>
               <div class="form-row"><label class="form-label">User Type</label>
                 <select class="form-input" id="invite-type">
-                  <option>Practitioner</option><option>Member</option><option>Guest</option><option>Administrator</option>
+                  <option value="practitioner">Practitioner</option><option value="member">Member</option><option value="guest">Guest</option><option value="administrator">Administrator</option>
                 </select>
               </div>
-              <div class="form-row"><label class="form-label">Personal Note (optional)</label><textarea class="form-input" rows="3" placeholder="Add a welcome message…"></textarea></div>
+              <div class="form-row"><label class="form-label">Personal Note (optional)</label><textarea class="form-input" id="invite-note" rows="3" placeholder="Add a welcome message…"></textarea></div>
               <div class="form-row">
                 <label class="form-label">Permissions</label>
                 <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px;">
@@ -1104,8 +1104,8 @@ textarea.form-input { resize: vertical; }
             <div class="card-header"><div class="card-title">Calendar Integrations</div></div>
             <div style="padding:16px 22px;">
               <div class="integration-row">
-                <div style="display:flex;align-items:center;gap:12px;"><span style="font-size:22px;">📅</span><div><div style="font-size:13.5px;font-weight:500;">Google Calendar</div><div style="font-size:12px;color:var(--r-warm-gray);">Auto-send invites on booking</div></div></div>
-                <span class="badge badge-green">Connected</span>
+                <div style="display:flex;align-items:center;gap:12px;"><span style="font-size:22px;">📅</span><div><div style="font-size:13.5px;font-weight:500;">Google Calendar</div><div style="font-size:12px;color:var(--r-warm-gray);">Auto-sync bookings to your calendar</div></div></div>
+                <span id="gcal-status-slot"><span class="badge badge-gray">Checking…</span></span>
               </div>
               <div class="integration-row">
                 <div style="display:flex;align-items:center;gap:12px;"><span style="font-size:22px;">📆</span><div><div style="font-size:13.5px;font-weight:500;">Outlook / Microsoft 365</div><div style="font-size:12px;color:var(--r-warm-gray);">Send via MAPI / Graph API</div></div></div>
@@ -1307,30 +1307,31 @@ textarea.form-input { resize: vertical; }
     <div class="modal-body">
       <div class="form-two">
         <div class="form-row"><label class="form-label">Member</label>
-          <select class="form-input"><option>Dr. Linda Chen</option><option>Priya Nair</option><option>Marcus Liu</option><option>Sophie Walsh</option></select>
+          <select class="form-input" id="nb-member"><option>Loading…</option></select>
         </div>
         <div class="form-row"><label class="form-label">Room</label>
-          <select class="form-input"><option>Amber Room</option><option>Pearl Room</option><option>Sapphire Lounge</option><option>Quartz Suite</option></select>
+          <select class="form-input" id="nb-room"><option>Loading…</option></select>
         </div>
       </div>
       <div class="form-two">
-        <div class="form-row"><label class="form-label">Date</label><input type="date" class="form-input"></div>
+        <div class="form-row"><label class="form-label">Date</label><input type="date" class="form-input" id="nb-date"></div>
         <div class="form-row"><label class="form-label">Start Time</label>
-          <select class="form-input"><option>09:00</option><option>10:00</option><option>11:00</option><option>12:00</option><option>13:00</option><option>14:00</option><option>15:00</option><option>16:00</option></select>
+          <select class="form-input" id="nb-time"><option>09:00</option><option>10:00</option><option>11:00</option><option>12:00</option><option>13:00</option><option>14:00</option><option>15:00</option><option>16:00</option></select>
         </div>
       </div>
       <div class="form-row"><label class="form-label">Duration</label>
-        <select class="form-input"><option>1 hour</option><option selected>2 hours</option><option>3 hours</option><option>Half day</option><option>Full day</option></select>
+        <select class="form-input" id="nb-duration"><option value="1">1 hour</option><option value="2" selected>2 hours</option><option value="3">3 hours</option><option value="4">Half day</option><option value="8">Full day</option></select>
       </div>
+      <div class="form-row"><label class="form-label">Notes</label><textarea class="form-input" id="nb-notes" rows="2" placeholder="Optional…"></textarea></div>
       <div style="background:var(--r-surface2);border-radius:10px;padding:14px 16px;margin-top:4px;">
         <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.07em;color:var(--r-warm-gray);font-weight:500;margin-bottom:10px;">Automatic Notifications</div>
-        <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:8px;cursor:pointer;"><input type="checkbox" checked> Send booking confirmation email</label>
-        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;"><input type="checkbox" checked> Send calendar invite (Google / Outlook)</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:8px;cursor:pointer;"><input type="checkbox" checked disabled> Send booking confirmation email</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;"><input type="checkbox" checked disabled> Send calendar invite (if Google Calendar connected)</label>
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('new-booking-modal')">Cancel</button>
-      <button class="btn btn-primary" onclick="confirmAdminBooking()">Confirm Booking</button>
+      <button class="btn btn-primary" id="nb-submit-btn" onclick="confirmAdminBooking()">Confirm Booking</button>
     </div>
   </div>
 </div>
@@ -1343,15 +1344,15 @@ textarea.form-input { resize: vertical; }
       <button class="close-btn" onclick="closeModal('invite-modal')">✕</button>
     </div>
     <div class="modal-body">
-      <div class="form-row"><label class="form-label">Email Address</label><input type="email" class="form-input" placeholder="name@email.com"></div>
+      <div class="form-row"><label class="form-label">Email Address</label><input type="email" class="form-input" id="im-email" placeholder="name@email.com"></div>
       <div class="form-row"><label class="form-label">User Type</label>
-        <select class="form-input"><option>Practitioner</option><option>Member</option><option>Guest</option><option>Administrator</option></select>
+        <select class="form-input" id="im-type"><option value="practitioner">Practitioner</option><option value="member">Member</option><option value="guest">Guest</option><option value="administrator">Administrator</option></select>
       </div>
-      <div class="form-row"><label class="form-label">Personal Note</label><textarea class="form-input" rows="2" placeholder="Optional welcome message…"></textarea></div>
+      <div class="form-row"><label class="form-label">Personal Note</label><textarea class="form-input" id="im-note" rows="2" placeholder="Optional welcome message…"></textarea></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('invite-modal')">Cancel</button>
-      <button class="btn btn-primary" onclick="sendInviteModal()">Send Invite</button>
+      <button class="btn btn-primary" id="invite-modal-submit" onclick="sendInviteModal()">Send Invite</button>
     </div>
   </div>
 </div>
@@ -1471,10 +1472,156 @@ let currentRole = 'admin';
 let loginRole = 'admin';
 
 const users = {
-  admin: { name: 'Sarah Allen', initials: 'SA', role: 'Administrator', avatar: '#C9A96E' },
-  practitioner: { name: 'Dr. Linda Chen', initials: 'LC', role: 'Practitioner', avatar: '#C9A96E' },
-  member: { name: 'Priya Nair', initials: 'PN', role: 'Member', avatar: '#B5D4F4' }
+  admin: { name: 'Sarah Allen', initials: 'SA', role: 'Administrator', avatar: '#C9A96E', email: 'sarah@radiantfr.com' },
+  practitioner: { name: 'Dr. Linda Chen', initials: 'LC', role: 'Practitioner', avatar: '#C9A96E', email: 'l.chen@clinic.co' },
+  member: { name: 'Priya Nair', initials: 'PN', role: 'Member', avatar: '#B5D4F4', email: 'priya.n@email.com' }
 };
+
+// ── LIVE APP STATE (populated from the real API) ──
+const state = { rooms: [], members: [], bookings: [], invites: [], currentMember: null };
+
+// ── API HELPERS ──
+async function api(path, options = {}) {
+  const res = await fetch('/api' + path, {
+    ...options,
+    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+  });
+  let data = null;
+  try { data = await res.json(); } catch (e) { /* e.g. 204 No Content */ }
+  if (!res.ok) throw new Error((data && data.error) || `Request failed (${res.status})`);
+  return data;
+}
+
+async function loadAppData() {
+  try {
+    const [roomsRes, membersRes, bookingsRes] = await Promise.all([
+      api('/rooms'), api('/members'), api('/bookings'),
+    ]);
+    state.rooms = roomsRes.rooms || [];
+    state.members = membersRes.members || [];
+    state.bookings = bookingsRes.bookings || [];
+
+    // Map the logged-in demo persona to its real Supabase member row by email
+    const u = users[loginRole === 'admin' ? 'admin' : loginRole];
+    state.currentMember = state.members.find(m => m.email === u.email) || null;
+
+    populateBookingModalSelects();
+    renderBookingsTable();
+    renderMembersTable();
+    renderGoogleCalendarStatus();
+  } catch (e) {
+    showToast('⚠ Could not load live data: ' + e.message);
+  }
+}
+
+function populateBookingModalSelects() {
+  const memberSel = document.getElementById('nb-member');
+  const roomSel = document.getElementById('nb-room');
+  if (memberSel) {
+    memberSel.innerHTML = state.members.map(m => `<option value="${m.id}">${m.first_name} ${m.last_name}</option>`).join('');
+  }
+  if (roomSel) {
+    roomSel.innerHTML = state.rooms.map(r => `<option value="${r.id}">${r.emoji || ''} ${r.name}</option>`).join('');
+  }
+}
+
+function fmtDateTime(iso) {
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ' · ' +
+    d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+}
+function durationLabel(startISO, endISO) {
+  const hrs = Math.round((new Date(endISO) - new Date(startISO)) / 3600000);
+  return hrs === 1 ? '1 hr' : `${hrs} hrs`;
+}
+function statusBadge(status) {
+  const map = { confirmed: 'badge-green', pending: 'badge-gold', cancelled: 'badge-red' };
+  return `<span class="badge ${map[status] || 'badge-gray'}">${status.charAt(0).toUpperCase() + status.slice(1)}</span>`;
+}
+function typeBadge(userType) {
+  const map = { practitioner: 'badge-blue', member: 'badge-gold', guest: 'badge-gray', administrator: 'badge-blue' };
+  const label = userType.charAt(0).toUpperCase() + userType.slice(1);
+  return `<span class="badge ${map[userType] || 'badge-gray'}">${label}</span>`;
+}
+
+function renderBookingsTable() {
+  const tbody = document.getElementById('bookings-table');
+  if (!tbody) return;
+  if (state.bookings.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="color:var(--r-warm-gray);text-align:center;padding:24px;">No bookings yet — click "+ New Booking" to create one.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = state.bookings.map(b => `
+    <tr>
+      <td><strong>${b.room ? b.room.name : '—'}</strong></td>
+      <td>${b.member ? b.member.first_name + ' ' + b.member.last_name : '—'}</td>
+      <td>${b.member ? typeBadge(b.member.user_type) : '—'}</td>
+      <td>${fmtDateTime(b.start_time)}</td>
+      <td>${durationLabel(b.start_time, b.end_time)}</td>
+      <td>${statusBadge(b.status)}</td>
+      <td>${b.status !== 'cancelled'
+        ? `<button class="btn btn-ghost btn-sm" onclick="cancelBooking('${b.id}')">Cancel</button>`
+        : '<span style="color:var(--r-warm-gray);font-size:12.5px;">—</span>'}</td>
+    </tr>`).join('');
+}
+
+function renderMembersTable() {
+  const tbody = document.getElementById('members-table');
+  if (!tbody) return;
+  tbody.innerHTML = state.members.map(m => {
+    const initials = (m.first_name[0] + m.last_name[0]).toUpperCase();
+    const bookingCount = state.bookings.filter(b => b.member && b.member.id === m.id).length;
+    return `
+    <tr>
+      <td><div style="display:flex;align-items:center;gap:10px;"><div class="avatar" style="width:30px;height:30px;font-size:11px;">${initials}</div>${m.first_name} ${m.last_name}</div></td>
+      <td style="color:var(--r-warm-gray);">${m.email}</td>
+      <td>${typeBadge(m.user_type)}</td>
+      <td style="color:var(--r-warm-gray);">${new Date(m.created_at).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}</td>
+      <td>${bookingCount}</td>
+      <td><span class="badge ${m.status === 'active' ? 'badge-green' : 'badge-red'}">${m.status.charAt(0).toUpperCase() + m.status.slice(1)}</span></td>
+      <td><button class="btn btn-ghost btn-sm">Manage</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderGoogleCalendarStatus() {
+  const slot = document.getElementById('gcal-status-slot');
+  if (!slot) return;
+  if (!state.currentMember) {
+    slot.innerHTML = `<span class="badge badge-gray">Sign in as a member to connect</span>`;
+    return;
+  }
+  if (state.currentMember.google_calendar_connected) {
+    slot.innerHTML = `<span class="badge badge-green">Connected</span>`;
+  } else {
+    slot.innerHTML = `<button class="btn btn-outline btn-sm" onclick="connectGoogleCalendar()">Connect</button>`;
+  }
+}
+
+function connectGoogleCalendar() {
+  if (!state.currentMember) { showToast('⚠ No matching member record found'); return; }
+  window.location.href = `/api/auth/google/start?member_id=${state.currentMember.id}`;
+}
+
+async function cancelBooking(id) {
+  try {
+    await api(`/bookings/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'cancelled' }) });
+    showToast('✓ Booking cancelled — notification sent');
+    await loadAppData();
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  }
+}
+
+function checkCalendarRedirectStatus() {
+  const params = new URLSearchParams(window.location.search);
+  const cal = params.get('calendar');
+  if (!cal) return;
+  if (cal === 'connected') showToast('✅ Google Calendar connected!');
+  else if (cal === 'error') showToast('⚠ Google Calendar connection failed: ' + (params.get('reason') || 'unknown error'));
+  // clean the URL so refreshing doesn't re-show the toast
+  window.history.replaceState({}, '', window.location.pathname);
+}
 
 // ── LOGIN ──
 function setLoginRole(role) {
@@ -1503,6 +1650,8 @@ function doLogin() {
     document.getElementById('role-toggle').style.display = 'none';
     setupClientView(loginRole);
   }
+
+  loadAppData();
 }
 
 function doLogout() {
@@ -1583,7 +1732,13 @@ function closeSidebar() {
 }
 
 // ── MODALS ──
-function openModal(id) { document.getElementById(id).classList.add('open'); }
+function openModal(id) {
+  document.getElementById(id).classList.add('open');
+  if (id === 'new-booking-modal') {
+    const dateInput = document.getElementById('nb-date');
+    if (dateInput && !dateInput.value) dateInput.valueAsDate = new Date();
+  }
+}
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 
 document.querySelectorAll('.modal-overlay').forEach(o => {
@@ -1591,24 +1746,91 @@ document.querySelectorAll('.modal-overlay').forEach(o => {
 });
 
 // ── BOOKING ACTIONS ──
-function confirmAdminBooking() {
-  closeModal('new-booking-modal');
-  setTimeout(() => openModal('cal-modal'), 280);
+async function confirmAdminBooking() {
+  const memberId = document.getElementById('nb-member').value;
+  const roomId = document.getElementById('nb-room').value;
+  const date = document.getElementById('nb-date').value;
+  const time = document.getElementById('nb-time').value;
+  const duration = parseFloat(document.getElementById('nb-duration').value);
+  const notes = document.getElementById('nb-notes').value;
+
+  if (!memberId || !roomId || !date || !time) {
+    showToast('⚠ Please fill in member, room, date and time');
+    return;
+  }
+
+  const start = new Date(`${date}T${time}:00`);
+  const end = new Date(start.getTime() + duration * 3600000);
+
+  const btn = document.getElementById('nb-submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Booking…';
+
+  try {
+    const result = await api('/bookings', {
+      method: 'POST',
+      body: JSON.stringify({
+        room_id: roomId,
+        member_id: memberId,
+        start_time: start.toISOString(),
+        end_time: end.toISOString(),
+        notes,
+      }),
+    });
+    closeModal('new-booking-modal');
+    await loadAppData();
+
+    let msg = '✓ Booking confirmed';
+    if (result.email_sent) msg += ' — email sent';
+    if (result.warnings && result.warnings.length) msg += ` (${result.warnings.join('; ')})`;
+    showToast(msg);
+
+    setTimeout(() => openModal('cal-modal'), 280);
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Confirm Booking';
+  }
 }
 
 function confirmClientBooking() {
   openModal('cal-modal');
 }
 
-function sendInviteModal() {
-  closeModal('invite-modal');
-  showToast('✉ Invitation sent successfully!');
+async function sendInviteModal() {
+  const email = document.getElementById('im-email').value;
+  const user_type = document.getElementById('im-type').value;
+  const personal_note = document.getElementById('im-note').value;
+  if (!email) { showToast('⚠ Please enter an email address'); return; }
+
+  const btn = document.getElementById('invite-modal-submit');
+  btn.disabled = true;
+  try {
+    const result = await api('/invites', { method: 'POST', body: JSON.stringify({ email, user_type, personal_note }) });
+    closeModal('invite-modal');
+    showToast(result.email_sent ? '✉ Invitation sent successfully!' : '✓ Invite created (email not sent — check Resend setup)');
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  } finally {
+    btn.disabled = false;
+  }
 }
 
-function sendInviteFromPage() {
+async function sendInviteFromPage() {
   const email = document.getElementById('invite-email').value;
-  const type = document.getElementById('invite-type').value;
-  showToast('✉ Invite sent to ' + (email || 'member') + ' as ' + type);
+  const user_type = document.getElementById('invite-type').value;
+  const personal_note = document.getElementById('invite-note').value;
+  if (!email) { showToast('⚠ Please enter an email address'); return; }
+
+  try {
+    const result = await api('/invites', { method: 'POST', body: JSON.stringify({ email, user_type, personal_note }) });
+    showToast(result.email_sent ? `✉ Invite sent to ${email}` : `✓ Invite created for ${email} (email not sent)`);
+    document.getElementById('invite-email').value = '';
+    document.getElementById('invite-note').value = '';
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  }
 }
 
 function addUser() {
@@ -1656,6 +1878,7 @@ function showToast(msg) {
 
 // ── INIT ──
 document.getElementById('booking-date-input') && (document.getElementById('booking-date-input').valueAsDate = new Date());
+checkCalendarRedirectStatus();
 </script>
 </body>
 </html>
