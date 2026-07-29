@@ -2498,7 +2498,7 @@ function renderProfilePage() {
   if (gcalSlot) {
     gcalSlot.innerHTML = m.google_calendar_connected
       ? '<span class="badge badge-green">Connected</span>'
-      : '<span class="badge badge-gray">Not connected</span>';
+      : '<button class="btn btn-outline btn-sm" onclick="connectGoogleCalendar()">Connect</button>';
   }
 }
 
