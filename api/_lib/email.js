@@ -9,7 +9,7 @@ function getResend() {
 // Until a domain is verified in Resend, FROM_EMAIL must stay on
 // resend's shared test domain (onboarding@resend.com) and can only
 // deliver to the Resend account owner's own address.
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'Radiant Booking <onboarding@resend.com>';
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'Radiant Booking <onboarding@resend.dev>';
 
 async function sendBookingConfirmation({ to, memberName, roomName, start, end }) {
   const resend = getResend();
