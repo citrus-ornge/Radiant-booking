@@ -1,5 +1,5 @@
-const { getSupabase } = require('./_lib/supabase');
-const { sendInvite } = require('./_lib/email');
+const { getSupabase } = require('../_lib/supabase');
+const { sendInvite } = require('../_lib/email');
 
 module.exports = async (req, res) => {
   const supabase = getSupabase();
@@ -22,7 +22,7 @@ module.exports = async (req, res) => {
     if (error) return res.status(500).json({ error: error.message });
 
     const baseUrl = process.env.PUBLIC_APP_URL || 'https://radiant-booking.vercel.app';
-    const inviteUrl = `${baseUrl}/invite/${invite.token}`;
+    const inviteUrl = `${baseUrl}/?invite=${invite.token}`;
 
     let email_sent = false;
     try {

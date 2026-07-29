@@ -1,6 +1,6 @@
-const { getSupabase } = require('./_lib/supabase');
-const { sendBookingConfirmation } = require('./_lib/email');
-const { createCalendarEvent } = require('./_lib/google');
+const { getSupabase } = require('../_lib/supabase');
+const { sendBookingConfirmation } = require('../_lib/email');
+const { createCalendarEvent } = require('../_lib/google');
 
 module.exports = async (req, res) => {
   const supabase = getSupabase();
