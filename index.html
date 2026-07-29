@@ -1691,8 +1691,10 @@ async function api(path, options = {}) {
 }
 
 async function loadAppData(isRetry) {
+  const isAdmin = currentRole === 'admin';
   const results = await Promise.allSettled([
-    api('/rooms'), api('/members'), api('/bookings'), api('/invites'),
+    api('/rooms'), api('/members'), api('/bookings'),
+    isAdmin ? api('/invites') : Promise.resolve({ invites: state.invites }),
   ]);
   const [roomsR, membersR, bookingsR, invitesR] = results;
   const failures = [];
@@ -1707,7 +1709,7 @@ async function loadAppData(isRetry) {
   else failures.push('bookings');
 
   if (invitesR.status === 'fulfilled') state.invites = invitesR.value.invites || [];
-  else failures.push('invites');
+  else if (isAdmin) failures.push('invites');
 
   // Refresh currentMember from the freshly-loaded members list (keeps it in sync
   // with any admin edits) while keeping the real auth-derived id as source of truth
