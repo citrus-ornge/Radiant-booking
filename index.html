@@ -816,6 +816,32 @@ textarea.form-input { resize: vertical; }
   .toast { left: 16px; right: 16px; bottom: 16px; max-width: none; }
 }
 
+.onboarding-progress-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--r-stone); }
+.onboarding-progress-dot.active { background: var(--r-gold); }
+.onboarding-progress-dot.done { background: var(--r-green); }
+
+.doc-card {
+  background: var(--r-surface);
+  border: 1px solid var(--r-stone);
+  border-radius: 14px;
+  padding: 26px 28px;
+  margin-bottom: 22px;
+}
+.doc-scroll-box {
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--r-stone);
+  border-radius: 10px;
+  padding: 16px 18px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--r-charcoal);
+  background: var(--r-surface2);
+  margin: 14px 0 18px;
+}
+.doc-scroll-box h1 { font-family: 'Playfair Display', serif; font-size: 18px; margin: 0 0 10px; }
+.doc-scroll-box p { margin: 0 0 10px; }
+
 @media (max-width: 480px) {
   .stats-grid { grid-template-columns: 1fr; }
   .time-slots { grid-template-columns: repeat(2, 1fr); }
@@ -869,30 +895,101 @@ textarea.form-input { resize: vertical; }
     <div class="login-logo">Radiant</div>
     <div class="login-sub">Booking Platform</div>
 
-    <div class="form-row">
-      <label class="form-label">Sign in as</label>
-      <div class="login-divider">
-        <button class="login-role-btn active" id="role-admin" onclick="setLoginRole('admin')">Administrator</button>
-        <button class="login-role-btn" id="role-practitioner" onclick="setLoginRole('practitioner')">Practitioner</button>
-        <button class="login-role-btn" id="role-member" onclick="setLoginRole('member')">Member</button>
+    <!-- SIGN IN (default) -->
+    <div id="auth-signin-panel">
+      <div class="form-row" style="margin-top:20px;">
+        <label class="form-label">Email</label>
+        <input type="email" class="form-input" id="login-email" placeholder="your@email.com">
       </div>
+      <div class="form-row" id="login-password-row" style="margin-bottom:8px;">
+        <label class="form-label">Password</label>
+        <input type="password" class="form-input" id="login-password" placeholder="••••••••">
+      </div>
+      <p style="text-align:right;margin:0 0 18px;">
+        <a href="#" style="font-size:12px;color:var(--r-gold-dark);" onclick="toggleMagicLinkMode();return false;" id="magic-link-toggle">Sign in with a magic link instead</a>
+      </p>
+
+      <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;" id="signin-btn" onclick="doSignIn()">Sign In to Radiant</button>
+      <p id="auth-error" style="text-align:center;font-size:12.5px;color:var(--r-red);margin-top:12px;display:none;"></p>
+      <p id="auth-info" style="text-align:center;font-size:12.5px;color:var(--r-green);margin-top:12px;display:none;"></p>
     </div>
 
-    <div class="form-row">
-      <label class="form-label">Email</label>
-      <input type="email" class="form-input" id="login-email" placeholder="your@email.com">
-    </div>
-    <div class="form-row" style="margin-bottom:24px;">
-      <label class="form-label">Password</label>
-      <input type="password" class="form-input" id="login-password" placeholder="••••••••">
+    <!-- SIGN UP (via invite link ?invite=TOKEN) -->
+    <div id="auth-signup-panel" style="display:none;">
+      <p style="font-size:13px;color:var(--r-warm-gray);margin:20px 0 16px;">You've been invited to join Radiant as a <strong id="invite-role-label">member</strong>. Set a password to activate your account.</p>
+      <div class="form-row">
+        <label class="form-label">Email</label>
+        <input type="email" class="form-input" id="signup-email" disabled>
+      </div>
+      <div class="form-row" style="margin-bottom:24px;">
+        <label class="form-label">Create Password</label>
+        <input type="password" class="form-input" id="signup-password" placeholder="At least 8 characters">
+      </div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;" id="signup-btn" onclick="doSignUp()">Create Account</button>
+      <p id="signup-error" style="text-align:center;font-size:12.5px;color:var(--r-red);margin-top:12px;display:none;"></p>
     </div>
 
-    <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;" onclick="doLogin()">Sign In to Radiant</button>
-
-    <p style="text-align:center;font-size:12px;color:var(--r-warm-gray);margin-top:18px;">
-      Demo: click any role above then Sign In
-    </p>
+    <!-- INVITE INVALID/EXPIRED -->
+    <div id="auth-invite-invalid" style="display:none;">
+      <p style="font-size:13.5px;color:var(--r-red);margin:20px 0;text-align:center;" id="invite-invalid-msg">This invite link is invalid or has expired.</p>
+      <button class="btn btn-outline" style="width:100%;justify-content:center;" onclick="window.location.href=window.location.pathname">Back to Sign In</button>
+    </div>
   </div>
+  </div>
+</div>
+
+<!-- ══════════════════ ONBOARDING WIZARD ══════════════════ -->
+<div id="onboarding-screen" style="display:none;position:fixed;inset:0;z-index:210;background:var(--r-cream);overflow-y:auto;">
+  <div style="max-width:640px;margin:0 auto;padding:48px 24px 80px;">
+    <div style="text-align:center;margin-bottom:8px;">
+      <div class="login-logo" style="font-size:22px;">Radiant</div>
+      <div class="login-sub">Practitioner Onboarding</div>
+    </div>
+    <div id="onboarding-progress" style="display:flex;gap:6px;justify-content:center;margin:20px 0 36px;"></div>
+
+    <!-- Step: Profile -->
+    <div id="onboarding-step-profile" class="onboarding-step">
+      <div class="page-title" style="font-size:20px;">Your Profile</div>
+      <div class="gold-line"></div>
+      <p class="page-sub" style="margin-bottom:22px;">Tell us a bit about yourself before you get started.</p>
+      <div class="form-two">
+        <div class="form-row"><label class="form-label">First Name</label><input class="form-input" id="ob-first-name"></div>
+        <div class="form-row"><label class="form-label">Last Name</label><input class="form-input" id="ob-last-name"></div>
+      </div>
+      <div class="form-row"><label class="form-label">Phone</label><input class="form-input" id="ob-phone" placeholder="07…"></div>
+      <div class="form-row"><label class="form-label">Qualifications</label><textarea class="form-input" id="ob-qualifications" rows="2" placeholder="e.g. RGN, Level 7 Aesthetics, Independent Prescriber"></textarea></div>
+      <div class="form-two">
+        <div class="form-row"><label class="form-label">Professional Indemnity No.</label><input class="form-input" id="ob-indemnity-number"></div>
+        <div class="form-row"><label class="form-label">Indemnity Expiry</label><input type="date" class="form-input" id="ob-indemnity-expiry"></div>
+      </div>
+      <div class="form-two">
+        <div class="form-row"><label class="form-label">DBS Status</label>
+          <select class="form-input" id="ob-dbs-status">
+            <option value="not_started">Not started</option>
+            <option value="pending">Pending</option>
+            <option value="clear">Clear</option>
+            <option value="expired">Expired</option>
+          </select>
+        </div>
+        <div class="form-row"><label class="form-label">DBS Expiry</label><input type="date" class="form-input" id="ob-dbs-expiry"></div>
+      </div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;margin-top:8px;" onclick="submitOnboardingProfile()">Continue to Documents →</button>
+    </div>
+
+    <!-- Step: Documents (rendered dynamically) -->
+    <div id="onboarding-step-documents" class="onboarding-step" style="display:none;">
+      <div id="onboarding-doc-container"></div>
+    </div>
+
+    <!-- Step: Done -->
+    <div id="onboarding-step-done" class="onboarding-step" style="display:none;text-align:center;padding:40px 0;">
+      <div style="width:56px;height:56px;border-radius:50%;background:var(--r-green-light);color:var(--r-green);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="28" height="28"><circle cx="12" cy="12" r="10"/><path d="M8 12l3 3 5-6"/></svg>
+      </div>
+      <div class="page-title" style="font-size:20px;">You're all set</div>
+      <p class="page-sub" style="margin:8px 0 24px;">Your profile is complete and all required documents are signed.</p>
+      <button class="btn btn-primary" onclick="finishOnboarding()">Enter Radiant Booking →</button>
+    </div>
   </div>
 </div>
 
@@ -1298,13 +1395,27 @@ textarea.form-input { resize: vertical; }
             <div class="card-header"><div class="card-title">Personal Details</div></div>
             <div style="padding:22px;">
               <div style="display:flex;align-items:center;gap:16px;margin-bottom:22px;">
-                <div class="avatar" style="width:58px;height:58px;font-size:18px;" id="profile-avatar">LC</div>
-                <div><div style="font-size:17px;font-family:'Playfair Display',serif;font-weight:500;" id="profile-name">Dr. Linda Chen</div><span class="badge badge-blue" style="margin-top:5px;" id="profile-badge">Practitioner</span></div>
+                <div class="avatar" style="width:58px;height:58px;font-size:18px;" id="profile-avatar">?</div>
+                <div><div style="font-size:17px;font-family:'Playfair Display',serif;font-weight:500;" id="profile-name">—</div><span class="badge badge-blue" style="margin-top:5px;" id="profile-badge">—</span></div>
               </div>
-              <div class="form-row"><label class="form-label">Full Name</label><input type="text" class="form-input" value="Dr. Linda Chen"></div>
-              <div class="form-row"><label class="form-label">Email</label><input type="email" class="form-input" value="l.chen@clinic.co"></div>
-              <div class="form-row"><label class="form-label">Phone</label><input type="tel" class="form-input" value="+44 7700 900123"></div>
-              <button class="btn btn-primary btn-sm" onclick="showToast('✓ Profile updated')">Save Changes</button>
+              <div class="form-two">
+                <div class="form-row"><label class="form-label">First Name</label><input type="text" class="form-input" id="profile-first-name"></div>
+                <div class="form-row"><label class="form-label">Last Name</label><input type="text" class="form-input" id="profile-last-name"></div>
+              </div>
+              <div class="form-row"><label class="form-label">Email</label><input type="email" class="form-input" id="profile-email" disabled style="opacity:0.6;"></div>
+              <div class="form-row"><label class="form-label">Phone</label><input type="tel" class="form-input" id="profile-phone"></div>
+              <div class="form-row"><label class="form-label">Qualifications</label><textarea class="form-input" id="profile-qualifications" rows="2"></textarea></div>
+              <div class="form-row" id="profile-tier-row" style="display:none;">
+                <label class="form-label">Membership Tier</label>
+                <select class="form-input" id="profile-plan-tier">
+                  <option value="">— Not set —</option>
+                  <option value="community">Community</option>
+                  <option value="flex">Flex</option>
+                  <option value="core">Core</option>
+                  <option value="resident">Resident</option>
+                </select>
+              </div>
+              <button class="btn btn-primary btn-sm" onclick="saveProfile()">Save Changes</button>
             </div>
           </div>
           <div class="card">
@@ -1506,26 +1617,25 @@ textarea.form-input { resize: vertical; }
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+const _sb = supabase.createClient('https://lygzlpeslpwptjqxtjgs.supabase.co', 'sb_publishable_zHXuiXcq7UGXRDeTtMAfgA_NVTwpsSA');
+</script>
 <script>
 // ── STATE ──
-let currentRole = 'admin';
-let loginRole = 'admin';
-
-const users = {
-  admin: { name: 'Sarah Allen', initials: 'SA', role: 'Administrator', avatar: '#B5A078', email: 'sarah@radiantfr.com' },
-  practitioner: { name: 'Dr. Linda Chen', initials: 'LC', role: 'Practitioner', avatar: '#B5A078', email: 'l.chen@clinic.co' },
-  member: { name: 'Priya Nair', initials: 'PN', role: 'Member', avatar: '#B5D4F4', email: 'priya.n@email.com' }
-};
+let currentRole = 'admin'; // derived from the real member's user_type after login
+let currentSession = null;
 
 // ── LIVE APP STATE (populated from the real API) ──
 const state = { rooms: [], members: [], bookings: [], invites: [], currentMember: null };
 
 // ── API HELPERS ──
 async function api(path, options = {}) {
-  const res = await fetch('/api' + path, {
-    ...options,
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-  });
+  const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+  if (currentSession && currentSession.access_token) {
+    headers['Authorization'] = 'Bearer ' + currentSession.access_token;
+  }
+  const res = await fetch('/api' + path, { ...options, headers });
   let data = null;
   try { data = await res.json(); } catch (e) { /* e.g. 204 No Content */ }
   if (!res.ok) throw new Error((data && data.error) || `Request failed (${res.status})`);
@@ -1551,9 +1661,12 @@ async function loadAppData(isRetry) {
   if (invitesR.status === 'fulfilled') state.invites = invitesR.value.invites || [];
   else failures.push('invites');
 
-  // Map the logged-in demo persona to its real Supabase member row by email
-  const u = users[loginRole === 'admin' ? 'admin' : loginRole];
-  state.currentMember = state.members.find(m => m.email === u.email) || null;
+  // Refresh currentMember from the freshly-loaded members list (keeps it in sync
+  // with any admin edits) while keeping the real auth-derived id as source of truth
+  if (state.currentMember) {
+    const refreshed = state.members.find(m => m.id === state.currentMember.id);
+    if (refreshed) state.currentMember = refreshed;
+  }
 
   populateBookingModalSelects();
   renderBookingsTable();
@@ -1838,42 +1951,334 @@ function checkCalendarRedirectStatus() {
 }
 
 // ── LOGIN ──
-function setLoginRole(role) {
-  loginRole = role;
-  document.querySelectorAll('.login-role-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById('role-' + role).classList.add('active');
+// ── AUTH: MAGIC LINK TOGGLE ──
+let magicLinkMode = false;
+function toggleMagicLinkMode() {
+  magicLinkMode = !magicLinkMode;
+  document.getElementById('login-password-row').style.display = magicLinkMode ? 'none' : 'block';
+  document.getElementById('magic-link-toggle').textContent = magicLinkMode ? 'Sign in with a password instead' : 'Sign in with a magic link instead';
+  document.getElementById('signin-btn').textContent = magicLinkMode ? 'Send Magic Link' : 'Sign In to Radiant';
 }
 
-function doLogin() {
-  const shell = document.getElementById('app-shell');
+function showAuthError(msg) {
+  const el = document.getElementById('auth-error');
+  el.textContent = msg; el.style.display = 'block';
+  document.getElementById('auth-info').style.display = 'none';
+}
+function showAuthInfo(msg) {
+  const el = document.getElementById('auth-info');
+  el.textContent = msg; el.style.display = 'block';
+  document.getElementById('auth-error').style.display = 'none';
+}
+
+async function doSignIn() {
+  const email = document.getElementById('login-email').value.trim();
+  if (!email) return showAuthError('Please enter your email.');
+  const btn = document.getElementById('signin-btn');
+  btn.disabled = true;
+
+  try {
+    if (magicLinkMode) {
+      const { error } = await _sb.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin } });
+      if (error) throw error;
+      showAuthInfo('Check your email for a sign-in link.');
+    } else {
+      const password = document.getElementById('login-password').value;
+      if (!password) return showAuthError('Please enter your password.');
+      const { data, error } = await _sb.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      await bootstrapSession(data.session);
+    }
+  } catch (e) {
+    showAuthError(e.message || 'Sign in failed.');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function doLogout() {
+  await _sb.auth.signOut();
+  currentSession = null;
+  state.currentMember = null;
+  document.getElementById('app-shell').style.display = 'none';
+  document.getElementById('onboarding-screen').style.display = 'none';
   const login = document.getElementById('login-screen');
+  login.style.display = 'flex';
   login.style.opacity = '0';
-  login.style.transition = 'opacity 0.3s';
-  setTimeout(() => { login.style.display = 'none'; }, 300);
+  setTimeout(() => { login.style.opacity = '1'; login.style.transition = 'opacity 0.3s'; }, 10);
+}
+
+// ── AUTH: INVITE-BASED SIGN UP ──
+let pendingInviteToken = null;
+
+async function checkInviteParam() {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('invite');
+  if (!token) return false;
+  pendingInviteToken = token;
+
+  try {
+    const res = await fetch('/api/invites/' + encodeURIComponent(token));
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Invite not found');
+
+    document.getElementById('auth-signin-panel').style.display = 'none';
+    document.getElementById('auth-signup-panel').style.display = 'block';
+    document.getElementById('signup-email').value = data.invite.email;
+    document.getElementById('invite-role-label').textContent = data.invite.user_type;
+    return true;
+  } catch (e) {
+    document.getElementById('auth-signin-panel').style.display = 'none';
+    document.getElementById('auth-invite-invalid').style.display = 'block';
+    document.getElementById('invite-invalid-msg').textContent = e.message;
+    return true;
+  }
+}
+
+async function doSignUp() {
+  const email = document.getElementById('signup-email').value;
+  const password = document.getElementById('signup-password').value;
+  if (!password || password.length < 8) {
+    document.getElementById('signup-error').textContent = 'Password must be at least 8 characters.';
+    document.getElementById('signup-error').style.display = 'block';
+    return;
+  }
+  const btn = document.getElementById('signup-btn');
+  btn.disabled = true;
+  try {
+    const { data, error } = await _sb.auth.signUp({ email, password });
+    if (error) throw error;
+    let session = data.session;
+    // If email confirmation is required, sign in directly since we already
+    // verified the invite belongs to this email address.
+    if (!session) {
+      const signInRes = await _sb.auth.signInWithPassword({ email, password });
+      if (signInRes.error) throw signInRes.error;
+      session = signInRes.data.session;
+    }
+    const acceptRes = await fetch('/api/invites/accept', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+      body: JSON.stringify({ token: pendingInviteToken }),
+    });
+    const acceptData = await acceptRes.json();
+    if (!acceptRes.ok) throw new Error(acceptData.error || 'Could not link your invite');
+
+    window.history.replaceState({}, '', window.location.pathname);
+    await bootstrapSession(session);
+  } catch (e) {
+    document.getElementById('signup-error').textContent = e.message || 'Sign up failed.';
+    document.getElementById('signup-error').style.display = 'block';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ── SESSION BOOTSTRAP ──
+async function bootstrapSession(session) {
+  currentSession = session;
+  let meData;
+  try {
+    meData = await api('/me');
+  } catch (e) {
+    showAuthError('Signed in, but no profile is linked to this account yet. Contact your admin.');
+    await _sb.auth.signOut();
+    currentSession = null;
+    return;
+  }
+
+  state.currentMember = meData.member;
+  currentRole = meData.member.user_type === 'administrator' ? 'admin' : meData.member.user_type;
+
+  document.getElementById('login-screen').style.display = 'none';
+
+  const needsOnboarding = ['practitioner', 'administrator'].includes(meData.member.user_type)
+    && meData.member.onboarding_status !== 'completed';
+
+  if (needsOnboarding) {
+    startOnboarding();
+  } else {
+    enterAppShell();
+  }
+}
+
+function enterAppShell() {
+  document.getElementById('onboarding-screen').style.display = 'none';
+  const shell = document.getElementById('app-shell');
   shell.style.display = 'flex';
 
-  const u = users[loginRole];
-  document.getElementById('sidebar-name').textContent = u.name.split(' ')[0] + ' ' + (u.name.split(' ')[1]?.[0] || '') + '.';
-  document.getElementById('sidebar-role').textContent = u.role;
-  document.getElementById('sidebar-avatar').textContent = u.initials;
+  const m = state.currentMember;
+  const initials = ((m.first_name || '?')[0] + (m.last_name || '?')[0]).toUpperCase();
+  document.getElementById('sidebar-name').textContent = (m.first_name || m.email) + ' ' + (m.last_name ? m.last_name[0] + '.' : '');
+  document.getElementById('sidebar-role').textContent = m.user_type.charAt(0).toUpperCase() + m.user_type.slice(1);
+  document.getElementById('sidebar-avatar').textContent = initials;
 
-  if (loginRole === 'admin') {
+  if (currentRole === 'admin') {
     document.getElementById('role-toggle').style.display = 'flex';
     setupAdminView();
   } else {
     document.getElementById('role-toggle').style.display = 'none';
-    setupClientView(loginRole);
+    setupClientView(currentRole);
   }
 
   loadAppData();
 }
 
-function doLogout() {
+// ── ONBOARDING WIZARD ──
+const onboarding = { docs: [], docIndex: 0 };
+
+function renderOnboardingProgress(activeStep) {
+  // activeStep: 0 = profile, 1 = documents, 2 = done
+  const steps = ['profile', 'documents', 'done'];
+  const el = document.getElementById('onboarding-progress');
+  el.innerHTML = steps.map((s, i) => {
+    const cls = i < activeStep ? 'done' : (i === activeStep ? 'active' : '');
+    return `<div class="onboarding-progress-dot ${cls}"></div>`;
+  }).join('');
+}
+
+function startOnboarding() {
   document.getElementById('app-shell').style.display = 'none';
-  const login = document.getElementById('login-screen');
-  login.style.display = 'flex';
-  login.style.opacity = '0';
-  setTimeout(() => { login.style.opacity = '1'; login.style.transition = 'opacity 0.3s'; }, 10);
+  document.getElementById('onboarding-screen').style.display = 'block';
+  document.getElementById('onboarding-step-profile').style.display = 'block';
+  document.getElementById('onboarding-step-documents').style.display = 'none';
+  document.getElementById('onboarding-step-done').style.display = 'none';
+  renderOnboardingProgress(0);
+
+  const m = state.currentMember;
+  document.getElementById('ob-first-name').value = m.first_name || '';
+  document.getElementById('ob-last-name').value = m.last_name || '';
+  document.getElementById('ob-phone').value = m.phone || '';
+  document.getElementById('ob-qualifications').value = m.qualifications || '';
+  document.getElementById('ob-indemnity-number').value = m.indemnity_number || '';
+  document.getElementById('ob-indemnity-expiry').value = m.indemnity_expiry || '';
+  document.getElementById('ob-dbs-status').value = m.dbs_status || 'not_started';
+  document.getElementById('ob-dbs-expiry').value = m.dbs_expiry || '';
+
+  // Skip straight to documents if profile basics are already filled in
+  if (m.first_name && m.last_name) {
+    document.getElementById('onboarding-step-profile').style.display = 'none';
+    loadOnboardingDocuments();
+  }
+}
+
+async function submitOnboardingProfile() {
+  const first_name = document.getElementById('ob-first-name').value.trim();
+  const last_name = document.getElementById('ob-last-name').value.trim();
+  if (!first_name || !last_name) { showToast('⚠ Please enter your first and last name'); return; }
+
+  const updates = {
+    first_name, last_name,
+    phone: document.getElementById('ob-phone').value.trim(),
+    qualifications: document.getElementById('ob-qualifications').value.trim(),
+    indemnity_number: document.getElementById('ob-indemnity-number').value.trim(),
+    indemnity_expiry: document.getElementById('ob-indemnity-expiry').value || null,
+    dbs_status: document.getElementById('ob-dbs-status').value,
+    dbs_expiry: document.getElementById('ob-dbs-expiry').value || null,
+  };
+
+  try {
+    const result = await api(`/members/${state.currentMember.id}`, { method: 'PATCH', body: JSON.stringify(updates) });
+    state.currentMember = result.member;
+    document.getElementById('onboarding-step-profile').style.display = 'none';
+    document.getElementById('onboarding-step-documents').style.display = 'block';
+    renderOnboardingProgress(1);
+    loadOnboardingDocuments();
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  }
+}
+
+function simpleMarkdownToHtml(md) {
+  return md.split(/\n\n+/).map(block => {
+    block = block.trim();
+    if (block.startsWith('# ')) return `<h1>${block.slice(2)}</h1>`;
+    return `<p>${block.replace(/\n/g, '<br>')}</p>`;
+  }).join('');
+}
+
+async function loadOnboardingDocuments() {
+  document.getElementById('onboarding-step-profile').style.display = 'none';
+  document.getElementById('onboarding-step-documents').style.display = 'block';
+  renderOnboardingProgress(1);
+
+  try {
+    const res = await api('/documents');
+    onboarding.docs = (res.documents || []).filter(d => !d.signed);
+    onboarding.docIndex = 0;
+    if (onboarding.docs.length === 0) {
+      showOnboardingDone();
+    } else {
+      renderCurrentOnboardingDoc();
+    }
+  } catch (e) {
+    document.getElementById('onboarding-doc-container').innerHTML = `<p style="color:var(--r-red);">Could not load documents: ${e.message}</p>`;
+  }
+}
+
+function renderCurrentOnboardingDoc() {
+  const doc = onboarding.docs[onboarding.docIndex];
+  const container = document.getElementById('onboarding-doc-container');
+  container.innerHTML = `
+    <p style="text-align:center;font-size:12px;color:var(--r-warm-gray);letter-spacing:0.05em;text-transform:uppercase;margin-bottom:6px;">
+      Document ${onboarding.docIndex + 1} of ${onboarding.docs.length}
+    </p>
+    <div class="doc-card">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:2px;">
+        <span class="badge ${doc.category === 'clinical' ? 'badge-blue' : 'badge-gold'}">${doc.category.charAt(0).toUpperCase() + doc.category.slice(1)}</span>
+        <div class="page-title" style="font-size:17px;">${doc.title}</div>
+      </div>
+      <div class="doc-scroll-box" id="doc-scroll-box" onscroll="checkDocScrolled()">${simpleMarkdownToHtml(doc.content)}</div>
+      <label style="display:flex;align-items:flex-start;gap:9px;font-size:13px;color:var(--r-warm-gray);margin-bottom:16px;cursor:pointer;">
+        <input type="checkbox" id="doc-ack-checkbox" disabled style="margin-top:2px;">
+        <span id="doc-ack-label">Scroll to the bottom to continue</span>
+      </label>
+      <div class="form-row">
+        <label class="form-label">Type your full name to sign</label>
+        <input class="form-input" id="doc-signature-name" placeholder="Full name">
+      </div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;" onclick="signCurrentOnboardingDoc('${doc.id}')">Sign &amp; Continue</button>
+    </div>`;
+}
+
+function checkDocScrolled() {
+  const box = document.getElementById('doc-scroll-box');
+  if (box.scrollTop + box.clientHeight >= box.scrollHeight - 6) {
+    document.getElementById('doc-ack-checkbox').disabled = false;
+    document.getElementById('doc-ack-checkbox').checked = true;
+    document.getElementById('doc-ack-label').textContent = 'I have read and understood this document';
+  }
+}
+
+async function signCurrentOnboardingDoc(documentId) {
+  const checkbox = document.getElementById('doc-ack-checkbox');
+  const signatureName = document.getElementById('doc-signature-name').value.trim();
+  if (!checkbox.checked) { showToast('⚠ Please scroll through and acknowledge the document first'); return; }
+  if (!signatureName || signatureName.length < 2) { showToast('⚠ Please type your full name to sign'); return; }
+
+  try {
+    const result = await api(`/documents/${documentId}/sign`, { method: 'POST', body: JSON.stringify({ signature_name: signatureName }) });
+    onboarding.docIndex++;
+    if (onboarding.docIndex >= onboarding.docs.length) {
+      showOnboardingDone();
+    } else {
+      renderCurrentOnboardingDoc();
+    }
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  }
+}
+
+function showOnboardingDone() {
+  document.getElementById('onboarding-step-documents').style.display = 'none';
+  document.getElementById('onboarding-step-done').style.display = 'block';
+  renderOnboardingProgress(2);
+  if (state.currentMember) state.currentMember.onboarding_status = 'completed';
+}
+
+function finishOnboarding() {
+  document.getElementById('onboarding-screen').style.display = 'none';
+  enterAppShell();
 }
 
 // ── ROLE SWITCH ──
@@ -1900,9 +2305,11 @@ function setupClientView(type) {
   document.getElementById('topbar-cta').textContent = '+ Book Room';
   document.getElementById('topbar-cta').onclick = () => showClientView('book-room');
 
-  const u = type === 'member' ? users.member : users.practitioner;
-  document.getElementById('client-welcome-name').textContent = u.name;
-  document.getElementById('client-welcome-role').textContent = u.role + ' Member';
+  const m = state.currentMember;
+  const displayName = m ? `${m.first_name || ''} ${m.last_name || ''}`.trim() || m.email : '';
+  const roleLabel = type.charAt(0).toUpperCase() + type.slice(1);
+  document.getElementById('client-welcome-name').textContent = displayName;
+  document.getElementById('client-welcome-role').textContent = roleLabel + ' Member';
 
   showClientView('my-bookings');
 }
@@ -1932,7 +2339,51 @@ function showClientView(name) {
   const navItems = document.querySelectorAll('#client-nav .nav-item');
   const idx = Object.keys(clientViews).indexOf(name);
   if (navItems[idx]) navItems[idx].classList.add('active');
+  if (name === 'profile') renderProfilePage();
   closeSidebar();
+}
+
+function renderProfilePage() {
+  const m = state.currentMember;
+  if (!m) return;
+  document.getElementById('profile-avatar').textContent = ((m.first_name || '?')[0] + (m.last_name || '?')[0]).toUpperCase();
+  document.getElementById('profile-name').textContent = `${m.first_name || ''} ${m.last_name || ''}`.trim() || m.email;
+  document.getElementById('profile-badge').textContent = m.user_type.charAt(0).toUpperCase() + m.user_type.slice(1);
+  document.getElementById('profile-first-name').value = m.first_name || '';
+  document.getElementById('profile-last-name').value = m.last_name || '';
+  document.getElementById('profile-email').value = m.email || '';
+  document.getElementById('profile-phone').value = m.phone || '';
+  document.getElementById('profile-qualifications').value = m.qualifications || '';
+
+  const tierRow = document.getElementById('profile-tier-row');
+  if (m.user_type === 'practitioner') {
+    tierRow.style.display = 'block';
+    document.getElementById('profile-plan-tier').value = m.plan_tier || '';
+  } else {
+    tierRow.style.display = 'none';
+  }
+}
+
+async function saveProfile() {
+  const m = state.currentMember;
+  if (!m) return;
+  const updates = {
+    first_name: document.getElementById('profile-first-name').value.trim(),
+    last_name: document.getElementById('profile-last-name').value.trim(),
+    phone: document.getElementById('profile-phone').value.trim(),
+    qualifications: document.getElementById('profile-qualifications').value.trim(),
+  };
+  if (m.user_type === 'practitioner') {
+    updates.plan_tier = document.getElementById('profile-plan-tier').value || null;
+  }
+  try {
+    const result = await api(`/members/${m.id}`, { method: 'PATCH', body: JSON.stringify(updates) });
+    state.currentMember = result.member;
+    renderProfilePage();
+    showToast('✓ Profile updated');
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  }
 }
 
 // ── MOBILE SIDEBAR ──
@@ -2095,6 +2546,22 @@ function showToast(msg) {
 // ── INIT ──
 document.getElementById('booking-date-input') && (document.getElementById('booking-date-input').valueAsDate = new Date());
 checkCalendarRedirectStatus();
+
+(async function initAuth() {
+  const hasInvite = await checkInviteParam();
+  if (hasInvite) return; // sign-up panel is now showing; don't also try to restore a session
+
+  const { data } = await _sb.auth.getSession();
+  if (data && data.session) {
+    await bootstrapSession(data.session);
+  }
+})();
+
+_sb.auth.onAuthStateChange((event, session) => {
+  if (event === 'SIGNED_OUT') {
+    currentSession = null;
+  }
+});
 </script>
 </body>
 </html>
