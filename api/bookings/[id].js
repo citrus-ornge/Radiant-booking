@@ -1,9 +1,25 @@
 const { getSupabase } = require('../_lib/supabase');
 const { sendCancellationAlert } = require('../_lib/email');
+const { requireAuth } = require('../_lib/auth');
 
 module.exports = async (req, res) => {
   const { id } = req.query;
   const supabase = getSupabase();
+
+  let requester;
+  try {
+    const auth = await requireAuth(req);
+    requester = auth.member;
+    if (!requester) return res.status(404).json({ error: 'No member record linked to this account' });
+  } catch (e) {
+    return res.status(e.status || 401).json({ error: e.message });
+  }
+
+  const { data: existing, error: existingErr } = await supabase.from('bookings').select('member_id').eq('id', id).single();
+  if (existingErr) return res.status(404).json({ error: 'Booking not found' });
+  if (requester.user_type !== 'administrator' && existing.member_id !== requester.id) {
+    return res.status(403).json({ error: 'You can only manage your own bookings' });
+  }
 
   if (req.method === 'PATCH') {
     const { status } = req.body || {};

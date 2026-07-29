@@ -1,9 +1,19 @@
 const { getSupabase } = require('./_lib/supabase');
 const { sendBookingConfirmation } = require('./_lib/email');
 const { createCalendarEvent } = require('./_lib/google');
+const { requireAuth } = require('./_lib/auth');
 
 module.exports = async (req, res) => {
   const supabase = getSupabase();
+
+  let requester;
+  try {
+    const auth = await requireAuth(req);
+    requester = auth.member;
+    if (!requester) return res.status(404).json({ error: 'No member record linked to this account' });
+  } catch (e) {
+    return res.status(e.status || 401).json({ error: e.message });
+  }
 
   if (req.method === 'GET') {
     const { data, error } = await supabase
@@ -22,6 +32,9 @@ module.exports = async (req, res) => {
     const { room_id, member_id, start_time, end_time, notes } = req.body || {};
     if (!room_id || !member_id || !start_time || !end_time) {
       return res.status(400).json({ error: 'room_id, member_id, start_time, end_time are required' });
+    }
+    if (requester.user_type !== 'administrator' && member_id !== requester.id) {
+      return res.status(403).json({ error: 'You can only create bookings for yourself' });
     }
 
     // Overlap check: reject if the room already has a confirmed/pending
