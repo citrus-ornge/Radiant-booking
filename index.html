@@ -1624,12 +1624,12 @@ textarea.form-input { resize: vertical; }
         <div><div style="font-size:13.5px;font-weight:500;color:var(--r-green);">Booking confirmed</div><div style="font-size:12px;color:var(--r-green);">A confirmation email has been sent</div></div>
       </div>
       <p style="font-size:13.5px;color:var(--r-warm-gray);margin-bottom:14px;">Add to your calendar:</p>
-      <div class="cal-option" onclick="openGoogleCalendarAdd()">
+      <div class="cal-option" onclick="openGoogleCalendarAdd(this)">
         <span class="cal-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="100%" height="100%"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg></span>
         <div><div style="font-size:14px;font-weight:500;">Google Calendar</div><div style="font-size:12px;color:var(--r-warm-gray);">Opens in a new tab</div></div>
         <span style="margin-left:auto;color:var(--r-warm-gray);">→</span>
       </div>
-      <div class="cal-option" onclick="downloadICS()">
+      <div class="cal-option" onclick="downloadICS(this)">
         <span class="cal-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="100%" height="100%"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg></span>
         <div><div style="font-size:14px;font-weight:500;">Outlook / Apple Calendar</div><div style="font-size:12px;color:var(--r-warm-gray);">Download .ics file</div></div>
         <span style="margin-left:auto;color:var(--r-warm-gray);">→</span>
@@ -1865,7 +1865,7 @@ function renderMyBookings() {
       <div class="date-box"><div class="date-day">${day}</div><div class="date-mon">${mon}</div></div>
       <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">${b.room ? b.room.name : '—'}</div><div style="font-size:12px;color:var(--r-warm-gray);">${time} · ${b.room ? b.room.floor || '' : ''}</div></div>
       <div style="display:flex;gap:8px;">
-        <button class="btn btn-outline btn-sm" onclick="openModal('cal-modal')">Add to Cal</button>
+        <button class="btn btn-outline btn-sm" onclick="openCalModalFor('${b.room ? b.room.name.replace(/'/g, "\\'") : 'Room'}','${b.start_time}','${b.end_time}')">Add to Cal</button>
         <button class="btn btn-danger btn-sm" onclick="cancelBooking('${b.id}')">Cancel</button>
       </div>
     </div>`;
@@ -2558,12 +2558,28 @@ document.querySelectorAll('.modal-overlay').forEach(o => {
 });
 
 // ── BOOKING ACTIONS ──
+function openCalModalFor(roomName, start, end) {
+  lastBookingForCal = { roomName, start, end, notes: '' };
+  document.querySelectorAll('.cal-option').forEach(el => el.classList.remove('cal-option-done'));
+  openModal('cal-modal');
+}
+
 function toGCalDate(iso) {
   return new Date(iso).toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
 }
 
-function openGoogleCalendarAdd() {
-  if (!lastBookingForCal) { showToast('⚠ No booking details available'); closeModal('cal-modal'); return; }
+function markCalOptionDone(el) {
+  if (!el || el.querySelector('.cal-done-check')) return;
+  const check = document.createElement('span');
+  check.className = 'cal-done-check';
+  check.style.cssText = 'color:var(--r-green);font-weight:600;margin-left:auto;';
+  check.textContent = '✓';
+  const arrow = el.querySelector('span[style*="margin-left"]');
+  if (arrow) arrow.replaceWith(check); else el.appendChild(check);
+}
+
+function openGoogleCalendarAdd(el) {
+  if (!lastBookingForCal) { showToast('⚠ No booking details available'); return; }
   const { roomName, start, end, notes } = lastBookingForCal;
   const params = new URLSearchParams({
     action: 'TEMPLATE',
@@ -2572,11 +2588,12 @@ function openGoogleCalendarAdd() {
     details: notes || 'Booked via Radiant Booking Platform',
   });
   window.open(`https://calendar.google.com/calendar/render?${params.toString()}`, '_blank');
-  closeModal('cal-modal');
+  markCalOptionDone(el);
+  showToast('↗ Opened in a new tab — tap again anytime to reopen');
 }
 
-function downloadICS() {
-  if (!lastBookingForCal) { showToast('⚠ No booking details available'); closeModal('cal-modal'); return; }
+function downloadICS(el) {
+  if (!lastBookingForCal) { showToast('⚠ No booking details available'); return; }
   const { roomName, start, end, notes } = lastBookingForCal;
   const ics = [
     'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Radiant Booking//EN', 'BEGIN:VEVENT',
@@ -2597,7 +2614,7 @@ function downloadICS() {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
-  closeModal('cal-modal');
+  markCalOptionDone(el);
   showToast('✓ Calendar file downloaded');
 }
 
