@@ -1624,19 +1624,19 @@ textarea.form-input { resize: vertical; }
         <div><div style="font-size:13.5px;font-weight:500;color:var(--r-green);">Booking confirmed</div><div style="font-size:12px;color:var(--r-green);">A confirmation email has been sent</div></div>
       </div>
       <p style="font-size:13.5px;color:var(--r-warm-gray);margin-bottom:14px;">Add to your calendar:</p>
-      <div class="cal-option" onclick="showToast('Opening Google Calendar…');closeModal('cal-modal')">
+      <div class="cal-option" onclick="openGoogleCalendarAdd()">
         <span class="cal-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="100%" height="100%"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg></span>
         <div><div style="font-size:14px;font-weight:500;">Google Calendar</div><div style="font-size:12px;color:var(--r-warm-gray);">Opens in a new tab</div></div>
         <span style="margin-left:auto;color:var(--r-warm-gray);">→</span>
       </div>
-      <div class="cal-option" onclick="showToast('Downloading .ics file…');closeModal('cal-modal')">
+      <div class="cal-option" onclick="downloadICS()">
         <span class="cal-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="100%" height="100%"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg></span>
         <div><div style="font-size:14px;font-weight:500;">Outlook / Apple Calendar</div><div style="font-size:12px;color:var(--r-warm-gray);">Download .ics file</div></div>
         <span style="margin-left:auto;color:var(--r-warm-gray);">→</span>
       </div>
-      <div class="cal-option" onclick="showToast('Calendar invite sent to your email!');closeModal('cal-modal')">
+      <div class="cal-option" onclick="closeModal('cal-modal');showToast('✓ A confirmation email was already sent when you booked')">
         <span class="cal-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="100%" height="100%"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></span>
-        <div><div style="font-size:14px;font-weight:500;">Send via Email</div><div style="font-size:12px;color:var(--r-warm-gray);">Receive invite at your registered email</div></div>
+        <div><div style="font-size:14px;font-weight:500;">Email confirmation</div><div style="font-size:12px;color:var(--r-warm-gray);">Sent automatically at booking time</div></div>
         <span style="margin-left:auto;color:var(--r-warm-gray);">→</span>
       </div>
     </div>
@@ -2556,6 +2556,51 @@ document.querySelectorAll('.modal-overlay').forEach(o => {
 });
 
 // ── BOOKING ACTIONS ──
+function toGCalDate(iso) {
+  return new Date(iso).toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+}
+
+function openGoogleCalendarAdd() {
+  if (!lastBookingForCal) { showToast('⚠ No booking details available'); closeModal('cal-modal'); return; }
+  const { roomName, start, end, notes } = lastBookingForCal;
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: `${roomName} — Radiant Booking`,
+    dates: `${toGCalDate(start)}/${toGCalDate(end)}`,
+    details: notes || 'Booked via Radiant Booking Platform',
+  });
+  window.open(`https://calendar.google.com/calendar/render?${params.toString()}`, '_blank');
+  closeModal('cal-modal');
+}
+
+function downloadICS() {
+  if (!lastBookingForCal) { showToast('⚠ No booking details available'); closeModal('cal-modal'); return; }
+  const { roomName, start, end, notes } = lastBookingForCal;
+  const ics = [
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Radiant Booking//EN', 'BEGIN:VEVENT',
+    `UID:${Date.now()}@radiant-booking.vercel.app`,
+    `DTSTAMP:${toGCalDate(new Date().toISOString())}`,
+    `DTSTART:${toGCalDate(start)}`,
+    `DTEND:${toGCalDate(end)}`,
+    `SUMMARY:${roomName} — Radiant Booking`,
+    `DESCRIPTION:${(notes || 'Booked via Radiant Booking Platform').replace(/\n/g, '\\n')}`,
+    'END:VEVENT', 'END:VCALENDAR',
+  ].join('\r\n');
+  const blob = new Blob([ics], { type: 'text/calendar' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'radiant-booking.ics';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  closeModal('cal-modal');
+  showToast('✓ Calendar file downloaded');
+}
+
+let lastBookingForCal = null;
+
 async function confirmAdminBooking() {
   const memberId = document.getElementById('nb-member').value;
   const roomId = document.getElementById('nb-room').value;
@@ -2589,6 +2634,9 @@ async function confirmAdminBooking() {
     });
     closeModal('new-booking-modal');
     await loadAppData();
+
+    const room = state.rooms.find(r => r.id === roomId);
+    lastBookingForCal = { roomName: room ? room.name : 'Room', start: start.toISOString(), end: end.toISOString(), notes };
 
     let msg = '✓ Booking confirmed';
     if (result.email_sent) msg += ' — email sent';
@@ -2632,6 +2680,9 @@ async function confirmClientBooking() {
       }),
     });
     await loadAppData();
+    const room = state.rooms.find(r => r.id === selectedClientRoomId);
+    lastBookingForCal = { roomName: room ? room.name : 'Room', start: start.toISOString(), end: end.toISOString(), notes };
+
     let msg = '✓ Booking confirmed';
     if (result.email_sent) msg += ' — confirmation email sent';
     showToast(msg);
