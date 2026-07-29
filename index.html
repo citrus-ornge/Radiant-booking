@@ -2257,7 +2257,7 @@ async function signCurrentOnboardingDoc(documentId) {
   if (!signatureName || signatureName.length < 2) { showToast('⚠ Please type your full name to sign'); return; }
 
   try {
-    const result = await api(`/documents/${documentId}/sign`, { method: 'POST', body: JSON.stringify({ signature_name: signatureName }) });
+    const result = await api(`/documents`, { method: 'POST', body: JSON.stringify({ document_id: documentId, signature_name: signatureName }) });
     onboarding.docIndex++;
     if (onboarding.docIndex >= onboarding.docs.length) {
       showOnboardingDone();
