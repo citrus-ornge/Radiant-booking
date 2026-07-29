@@ -1342,7 +1342,7 @@ textarea.form-input { resize: vertical; }
               <div style="color:var(--r-warm-gray);padding:8px;">Loading rooms…</div>
             </div>
           </div>
-          <div class="card">
+          <div class="card" style="overflow: visible;">
             <div class="card-header"><div class="card-title">Date &amp; Time</div></div>
             <div style="padding:18px 22px;">
               <div class="form-row"><label class="form-label">Date</label><input type="date" class="form-input" id="booking-date-input"></div>
@@ -1367,7 +1367,7 @@ textarea.form-input { resize: vertical; }
                 <select class="form-input" id="client-duration"><option value="1">1 hour</option><option value="2" selected>2 hours</option><option value="3">3 hours</option><option value="4">Half day (4hrs)</option><option value="8">Full day</option></select>
               </div>
               <div class="form-row"><label class="form-label">Notes</label><textarea class="form-input" id="client-notes" rows="2" placeholder="Any special requirements…"></textarea></div>
-              <button class="btn btn-primary" style="width:100%;justify-content:center;" id="client-book-btn" onclick="confirmClientBooking()">Confirm Booking</button>
+              <button class="btn btn-primary" style="width:100%;justify-content:center;position:sticky;bottom:12px;box-shadow:0 4px 16px rgba(0,0,0,0.15);z-index:5;" id="client-book-btn" onclick="confirmClientBooking()">Confirm Booking</button>
             </div>
           </div>
         </div>
