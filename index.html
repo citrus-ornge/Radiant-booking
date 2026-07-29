@@ -1062,7 +1062,10 @@ textarea.form-input { resize: vertical; }
           <div style="font-size:13px;color:rgba(255,255,255,0.8);font-weight:500;" id="sidebar-name">Sarah A.</div>
           <div style="font-size:11px;color:rgba(255,255,255,0.35);" id="sidebar-role">Administrator</div>
         </div>
-        <button class="btn btn-ghost" style="margin-left:auto;padding:4px 6px;font-size:12px;color:rgba(255,255,255,0.3);" onclick="doLogout()">↩</button>
+        <button class="btn btn-ghost" style="margin-left:auto;padding:6px 10px;font-size:11.5px;color:rgba(255,255,255,0.55);display:flex;align-items:center;gap:5px;" onclick="doLogout()" title="Log out">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Log out
+        </button>
       </div>
     </div>
   </div>
@@ -1311,35 +1314,14 @@ textarea.form-input { resize: vertical; }
           <button class="btn btn-primary" onclick="showClientView('book-room')">Book a Room →</button>
         </div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:24px;">
-          <div class="stat-card"><div class="stat-label">Upcoming</div><div class="stat-value">3</div></div>
-          <div class="stat-card"><div class="stat-label">This Month</div><div class="stat-value">8</div></div>
-          <div class="stat-card"><div class="stat-label">Total Bookings</div><div class="stat-value">48</div></div>
+          <div class="stat-card"><div class="stat-label">Upcoming</div><div class="stat-value" id="my-stat-upcoming">–</div></div>
+          <div class="stat-card"><div class="stat-label">This Month</div><div class="stat-value" id="my-stat-month">–</div></div>
+          <div class="stat-card"><div class="stat-label">Total Bookings</div><div class="stat-value" id="my-stat-total">–</div></div>
         </div>
         <div class="card">
           <div class="card-header"><div class="card-title">Upcoming Sessions</div></div>
-          <div class="booking-item">
-            <div class="date-box"><div class="date-day">30</div><div class="date-mon">Apr</div></div>
-            <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">Amber Room</div><div style="font-size:12px;color:var(--r-warm-gray);">10:00–12:00 · Ground floor</div></div>
-            <div style="display:flex;gap:8px;">
-              <button class="btn btn-outline btn-sm" onclick="openModal('cal-modal')">Add to Cal</button>
-              <button class="btn btn-danger btn-sm">Cancel</button>
-            </div>
-          </div>
-          <div class="booking-item">
-            <div class="date-box"><div class="date-day">2</div><div class="date-mon">May</div></div>
-            <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">Pearl Room</div><div style="font-size:12px;color:var(--r-warm-gray);">09:00–11:00 · First floor</div></div>
-            <div style="display:flex;gap:8px;">
-              <button class="btn btn-outline btn-sm" onclick="openModal('cal-modal')">Add to Cal</button>
-              <button class="btn btn-danger btn-sm">Cancel</button>
-            </div>
-          </div>
-          <div class="booking-item">
-            <div class="date-box"><div class="date-day">7</div><div class="date-mon">May</div></div>
-            <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">Jade Suite</div><div style="font-size:12px;color:var(--r-warm-gray);">14:00–16:00 · First floor</div></div>
-            <div style="display:flex;gap:8px;">
-              <button class="btn btn-outline btn-sm" onclick="openModal('cal-modal')">Add to Cal</button>
-              <button class="btn btn-danger btn-sm">Cancel</button>
-            </div>
+          <div id="my-bookings-list">
+            <div style="padding:18px 22px;color:var(--r-warm-gray);font-size:13px;">Loading…</div>
           </div>
         </div>
       </div>
@@ -1536,6 +1518,65 @@ textarea.form-input { resize: vertical; }
   </div>
 </div>
 
+<!-- MANAGE MEMBER (admin) -->
+<div class="modal-overlay" id="manage-member-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div><div class="modal-title">Manage Member</div></div>
+      <button class="close-btn" onclick="closeModal('manage-member-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="mm-id">
+      <div class="form-two">
+        <div class="form-row"><label class="form-label">First Name</label><input class="form-input" id="mm-first-name"></div>
+        <div class="form-row"><label class="form-label">Last Name</label><input class="form-input" id="mm-last-name"></div>
+      </div>
+      <div class="form-row"><label class="form-label">Email</label><input class="form-input" id="mm-email" disabled style="opacity:0.6;"></div>
+      <div class="form-two">
+        <div class="form-row"><label class="form-label">User Type</label>
+          <select class="form-input" id="mm-user-type">
+            <option value="administrator">Administrator</option>
+            <option value="practitioner">Practitioner</option>
+            <option value="member">Member</option>
+            <option value="guest">Guest</option>
+          </select>
+        </div>
+        <div class="form-row"><label class="form-label">Status</label>
+          <select class="form-input" id="mm-status">
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row" id="mm-tier-row">
+        <label class="form-label">Membership Tier</label>
+        <select class="form-input" id="mm-plan-tier">
+          <option value="">— Not set —</option>
+          <option value="community">Community</option>
+          <option value="flex">Flex</option>
+          <option value="core">Core</option>
+          <option value="resident">Resident</option>
+        </select>
+      </div>
+      <div class="form-row" id="mm-onboarding-row">
+        <label class="form-label">Onboarding Status</label>
+        <select class="form-input" id="mm-onboarding-status">
+          <option value="not_started">Not started</option>
+          <option value="profile_pending">Profile pending</option>
+          <option value="documents_pending">Documents pending</option>
+          <option value="completed">Completed</option>
+        </select>
+      </div>
+      <div class="form-row"><label class="form-label">Phone</label><input class="form-input" id="mm-phone"></div>
+      <div class="form-row"><label class="form-label">Qualifications</label><textarea class="form-input" id="mm-qualifications" rows="2"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('manage-member-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveManagedMember()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
 <!-- ADD ROOM -->
 <div class="modal-overlay" id="add-room-modal">
   <div class="modal">
@@ -1678,6 +1719,7 @@ async function loadAppData(isRetry) {
   renderPendingInvitesWidget();
   renderSentInvitesWidget();
   renderNotificationsFeed();
+  renderMyBookings();
 
   if (failures.length > 0) {
     if (!isRetry) {
@@ -1740,6 +1782,87 @@ function renderBookingsTable() {
     </tr>`).join('');
 }
 
+function openManageMember(id) {
+  const m = state.members.find(x => x.id === id);
+  if (!m) { showToast('⚠ Member not found'); return; }
+  document.getElementById('mm-id').value = m.id;
+  document.getElementById('mm-first-name').value = m.first_name || '';
+  document.getElementById('mm-last-name').value = m.last_name || '';
+  document.getElementById('mm-email').value = m.email || '';
+  document.getElementById('mm-user-type').value = m.user_type || 'member';
+  document.getElementById('mm-status').value = m.status || 'active';
+  document.getElementById('mm-plan-tier').value = m.plan_tier || '';
+  document.getElementById('mm-onboarding-status').value = m.onboarding_status || 'not_started';
+  document.getElementById('mm-phone').value = m.phone || '';
+  document.getElementById('mm-qualifications').value = m.qualifications || '';
+
+  const isPractitioner = m.user_type === 'practitioner';
+  document.getElementById('mm-tier-row').style.display = isPractitioner ? 'block' : 'none';
+  document.getElementById('mm-onboarding-row').style.display = (isPractitioner || m.user_type === 'administrator') ? 'block' : 'none';
+
+  openModal('manage-member-modal');
+}
+
+async function saveManagedMember() {
+  const id = document.getElementById('mm-id').value;
+  const updates = {
+    first_name: document.getElementById('mm-first-name').value.trim(),
+    last_name: document.getElementById('mm-last-name').value.trim(),
+    user_type: document.getElementById('mm-user-type').value,
+    status: document.getElementById('mm-status').value,
+    plan_tier: document.getElementById('mm-plan-tier').value || null,
+    onboarding_status: document.getElementById('mm-onboarding-status').value,
+    phone: document.getElementById('mm-phone').value.trim(),
+    qualifications: document.getElementById('mm-qualifications').value.trim(),
+  };
+  try {
+    await api('/members', { method: 'PATCH', body: JSON.stringify({ id, ...updates }) });
+    closeModal('manage-member-modal');
+    showToast('✓ Member updated');
+    await loadAppData();
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  }
+}
+
+function renderMyBookings() {
+  const listEl = document.getElementById('my-bookings-list');
+  if (!listEl || !state.currentMember) return;
+
+  const mine = state.bookings.filter(b => b.member && b.member.id === state.currentMember.id);
+  const now = new Date();
+  const upcoming = mine.filter(b => b.status !== 'cancelled' && new Date(b.start_time) >= now).sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+  const thisMonth = mine.filter(b => {
+    const d = new Date(b.start_time);
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  });
+
+  document.getElementById('my-stat-upcoming').textContent = upcoming.length;
+  document.getElementById('my-stat-month').textContent = thisMonth.length;
+  document.getElementById('my-stat-total').textContent = mine.length;
+
+  if (upcoming.length === 0) {
+    listEl.innerHTML = `<div style="padding:18px 22px;color:var(--r-warm-gray);font-size:13px;">No upcoming sessions — click "Book a Room" to schedule one.</div>`;
+    return;
+  }
+
+  listEl.innerHTML = upcoming.map(b => {
+    const d = new Date(b.start_time);
+    const day = d.toLocaleDateString('en-GB', { day: 'numeric' });
+    const mon = d.toLocaleDateString('en-GB', { month: 'short' });
+    const time = fmtDateTime(b.start_time).split(' · ')[1] || '';
+    return `
+    <div class="booking-item">
+      <div class="date-box"><div class="date-day">${day}</div><div class="date-mon">${mon}</div></div>
+      <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">${b.room ? b.room.name : '—'}</div><div style="font-size:12px;color:var(--r-warm-gray);">${time} · ${b.room ? b.room.floor || '' : ''}</div></div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-outline btn-sm" onclick="openModal('cal-modal')">Add to Cal</button>
+        <button class="btn btn-danger btn-sm" onclick="cancelBooking('${b.id}')">Cancel</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 function renderMembersTable() {
   const tbody = document.getElementById('members-table');
   if (!tbody) return;
@@ -1754,7 +1877,7 @@ function renderMembersTable() {
       <td style="color:var(--r-warm-gray);">${new Date(m.created_at).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}</td>
       <td>${bookingCount}</td>
       <td><span class="badge ${m.status === 'active' ? 'badge-green' : 'badge-red'}">${m.status.charAt(0).toUpperCase() + m.status.slice(1)}</span></td>
-      <td><button class="btn btn-ghost btn-sm">Manage</button></td>
+      <td><button class="btn btn-ghost btn-sm" onclick="openManageMember('${m.id}')">Manage</button></td>
     </tr>`;
   }).join('');
 }
