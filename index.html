@@ -10,7 +10,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -531,58 +531,119 @@ textarea.form-input { resize: vertical; }
 /* ── LOGIN ── */
 #login-screen {
   position: fixed; inset: 0;
-  background:
-    radial-gradient(ellipse 900px 700px at 12% -8%, rgba(155,44,74,0.35) 0%, transparent 60%),
-    radial-gradient(ellipse 800px 650px at 100% 108%, rgba(31,111,107,0.30) 0%, transparent 60%),
-    linear-gradient(160deg, #201F1C 0%, #17322F 100%);
+  display: flex;
+  flex-direction: column;
+  z-index: 200;
+  overflow-y: auto;
+  background: #FAFAF5;
+}
+
+.login-hero {
+  position: relative;
+  min-height: 46vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+  padding: 48px 24px 40px;
+}
+.login-hero-bg {
+  position: absolute; inset: 0;
+  background-image: url('/assets/login-hero.jpg');
+  background-size: cover;
+  background-position: center 30%;
+}
+.login-hero-overlay {
+  position: absolute; inset: 0;
+  background: linear-gradient(to bottom, rgba(26,26,26,0.25) 0%, rgba(26,26,26,0.45) 55%, rgba(26,26,26,0.72) 100%);
+}
+.login-hero-content {
+  position: relative; z-index: 1;
+  text-align: center;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  z-index: 200;
-  overflow: hidden;
 }
-
-#login-screen::before,
-#login-screen::after {
-  content: '';
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(60px);
-  pointer-events: none;
+.login-hero-eyebrow {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #C7B593;
+  margin-bottom: 14px;
 }
-#login-screen::before {
-  width: 420px; height: 420px;
-  background: rgba(201,169,110,0.14);
-  top: -120px; right: 8%;
-}
-#login-screen::after {
-  width: 380px; height: 380px;
-  background: rgba(155,44,74,0.18);
-  bottom: -140px; left: 6%;
-}
-
-.login-tagline-wrap {
-  position: relative;
-  z-index: 1;
-  text-align: center;
-  margin-bottom: 26px;
-  padding: 0 20px;
-}
-.login-tagline {
+.login-hero h1 {
   font-family: 'Playfair Display', serif;
+  font-weight: 600;
+  color: #FFFFFF;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: 1.05;
+  font-size: clamp(26px, 4.2vw, 42px);
+  text-shadow: 0 2px 20px rgba(0,0,0,0.3);
+}
+.login-hero h1 em {
+  display: block;
   font-style: italic;
   font-weight: 500;
-  font-size: 26px;
-  color: rgba(250,248,244,0.92);
+  color: #C7B593;
+  text-transform: none;
+  font-size: 0.62em;
+  margin-top: 8px;
   letter-spacing: 0.01em;
 }
-.login-tagline-sub {
-  font-size: 11.5px;
-  color: rgba(250,248,244,0.5);
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  margin-top: 8px;
+.login-trust {
+  margin-top: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: rgba(255,255,255,0.12);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255,255,255,0.22);
+  padding: 11px 20px;
+  max-width: 90vw;
+}
+.login-trust-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: rgba(255,255,255,0.92);
+  font-family: 'Montserrat', sans-serif;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+.login-trust-pill svg { width: 12px; height: 12px; color: #D4AD5A; flex-shrink: 0; }
+.login-trust-sep { width: 1px; height: 13px; background: rgba(255,255,255,0.3); }
+
+.login-stars-banner {
+  background: #FFFFFF;
+  border-bottom: 1px solid #E6E1DA;
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+.login-rating-num { font-family: 'Playfair Display', serif; font-size: 26px; color: #1A1A1A; line-height: 1; }
+.login-stars-row { display: flex; gap: 2px; }
+.login-stars-row svg { width: 14px; height: 14px; fill: #F5A623; }
+.login-stars-label { font-family: 'Montserrat', sans-serif; font-size: 11px; color: #8C857B; letter-spacing: 0.04em; }
+.login-stars-sep { width: 1px; height: 20px; background: #E6E1DA; }
+
+.login-card-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 36px 20px;
 }
 
 .login-card {
@@ -592,7 +653,8 @@ textarea.form-input { resize: vertical; }
   border-radius: 20px;
   width: 420px;
   padding: 40px;
-  box-shadow: 0 24px 80px rgba(0,0,0,0.4);
+  box-shadow: 0 24px 60px rgba(26,26,26,0.14);
+  border: 1px solid #E6E1DA;
 }
 
 .login-logo {
@@ -734,6 +796,9 @@ textarea.form-input { resize: vertical; }
   .modal-overlay { align-items: flex-end; }
 
   .login-card { width: 90vw; padding: 30px 22px; }
+  .login-hero { min-height: 34vh; padding: 32px 16px 28px; }
+  .login-trust { gap: 8px; padding: 9px 14px; }
+  .login-trust-sep { display: none; }
 
   .toast { left: 16px; right: 16px; bottom: 16px; max-width: none; }
 }
@@ -749,10 +814,44 @@ textarea.form-input { resize: vertical; }
 
 <!-- ══════════════════ LOGIN SCREEN ══════════════════ -->
 <div id="login-screen">
-  <div class="login-tagline-wrap">
-    <div class="login-tagline">You, younger.</div>
-    <div class="login-tagline-sub">Est. 2012 · Ringmer &amp; Heathfield</div>
+  <div class="login-hero">
+    <div class="login-hero-bg"></div>
+    <div class="login-hero-overlay"></div>
+    <div class="login-hero-content">
+      <div class="login-hero-eyebrow">Booking Platform</div>
+      <h1>Radiant<em>You, younger.</em></h1>
+      <div class="login-trust">
+        <div class="login-trust-pill">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          5.0 Google Reviews
+        </div>
+        <div class="login-trust-sep"></div>
+        <div class="login-trust-pill">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          Save Face Accredited
+        </div>
+        <div class="login-trust-sep"></div>
+        <div class="login-trust-pill">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Est. 2012 · Ringmer &amp; Heathfield
+        </div>
+      </div>
+    </div>
   </div>
+
+  <div class="login-stars-banner">
+    <span class="login-rating-num">5.0</span>
+    <div class="login-stars-row">
+      <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+      <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+      <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+      <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+      <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+    </div>
+    <span class="login-stars-label">Rated 5 stars on Google</span>
+  </div>
+
+  <div class="login-card-wrap">
   <div class="login-card">
     <div class="login-logo">Radiant</div>
     <div class="login-sub">Booking Platform</div>
@@ -780,6 +879,7 @@ textarea.form-input { resize: vertical; }
     <p style="text-align:center;font-size:12px;color:var(--r-warm-gray);margin-top:18px;">
       Demo: click any role above then Sign In
     </p>
+  </div>
   </div>
 </div>
 
