@@ -1419,32 +1419,47 @@ async function api(path, options = {}) {
   return data;
 }
 
-async function loadAppData() {
-  try {
-    const [roomsRes, membersRes, bookingsRes, invitesRes] = await Promise.all([
-      api('/rooms'), api('/members'), api('/bookings'), api('/invites'),
-    ]);
-    state.rooms = roomsRes.rooms || [];
-    state.members = membersRes.members || [];
-    state.bookings = bookingsRes.bookings || [];
-    state.invites = invitesRes.invites || [];
+async function loadAppData(isRetry) {
+  const results = await Promise.allSettled([
+    api('/rooms'), api('/members'), api('/bookings'), api('/invites'),
+  ]);
+  const [roomsR, membersR, bookingsR, invitesR] = results;
+  const failures = [];
 
-    // Map the logged-in demo persona to its real Supabase member row by email
-    const u = users[loginRole === 'admin' ? 'admin' : loginRole];
-    state.currentMember = state.members.find(m => m.email === u.email) || null;
+  if (roomsR.status === 'fulfilled') state.rooms = roomsR.value.rooms || [];
+  else failures.push('rooms');
 
-    populateBookingModalSelects();
-    renderBookingsTable();
-    renderMembersTable();
-    renderRoomsGrid();
-    renderBookRoomList();
-    renderGoogleCalendarStatus();
-    renderUpcomingBookingsWidget();
-    renderPendingInvitesWidget();
-    renderSentInvitesWidget();
-    renderNotificationsFeed();
-  } catch (e) {
-    showToast('⚠ Could not load live data: ' + e.message);
+  if (membersR.status === 'fulfilled') state.members = membersR.value.members || [];
+  else failures.push('members');
+
+  if (bookingsR.status === 'fulfilled') state.bookings = bookingsR.value.bookings || [];
+  else failures.push('bookings');
+
+  if (invitesR.status === 'fulfilled') state.invites = invitesR.value.invites || [];
+  else failures.push('invites');
+
+  // Map the logged-in demo persona to its real Supabase member row by email
+  const u = users[loginRole === 'admin' ? 'admin' : loginRole];
+  state.currentMember = state.members.find(m => m.email === u.email) || null;
+
+  populateBookingModalSelects();
+  renderBookingsTable();
+  renderMembersTable();
+  renderRoomsGrid();
+  renderBookRoomList();
+  renderGoogleCalendarStatus();
+  renderUpcomingBookingsWidget();
+  renderPendingInvitesWidget();
+  renderSentInvitesWidget();
+  renderNotificationsFeed();
+
+  if (failures.length > 0) {
+    if (!isRetry) {
+      // Transient errors (e.g. a brief upstream auth hiccup) usually clear on retry
+      setTimeout(() => loadAppData(true), 1200);
+    } else {
+      showToast(`⚠ Some data failed to load (${failures.join(', ')}) — try refreshing`);
+    }
   }
 }
 
