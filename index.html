@@ -1095,23 +1095,23 @@ textarea.form-input { resize: vertical; }
         <div class="stats-grid">
           <div class="stat-card">
             <div class="stat-label">Today's Bookings</div>
-            <div class="stat-value">7</div>
-            <div class="stat-delta">↑ 2 from yesterday</div>
+            <div class="stat-value" id="stat-today-bookings">–</div>
+            <div class="stat-delta" id="stat-today-bookings-delta"></div>
           </div>
           <div class="stat-card">
             <div class="stat-label">Active Members</div>
-            <div class="stat-value">142</div>
-            <div class="stat-delta">↑ 8 this month</div>
+            <div class="stat-value" id="stat-active-members">–</div>
+            <div class="stat-delta" id="stat-active-members-delta"></div>
           </div>
           <div class="stat-card">
             <div class="stat-label">Rooms Available</div>
-            <div class="stat-value">3/6</div>
-            <div class="stat-delta">3 currently occupied</div>
+            <div class="stat-value" id="stat-rooms-available">–</div>
+            <div class="stat-delta" id="stat-rooms-available-delta"></div>
           </div>
           <div class="stat-card">
             <div class="stat-label">Pending Invites</div>
-            <div class="stat-value">14</div>
-            <div class="stat-delta">4 expired</div>
+            <div class="stat-value" id="stat-pending-invites">–</div>
+            <div class="stat-delta" id="stat-pending-invites-delta"></div>
           </div>
         </div>
 
@@ -1729,6 +1729,7 @@ async function loadAppData(isRetry) {
   renderSentInvitesWidget();
   renderNotificationsFeed();
   renderMyBookings();
+  renderDashboardStats();
 
   if (failures.length > 0) {
     if (!isRetry) {
@@ -1937,6 +1938,38 @@ function timeAgo(iso) {
 
 function inviteInitials(email) {
   return (email || '??').slice(0, 2).toUpperCase();
+}
+
+function renderDashboardStats() {
+  const todayEl = document.getElementById('stat-today-bookings');
+  if (!todayEl) return; // only present on admin dashboard
+
+  const now = new Date();
+  const todayStr = now.toDateString();
+
+  const todaysBookings = state.bookings.filter(b => b.status !== 'cancelled' && new Date(b.start_time).toDateString() === todayStr);
+  const confirmedToday = todaysBookings.filter(b => b.status === 'confirmed').length;
+  document.getElementById('stat-today-bookings').textContent = todaysBookings.length;
+  document.getElementById('stat-today-bookings-delta').textContent = `${confirmedToday} confirmed`;
+
+  const activeMembers = state.members.filter(m => m.status === 'active').length;
+  document.getElementById('stat-active-members').textContent = activeMembers;
+  document.getElementById('stat-active-members-delta').textContent = `${state.members.length} total`;
+
+  const occupiedNow = new Set(
+    state.bookings
+      .filter(b => b.status !== 'cancelled' && new Date(b.start_time) <= now && new Date(b.end_time) > now)
+      .map(b => b.room && b.room.id)
+  );
+  const totalRooms = state.rooms.length;
+  const availableNow = totalRooms - occupiedNow.size;
+  document.getElementById('stat-rooms-available').textContent = `${availableNow}/${totalRooms}`;
+  document.getElementById('stat-rooms-available-delta').textContent = `${occupiedNow.size} currently occupied`;
+
+  const pendingInvites = state.invites.filter(i => i.status === 'pending').length;
+  const expiredInvites = state.invites.filter(i => i.status === 'expired').length;
+  document.getElementById('stat-pending-invites').textContent = pendingInvites;
+  document.getElementById('stat-pending-invites-delta').textContent = `${expiredInvites} expired`;
 }
 
 function renderUpcomingBookingsWidget() {
