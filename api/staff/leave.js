@@ -3,54 +3,70 @@ const { requireAuth } = require('../_lib/auth');
 const { sendLeaveUpdate } = require('../_lib/email');
 const { createCalendarEvent, deleteCalendarEvent } = require('../_lib/google');
 
+const TEAM_CALENDAR_EMAIL = 'support@radiantfr.com';
+
 function addDays(dateISO, days) {
   const d = new Date(dateISO + 'T00:00:00');
   d.setDate(d.getDate() + days);
   return d.toISOString().slice(0, 10);
 }
 
-async function notifyAndSync(supabase, entry, removed) {
-  if (!entry.member_id) return;
-  const { data: member } = await supabase
-    .from('members')
-    .select('email, first_name, last_name, google_calendar_connected, google_refresh_token')
-    .eq('id', entry.member_id)
-    .maybeSingle();
-  if (!member) return;
-
-  try {
-    await sendLeaveUpdate({
-      to: member.email,
-      staffName: member.first_name || entry.staff_name,
-      leaveDate: entry.leave_date,
-      code: entry.code,
-      removed,
-    });
-  } catch (e) { /* non-critical */ }
-
-  if (!member.google_calendar_connected || !member.google_refresh_token) return;
+async function syncOneCalendar(supabase, entry, account, removed, eventIdField, staffDisplayName) {
+  if (!account || !account.google_calendar_connected || !account.google_refresh_token) return;
 
   if (removed) {
-    if (entry.google_event_id) {
-      try { await deleteCalendarEvent({ refreshToken: member.google_refresh_token, eventId: entry.google_event_id }); } catch (e) {}
+    if (entry[eventIdField]) {
+      try { await deleteCalendarEvent({ refreshToken: account.google_refresh_token, eventId: entry[eventIdField] }); } catch (e) {}
     }
     return;
   }
 
   try {
     const codeLabel = { AL: 'Annual Leave', BH: 'Bank Holiday', SICK: 'Sick Leave', OTHER: 'Leave' }[entry.code] || entry.code;
+    const summary = eventIdField === 'team_google_event_id'
+      ? `Radiant — ${staffDisplayName} — ${codeLabel}`
+      : `Radiant — ${codeLabel}`;
     const event = await createCalendarEvent({
-      refreshToken: member.google_refresh_token,
-      summary: `Radiant — ${codeLabel}`,
+      refreshToken: account.google_refresh_token,
+      summary,
       description: 'Synced from the Radiant Booking leave calendar',
       allDay: true,
       startDate: entry.leave_date,
       endDate: addDays(entry.leave_date, 1), // Google all-day events use an exclusive end date
     });
     if (event && event.id) {
-      await supabase.from('leave_days').update({ google_event_id: event.id }).eq('id', entry.id);
+      await supabase.from('leave_days').update({ [eventIdField]: event.id }).eq('id', entry.id);
     }
   } catch (e) { /* non-critical */ }
+}
+
+async function notifyAndSync(supabase, entry, removed) {
+  if (entry.member_id) {
+    const { data: member } = await supabase
+      .from('members')
+      .select('email, first_name, last_name, google_calendar_connected, google_refresh_token')
+      .eq('id', entry.member_id)
+      .maybeSingle();
+    if (member) {
+      try {
+        await sendLeaveUpdate({
+          to: member.email,
+          staffName: member.first_name || entry.staff_name,
+          leaveDate: entry.leave_date,
+          code: entry.code,
+          removed,
+        });
+      } catch (e) { /* non-critical */ }
+      await syncOneCalendar(supabase, entry, member, removed, 'google_event_id', entry.staff_name);
+    }
+  }
+
+  const { data: teamAccount } = await supabase
+    .from('members')
+    .select('google_calendar_connected, google_refresh_token')
+    .eq('email', TEAM_CALENDAR_EMAIL)
+    .maybeSingle();
+  await syncOneCalendar(supabase, entry, teamAccount, removed, 'team_google_event_id', entry.staff_name);
 }
 
 module.exports = async (req, res) => {

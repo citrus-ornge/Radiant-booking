@@ -3,6 +3,11 @@ const { requireAuth } = require('../_lib/auth');
 const { sendRotaUpdate } = require('../_lib/email');
 const { createCalendarEvent, deleteCalendarEvent } = require('../_lib/google');
 
+// The shared team inbox/calendar that should see every rota change,
+// regardless of whether the individual staff member has their own
+// Google Calendar connected.
+const TEAM_CALENDAR_EMAIL = 'support@radiantfr.com';
+
 // Best-effort parser for the messy real-world time formats seen in the rota
 // (e.g. "9:30 - 16:00", "10:00 -16:00", "07:45 - 14.15"). Returns null if it
 // can't confidently parse two times, in which case calendar sync is skipped
@@ -18,52 +23,35 @@ function parseTimeRange(timeRange, shiftDateISO) {
   return { startISO, endISO };
 }
 
-async function notifyAndSync(supabase, shift, removed) {
-  if (!shift.member_id) return;
-  const { data: member } = await supabase
-    .from('members')
-    .select('email, first_name, last_name, google_calendar_connected, google_refresh_token')
-    .eq('id', shift.member_id)
-    .maybeSingle();
-  if (!member) return;
-
-  try {
-    await sendRotaUpdate({
-      to: member.email,
-      staffName: member.first_name || shift.staff_name,
-      shiftDate: shift.shift_date,
-      dayOfWeek: shift.day_of_week,
-      timeRange: shift.time_range,
-      status: shift.status,
-      removed,
-    });
-  } catch (e) { /* non-critical */ }
-
-  if (!member.google_calendar_connected || !member.google_refresh_token) return;
+async function syncOneCalendar(supabase, shift, account, removed, eventIdField, staffDisplayName) {
+  if (!account || !account.google_calendar_connected || !account.google_refresh_token) return;
 
   if (removed) {
-    if (shift.google_event_id) {
-      try { await deleteCalendarEvent({ refreshToken: member.google_refresh_token, eventId: shift.google_event_id }); } catch (e) {}
+    if (shift[eventIdField]) {
+      try { await deleteCalendarEvent({ refreshToken: account.google_refresh_token, eventId: shift[eventIdField] }); } catch (e) {}
     }
     return;
   }
 
   try {
     const statusLabel = { scheduled: 'Working', closed: 'Closed', annual_leave: 'Annual Leave', tbc: 'Shift TBC' }[shift.status] || shift.status;
+    const summary = eventIdField === 'team_google_event_id'
+      ? `Radiant Rota — ${staffDisplayName} — ${statusLabel}`
+      : `Radiant Rota — ${statusLabel}`;
     const parsed = shift.status === 'scheduled' ? parseTimeRange(shift.time_range, shift.shift_date) : null;
     let event;
     if (parsed) {
       event = await createCalendarEvent({
-        refreshToken: member.google_refresh_token,
-        summary: `Radiant Rota — ${statusLabel}`,
+        refreshToken: account.google_refresh_token,
+        summary,
         description: 'Synced from the Radiant Booking rota',
         startISO: parsed.startISO,
         endISO: parsed.endISO,
       });
     } else {
       event = await createCalendarEvent({
-        refreshToken: member.google_refresh_token,
-        summary: `Radiant Rota — ${statusLabel}`,
+        refreshToken: account.google_refresh_token,
+        summary,
         description: 'Synced from the Radiant Booking rota',
         allDay: true,
         startDate: shift.shift_date,
@@ -71,9 +59,43 @@ async function notifyAndSync(supabase, shift, removed) {
       });
     }
     if (event && event.id) {
-      await supabase.from('rota_shifts').update({ google_event_id: event.id }).eq('id', shift.id);
+      await supabase.from('rota_shifts').update({ [eventIdField]: event.id }).eq('id', shift.id);
     }
   } catch (e) { /* non-critical */ }
+}
+
+async function notifyAndSync(supabase, shift, removed) {
+  // Individual notification + personal calendar (if they have an account)
+  if (shift.member_id) {
+    const { data: member } = await supabase
+      .from('members')
+      .select('email, first_name, last_name, google_calendar_connected, google_refresh_token')
+      .eq('id', shift.member_id)
+      .maybeSingle();
+    if (member) {
+      try {
+        await sendRotaUpdate({
+          to: member.email,
+          staffName: member.first_name || shift.staff_name,
+          shiftDate: shift.shift_date,
+          dayOfWeek: shift.day_of_week,
+          timeRange: shift.time_range,
+          status: shift.status,
+          removed,
+        });
+      } catch (e) { /* non-critical */ }
+      await syncOneCalendar(supabase, shift, member, removed, 'google_event_id', shift.staff_name);
+    }
+  }
+
+  // Always sync to the shared team calendar too, regardless of the
+  // individual's own connection status
+  const { data: teamAccount } = await supabase
+    .from('members')
+    .select('google_calendar_connected, google_refresh_token')
+    .eq('email', TEAM_CALENDAR_EMAIL)
+    .maybeSingle();
+  await syncOneCalendar(supabase, shift, teamAccount, removed, 'team_google_event_id', shift.staff_name);
 }
 
 module.exports = async (req, res) => {
@@ -114,10 +136,9 @@ module.exports = async (req, res) => {
       .single();
     if (error) return res.status(500).json({ error: error.message });
 
-    let notified = false;
-    try { await notifyAndSync(supabase, data, false); notified = true; } catch (e) {}
+    try { await notifyAndSync(supabase, data, false); } catch (e) {}
 
-    return res.status(201).json({ shift: data, notified });
+    return res.status(201).json({ shift: data });
   }
 
   if (req.method === 'DELETE') {
