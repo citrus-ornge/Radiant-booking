@@ -4,7 +4,7 @@ const { requireAuth } = require('./_lib/auth');
 const ADMIN_EDITABLE_FIELDS = [
   'first_name', 'last_name', 'phone', 'qualifications', 'specialties',
   'indemnity_number', 'indemnity_expiry', 'dbs_status', 'dbs_expiry',
-  'plan_tier', 'onboarding_status', 'user_type', 'status',
+  'plan_tier', 'onboarding_status', 'user_type', 'status', 'is_owner',
 ];
 
 const SELF_EDITABLE_FIELDS = [
@@ -18,7 +18,7 @@ module.exports = async (req, res) => {
   if (req.method === 'GET') {
     const { data, error } = await supabase
       .from('members')
-      .select('id, first_name, last_name, email, phone, user_type, status, google_calendar_connected, created_at, qualifications, indemnity_number, indemnity_expiry, dbs_status, dbs_expiry, plan_tier, onboarding_status')
+      .select('id, first_name, last_name, email, phone, user_type, status, google_calendar_connected, created_at, qualifications, indemnity_number, indemnity_expiry, dbs_status, dbs_expiry, plan_tier, onboarding_status, is_owner')
       .order('created_at', { ascending: false });
     if (error) return res.status(500).json({ error: error.message });
     return res.status(200).json({ members: data });

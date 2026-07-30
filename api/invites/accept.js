@@ -38,7 +38,11 @@ module.exports = async (req, res) => {
   if (existing) {
     const { data, error } = await supabase
       .from('members')
-      .update({ auth_user_id: authUser.id, onboarding_status: 'profile_pending', status: 'active' })
+      .update({
+        auth_user_id: authUser.id, status: 'active',
+        is_owner: invite.is_owner,
+        onboarding_status: invite.is_owner ? 'completed' : 'profile_pending',
+      })
       .eq('id', existing.id)
       .select()
       .single();
@@ -50,7 +54,9 @@ module.exports = async (req, res) => {
       .insert({
         first_name: '', last_name: '', email: invite.email,
         user_type: invite.user_type, auth_user_id: authUser.id,
-        onboarding_status: 'profile_pending', status: 'active',
+        is_owner: invite.is_owner,
+        onboarding_status: invite.is_owner ? 'completed' : 'profile_pending',
+        status: 'active',
       })
       .select()
       .single();
@@ -67,6 +73,7 @@ module.exports = async (req, res) => {
       firstName: member.first_name || member.email.split('@')[0],
       userType: member.user_type,
       planTier: member.plan_tier,
+      isOwner: member.is_owner,
     });
     welcome_email_sent = true;
   } catch (e) {

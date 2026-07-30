@@ -54,12 +54,12 @@ module.exports = async (req, res) => {
       return res.status(429).json({ error: 'Too many invites sent recently. Please wait a while before sending more.' });
     }
 
-    const { email, user_type, personal_note } = req.body || {};
+    const { email, user_type, personal_note, is_owner } = req.body || {};
     if (!email || !user_type) return res.status(400).json({ error: 'email and user_type are required' });
 
     const { data: invite, error } = await supabase
       .from('invites')
-      .insert({ email, user_type, personal_note })
+      .insert({ email, user_type, personal_note, is_owner: !!is_owner })
       .select()
       .single();
     if (error) return res.status(500).json({ error: error.message });

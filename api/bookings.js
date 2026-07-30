@@ -22,7 +22,7 @@ module.exports = async (req, res) => {
       .select(`
         id, start_time, end_time, status, notes, created_at,
         room:rooms ( id, name, emoji, floor ),
-        member:members ( id, first_name, last_name, email, user_type )
+        member:members ( id, first_name, last_name, email, user_type, is_owner )
       `)
       .order('start_time', { ascending: true });
     if (error) return res.status(500).json({ error: error.message });

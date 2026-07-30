@@ -1234,9 +1234,12 @@ textarea.form-input { resize: vertical; }
             <div style="padding:20px 22px;">
               <div class="form-row"><label class="form-label">Email Address</label><input type="email" class="form-input" placeholder="member@email.com" id="invite-email"></div>
               <div class="form-row"><label class="form-label">User Type</label>
-                <select class="form-input" id="invite-type">
+                <select class="form-input" id="invite-type" onchange="toggleInviteOwnerRow('invite')">
                   <option value="practitioner">Practitioner</option><option value="member">Member</option><option value="guest">Guest</option><option value="administrator">Staff & Admin</option>
                 </select>
+              </div>
+              <div class="form-row" id="invite-owner-row" style="display:none;">
+                <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer;"><input type="checkbox" id="invite-is-owner"> This person is the clinic owner (Owner / Super Admin — skips onboarding)</label>
               </div>
               <div class="form-row"><label class="form-label">Personal Note (optional)</label><textarea class="form-input" id="invite-note" rows="3" placeholder="Add a welcome message…"></textarea></div>
               <div class="form-row">
@@ -1519,7 +1522,10 @@ textarea.form-input { resize: vertical; }
     <div class="modal-body">
       <div class="form-row"><label class="form-label">Email Address</label><input type="email" class="form-input" id="im-email" placeholder="name@email.com"></div>
       <div class="form-row"><label class="form-label">User Type</label>
-        <select class="form-input" id="im-type"><option value="practitioner">Practitioner</option><option value="member">Member</option><option value="guest">Guest</option><option value="administrator">Staff & Admin</option></select>
+        <select class="form-input" id="im-type" onchange="toggleInviteOwnerRow('im')"><option value="practitioner">Practitioner</option><option value="member">Member</option><option value="guest">Guest</option><option value="administrator">Staff & Admin</option></select>
+      </div>
+      <div class="form-row" id="im-owner-row" style="display:none;">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer;"><input type="checkbox" id="im-is-owner"> This person is the clinic owner (Owner / Super Admin — skips onboarding)</label>
       </div>
       <div class="form-row"><label class="form-label">Personal Note</label><textarea class="form-input" id="im-note" rows="2" placeholder="Optional welcome message…"></textarea></div>
     </div>
@@ -1574,7 +1580,7 @@ textarea.form-input { resize: vertical; }
       <div class="form-row"><label class="form-label">Email</label><input class="form-input" id="mm-email" disabled style="opacity:0.6;"></div>
       <div class="form-two">
         <div class="form-row"><label class="form-label">User Type</label>
-          <select class="form-input" id="mm-user-type">
+          <select class="form-input" id="mm-user-type" onchange="toggleInviteOwnerRow('mm')">
             <option value="administrator">Staff & Admin</option>
             <option value="practitioner">Practitioner</option>
             <option value="member">Member</option>
@@ -1587,6 +1593,9 @@ textarea.form-input { resize: vertical; }
             <option value="inactive">Inactive</option>
           </select>
         </div>
+      </div>
+      <div class="form-row" id="mm-owner-row" style="display:none;">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer;"><input type="checkbox" id="mm-is-owner"> Owner / Super Admin (skips onboarding, full access)</label>
       </div>
       <div class="form-row" id="mm-tier-row">
         <label class="form-label">Membership Tier</label>
@@ -1876,14 +1885,15 @@ function statusBadge(status) {
   const map = { confirmed: 'badge-green', pending: 'badge-gold', cancelled: 'badge-red' };
   return `<span class="badge ${map[status] || 'badge-gray'}">${status.charAt(0).toUpperCase() + status.slice(1)}</span>`;
 }
-function roleLabel(userType) {
+function roleLabel(userType, isOwner) {
+  if (isOwner) return 'Owner (Super Admin)';
   const map = { administrator: 'Staff & Admin', practitioner: 'Practitioner', member: 'Member', guest: 'Guest' };
   return map[userType] || (userType.charAt(0).toUpperCase() + userType.slice(1));
 }
 
-function typeBadge(userType) {
+function typeBadge(userType, isOwner) {
   const map = { practitioner: 'badge-blue', member: 'badge-gold', guest: 'badge-gray', administrator: 'badge-blue' };
-  return `<span class="badge ${map[userType] || 'badge-gray'}">${esc(roleLabel(userType))}</span>`;
+  return `<span class="badge ${isOwner ? 'badge-gold' : (map[userType] || 'badge-gray')}">${esc(roleLabel(userType, isOwner))}</span>`;
 }
 
 function renderBookingsTable() {
@@ -1897,7 +1907,7 @@ function renderBookingsTable() {
     <tr>
       <td><strong>${esc(b.room ? b.room.name : '—')}</strong></td>
       <td>${b.member ? esc(b.member.first_name) + ' ' + esc(b.member.last_name) : '—'}</td>
-      <td>${b.member ? typeBadge(b.member.user_type) : '—'}</td>
+      <td>${b.member ? typeBadge(b.member.user_type, b.member.is_owner) : '—'}</td>
       <td>${fmtDateTime(b.start_time)}</td>
       <td>${durationLabel(b.start_time, b.end_time)}</td>
       <td>${statusBadge(b.status)}</td>
@@ -1925,6 +1935,8 @@ function openManageMember(id) {
   const isMember = m.user_type === 'member';
   document.getElementById('mm-tier-row').style.display = (isPractitioner || isMember) ? 'block' : 'none';
   document.getElementById('mm-onboarding-row').style.display = (isPractitioner || m.user_type === 'administrator') ? 'block' : 'none';
+  document.getElementById('mm-is-owner').checked = !!m.is_owner;
+  toggleInviteOwnerRow('mm');
 
   const gcalEl = document.getElementById('mm-gcal-status');
   if (m.google_calendar_connected) {
@@ -1950,15 +1962,17 @@ async function disconnectManagedMemberCalendar(memberId) {
 
 async function saveManagedMember() {
   const id = document.getElementById('mm-id').value;
+  const userType = document.getElementById('mm-user-type').value;
   const updates = {
     first_name: document.getElementById('mm-first-name').value.trim(),
     last_name: document.getElementById('mm-last-name').value.trim(),
-    user_type: document.getElementById('mm-user-type').value,
+    user_type: userType,
     status: document.getElementById('mm-status').value,
     plan_tier: document.getElementById('mm-plan-tier').value || null,
     onboarding_status: document.getElementById('mm-onboarding-status').value,
     phone: document.getElementById('mm-phone').value.trim(),
     qualifications: document.getElementById('mm-qualifications').value.trim(),
+    is_owner: userType === 'administrator' && document.getElementById('mm-is-owner').checked,
   };
   try {
     await api('/members', { method: 'PATCH', body: JSON.stringify({ id, ...updates }) });
@@ -2090,7 +2104,7 @@ function renderMembersTable() {
     <tr>
       <td><div style="display:flex;align-items:center;gap:10px;"><div class="avatar" style="width:30px;height:30px;font-size:11px;">${esc(initials)}</div>${esc(m.first_name)} ${esc(m.last_name)}</div></td>
       <td style="color:var(--r-warm-gray);">${esc(m.email)}</td>
-      <td>${typeBadge(m.user_type)}</td>
+      <td>${typeBadge(m.user_type, m.is_owner)}</td>
       <td style="color:var(--r-warm-gray);">${new Date(m.created_at).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}</td>
       <td>${bookingCount}</td>
       <td><span class="badge ${m.status === 'active' ? 'badge-green' : 'badge-red'}">${m.status.charAt(0).toUpperCase() + m.status.slice(1)}</span></td>
@@ -2511,7 +2525,7 @@ function enterAppShell() {
   const m = state.currentMember;
   const initials = initialsFor(m);
   document.getElementById('sidebar-name').textContent = (m.first_name || m.email) + ' ' + (m.last_name ? m.last_name[0] + '.' : '');
-  document.getElementById('sidebar-role').textContent = roleLabel(m.user_type);
+  document.getElementById('sidebar-role').textContent = roleLabel(m.user_type, m.is_owner);
   document.getElementById('sidebar-avatar').textContent = initials;
 
   if (currentRole === 'admin') {
@@ -2831,7 +2845,7 @@ function renderProfilePage() {
   if (!m) return;
   document.getElementById('profile-avatar').textContent = initialsFor(m);
   document.getElementById('profile-name').textContent = `${m.first_name || ''} ${m.last_name || ''}`.trim() || m.email;
-  document.getElementById('profile-badge').textContent = roleLabel(m.user_type);
+  document.getElementById('profile-badge').textContent = roleLabel(m.user_type, m.is_owner);
   document.getElementById('profile-first-name').value = m.first_name || '';
   document.getElementById('profile-last-name').value = m.last_name || '';
   document.getElementById('profile-email').value = m.email || '';
@@ -3059,16 +3073,23 @@ async function confirmClientBooking() {
   }
 }
 
+function toggleInviteOwnerRow(prefix) {
+  const type = document.getElementById(prefix + '-type').value;
+  const row = document.getElementById(prefix + '-owner-row');
+  if (row) row.style.display = type === 'administrator' ? 'block' : 'none';
+}
+
 async function sendInviteModal() {
   const email = document.getElementById('im-email').value;
   const user_type = document.getElementById('im-type').value;
   const personal_note = document.getElementById('im-note').value;
+  const is_owner = user_type === 'administrator' && document.getElementById('im-is-owner').checked;
   if (!email) { showToast('⚠ Please enter an email address'); return; }
 
   const btn = document.getElementById('invite-modal-submit');
   btn.disabled = true;
   try {
-    const result = await api('/invites', { method: 'POST', body: JSON.stringify({ email, user_type, personal_note }) });
+    const result = await api('/invites', { method: 'POST', body: JSON.stringify({ email, user_type, personal_note, is_owner }) });
     closeModal('invite-modal');
     showToast(result.email_sent ? '✓ Invitation sent successfully!' : '✓ Invite created (email not sent — check Resend setup)');
   } catch (e) {
@@ -3082,10 +3103,11 @@ async function sendInviteFromPage() {
   const email = document.getElementById('invite-email').value;
   const user_type = document.getElementById('invite-type').value;
   const personal_note = document.getElementById('invite-note').value;
+  const is_owner = user_type === 'administrator' && document.getElementById('invite-is-owner').checked;
   if (!email) { showToast('⚠ Please enter an email address'); return; }
 
   try {
-    const result = await api('/invites', { method: 'POST', body: JSON.stringify({ email, user_type, personal_note }) });
+    const result = await api('/invites', { method: 'POST', body: JSON.stringify({ email, user_type, personal_note, is_owner }) });
     showToast(result.email_sent ? `✓ Invite sent to ${email}` : `✓ Invite created for ${email} (email not sent)`);
     document.getElementById('invite-email').value = '';
     document.getElementById('invite-note').value = '';

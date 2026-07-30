@@ -66,10 +66,29 @@ function tierSectionFor(userType, planTier) {
   return `\n\nMembership tier: not yet set\nYou can select your membership tier (Community, Flex, Core or Resident) from your Profile page.`;
 }
 
-async function sendWelcomeEmail({ to, firstName, userType, planTier }) {
+async function sendWelcomeEmail({ to, firstName, userType, planTier, isOwner }) {
   const resend = getResend();
   const name = firstName || 'there';
   const appUrl = process.env.PUBLIC_APP_URL || 'https://radiant-booking.vercel.app';
+
+  if (isOwner) {
+    const body = `Hi ${name},
+
+Your Radiant Booking Platform account is ready — with full Super Admin access as the clinic owner.
+
+As Super Admin, you have complete oversight of the platform:
+- Full visibility and control over rooms, members, bookings and invitations
+- The ability to manage every other Staff & Admin account
+- Real-time booking activity across the whole clinic
+- Everything Staff & Admin and practitioner accounts can do, with nothing restricted
+
+Since you're the one who set the clinic's policies in the first place, there's no onboarding or document-signing required on your account — you're taken straight in. The underlying policy documents (health & safety, infection control, complaints, data protection and our internal SOPs) remain available as downloadable PDFs from your Profile page whenever you want to review or update them.
+
+Sign in any time at ${appUrl}.
+
+— Radiant Booking`;
+    return resend.emails.send({ from: FROM_EMAIL, to: [to], subject: 'Welcome to the Radiant Booking Platform', text: body });
+  }
 
   if (userType === 'member') {
     const body = `Hi ${name},
