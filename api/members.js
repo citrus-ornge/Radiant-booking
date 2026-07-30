@@ -71,5 +71,37 @@ module.exports = async (req, res) => {
     }
   }
 
+  if (req.method === 'DELETE') {
+    try {
+      const { member: requester } = await requireAuth(req);
+      if (!requester || requester.user_type !== 'administrator') {
+        return res.status(403).json({ error: 'Only administrators can delete members' });
+      }
+      const { id } = req.body || {};
+      if (!id) return res.status(400).json({ error: 'id is required' });
+      if (id === requester.id) {
+        return res.status(400).json({ error: 'Use the Profile page to delete your own account' });
+      }
+
+      const { data: target, error: fetchErr } = await supabase.from('members').select('auth_user_id').eq('id', id).single();
+      if (fetchErr) return res.status(404).json({ error: 'Member not found' });
+
+      const { error } = await supabase.from('members').delete().eq('id', id);
+      if (error) return res.status(500).json({ error: error.message });
+
+      if (target.auth_user_id) {
+        try {
+          await supabase.auth.admin.deleteUser(target.auth_user_id);
+        } catch (e) {
+          console.error('Failed to delete auth user for member', id, e.message);
+        }
+      }
+
+      return res.status(200).json({ deleted: true });
+    } catch (e) {
+      return res.status(e.status || 500).json({ error: e.message });
+    }
+  }
+
   res.status(405).json({ error: 'Method not allowed' });
 };

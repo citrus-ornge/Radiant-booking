@@ -932,7 +932,7 @@ textarea.form-input { resize: vertical; }
       </div>
       <div class="form-row" style="margin-bottom:24px;">
         <label class="form-label">Create Password</label>
-        <input type="password" class="form-input" id="signup-password" placeholder="At least 8 characters">
+        <input type="password" class="form-input" id="signup-password" placeholder="At least 8 characters, incl. a letter and number">
       </div>
       <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;" id="signup-btn" onclick="doSignUp()">Create Account</button>
       <p id="signup-error" style="text-align:center;font-size:12.5px;color:var(--r-red);margin-top:12px;display:none;"></p>
@@ -944,6 +944,9 @@ textarea.form-input { resize: vertical; }
       <button class="btn btn-outline" style="width:100%;justify-content:center;" onclick="window.location.href=window.location.pathname">Back to Sign In</button>
     </div>
   </div>
+  <p style="text-align:center;font-size:12px;color:var(--r-warm-gray);margin-top:16px;">
+    <a href="#" onclick="openModal('privacy-policy-modal');return false;" style="color:var(--r-warm-gray);">Privacy Policy</a>
+  </p>
   </div>
 </div>
 
@@ -1436,6 +1439,22 @@ textarea.form-input { resize: vertical; }
               </label>
             </div>
           </div>
+          <div class="card" style="border-color:rgba(155,44,74,0.25);">
+            <div class="card-header"><div class="card-title" style="color:var(--r-red);">Data &amp; Privacy</div></div>
+            <div style="padding:18px 22px;display:flex;flex-direction:column;gap:12px;">
+              <div>
+                <button class="btn btn-outline btn-sm" onclick="downloadMyData()">Download my data</button>
+                <p style="font-size:12px;color:var(--r-warm-gray);margin-top:6px;">Get a copy of your profile and booking history as a file.</p>
+              </div>
+              <div style="border-top:1px solid var(--r-stone);padding-top:12px;">
+                <button class="btn btn-outline btn-sm" style="border-color:var(--r-red);color:var(--r-red);" onclick="openModal('delete-account-modal')">Delete my account</button>
+                <p style="font-size:12px;color:var(--r-warm-gray);margin-top:6px;">Permanently deletes your profile, bookings and sign-in. This can't be undone.</p>
+              </div>
+              <div style="border-top:1px solid var(--r-stone);padding-top:12px;">
+                <a href="#" onclick="openModal('privacy-policy-modal');return false;" style="font-size:12.5px;color:var(--r-warm-gray);text-decoration:underline;">Read our Privacy Policy</a>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1586,8 +1605,68 @@ textarea.form-input { resize: vertical; }
       <div class="form-row"><label class="form-label">Qualifications</label><textarea class="form-input" id="mm-qualifications" rows="2"></textarea></div>
     </div>
     <div class="modal-footer">
+      <button class="btn btn-outline" style="border-color:var(--r-red);color:var(--r-red);margin-right:auto;" onclick="confirmDeleteManagedMember()">Delete Member</button>
       <button class="btn btn-outline" onclick="closeModal('manage-member-modal')">Cancel</button>
       <button class="btn btn-primary" onclick="saveManagedMember()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE ACCOUNT (self) -->
+<div class="modal-overlay" id="delete-account-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div><div class="modal-title" style="color:var(--r-red);">Delete My Account</div></div>
+      <button class="close-btn" onclick="closeModal('delete-account-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13.5px;line-height:1.5;">This will permanently delete your profile, all your bookings, and your sign-in access. This cannot be undone.</p>
+      <div class="form-row"><label class="form-label">Type DELETE to confirm</label><input class="form-input" id="delete-account-confirm-input" placeholder="DELETE"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('delete-account-modal')">Cancel</button>
+      <button class="btn btn-primary" style="background:var(--r-red);color:#fff;" id="delete-account-btn" onclick="deleteMyAccount()">Permanently Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- PRIVACY POLICY -->
+<div class="modal-overlay" id="privacy-policy-modal">
+  <div class="modal" style="width:640px;">
+    <div class="modal-header">
+      <div><div class="modal-title">Privacy Policy</div></div>
+      <button class="close-btn" onclick="closeModal('privacy-policy-modal')">✕</button>
+    </div>
+    <div class="modal-body" style="font-size:13.5px;line-height:1.65;">
+      <div style="background:var(--r-surface2);border-radius:8px;padding:12px 14px;margin-bottom:18px;font-size:12px;color:var(--r-warm-gray);">
+        <strong>Draft for review.</strong> This is a working template pending confirmation from Radiant's team — data retention periods and the contact details below are placeholders and should be confirmed before this is published as final.
+      </div>
+
+      <p style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--r-warm-gray);">Last updated: 30 July 2026</p>
+
+      <h3 style="font-family:'Playfair Display',serif;font-size:16px;margin:18px 0 8px;">Who we are</h3>
+      <p>Radiant Medical Aesthetics ("Radiant", "we", "us") operates this booking platform for the use of our practitioners, members and staff. Radiant is the data controller for the personal data processed here.</p>
+
+      <h3 style="font-family:'Playfair Display',serif;font-size:16px;margin:18px 0 8px;">What we collect</h3>
+      <p>Account details (name, email, phone), professional details for practitioners (qualifications, indemnity insurance number and expiry, DBS status), booking records (room, date, time, notes), and — only if you choose to connect it — a link to your Google Calendar for syncing bookings.</p>
+
+      <h3 style="font-family:'Playfair Display',serif;font-size:16px;margin:18px 0 8px;">Why we process it</h3>
+      <p>To operate the booking platform and manage room availability (performance of a contract with you), to verify practitioner credentials where legally required (legal obligation), and to keep the platform secure and prevent misuse (legitimate interest).</p>
+
+      <h3 style="font-family:'Playfair Display',serif;font-size:16px;margin:18px 0 8px;">Who we share it with</h3>
+      <p>We use the following processors to run this platform: Supabase (database and sign-in), Resend (sending booking and account emails), Google (calendar sync, only for accounts that connect it), and Vercel (hosting). None of these providers use your data for their own purposes.</p>
+
+      <h3 style="font-family:'Playfair Display',serif;font-size:16px;margin:18px 0 8px;">How long we keep it</h3>
+      <p><em>[TBC — placeholder pending confirmation]</em> We intend to retain your account data for as long as your account is active, and for a limited period afterwards where needed for legitimate business or legal purposes (for example, professional indemnity or DBS records required for compliance). When you delete your account, your profile and bookings are removed immediately; any retention beyond that for compliance reasons will be clearly explained separately.</p>
+
+      <h3 style="font-family:'Playfair Display',serif;font-size:16px;margin:18px 0 8px;">Your rights</h3>
+      <p>You can access, download or delete your personal data at any time from your Profile page ("Download my data" and "Delete my account"). You also have the right to ask us to correct inaccurate data, object to certain processing, or complain to the UK Information Commissioner's Office (ico.org.uk) if you believe your data has been mishandled.</p>
+
+      <h3 style="font-family:'Playfair Display',serif;font-size:16px;margin:18px 0 8px;">Contact</h3>
+      <p><em>[TBC — placeholder]</em> For any questions about this policy or your data, contact Radiant at <em>[privacy contact email to be confirmed]</em>.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="closeModal('privacy-policy-modal')">Close</button>
     </div>
   </div>
 </div>
@@ -1856,6 +1935,69 @@ async function saveManagedMember() {
   } catch (e) {
     showToast('⚠ ' + e.message);
   }
+}
+
+async function confirmDeleteManagedMember() {
+  const id = document.getElementById('mm-id').value;
+  const name = document.getElementById('mm-first-name').value + ' ' + document.getElementById('mm-last-name').value;
+  if (!window.confirm(`Permanently delete ${name.trim() || 'this member'}? This removes their profile, bookings and sign-in access. This cannot be undone.`)) return;
+  try {
+    await api('/members', { method: 'DELETE', body: JSON.stringify({ id }) });
+    closeModal('manage-member-modal');
+    showToast('✓ Member deleted');
+    await loadAppData();
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  }
+}
+
+async function deleteMyAccount() {
+  const confirmText = document.getElementById('delete-account-confirm-input').value.trim();
+  if (confirmText !== 'DELETE') {
+    showToast('⚠ Please type DELETE to confirm');
+    return;
+  }
+  const btn = document.getElementById('delete-account-btn');
+  btn.disabled = true;
+  try {
+    await api('/account', { method: 'DELETE' });
+    closeModal('delete-account-modal');
+    showToast('✓ Your account has been deleted');
+    setTimeout(() => doLogout(), 1200);
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function downloadMyData() {
+  const m = state.currentMember;
+  if (!m) { showToast('⚠ Could not load your data'); return; }
+  const myBookings = state.bookings.filter(b => b.member && b.member.id === m.id);
+  const exportData = {
+    exported_at: new Date().toISOString(),
+    profile: {
+      first_name: m.first_name, last_name: m.last_name, email: m.email, phone: m.phone,
+      user_type: m.user_type, qualifications: m.qualifications, plan_tier: m.plan_tier,
+      indemnity_number: m.indemnity_number, indemnity_expiry: m.indemnity_expiry,
+      dbs_status: m.dbs_status, dbs_expiry: m.dbs_expiry, created_at: m.created_at,
+    },
+    bookings: myBookings.map(b => ({
+      room: b.room ? b.room.name : null, start_time: b.start_time, end_time: b.end_time,
+      status: b.status, notes: b.notes,
+    })),
+  };
+  const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'my-radiant-data.json';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  showToast('✓ Data downloaded');
 }
 
 function renderMyBookings() {
@@ -2240,11 +2382,19 @@ async function checkInviteParam() {
   }
 }
 
+function isStrongPassword(pw) {
+  if (!pw || pw.length < 8) return 'Password must be at least 8 characters.';
+  if (!/[a-zA-Z]/.test(pw)) return 'Password must include at least one letter.';
+  if (!/[0-9]/.test(pw)) return 'Password must include at least one number.';
+  return null;
+}
+
 async function doSignUp() {
   const email = document.getElementById('signup-email').value;
   const password = document.getElementById('signup-password').value;
-  if (!password || password.length < 8) {
-    document.getElementById('signup-error').textContent = 'Password must be at least 8 characters.';
+  const pwError = isStrongPassword(password);
+  if (pwError) {
+    document.getElementById('signup-error').textContent = pwError;
     document.getElementById('signup-error').style.display = 'block';
     return;
   }

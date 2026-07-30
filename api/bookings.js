@@ -2,6 +2,7 @@ const { getSupabase } = require('./_lib/supabase');
 const { sendBookingConfirmation } = require('./_lib/email');
 const { createCalendarEvent } = require('./_lib/google');
 const { requireAuth } = require('./_lib/auth');
+const { checkRateLimit } = require('./_lib/rateLimit');
 
 module.exports = async (req, res) => {
   const supabase = getSupabase();
@@ -29,6 +30,11 @@ module.exports = async (req, res) => {
   }
 
   if (req.method === 'POST') {
+    const allowed = await checkRateLimit(`booking_create:${requester.id}`, 30, 3600);
+    if (!allowed) {
+      return res.status(429).json({ error: 'Too many bookings created recently. Please wait a while before booking more.' });
+    }
+
     const { room_id, member_id, start_time, end_time, notes } = req.body || {};
     if (!room_id || !member_id || !start_time || !end_time) {
       return res.status(400).json({ error: 'room_id, member_id, start_time, end_time are required' });

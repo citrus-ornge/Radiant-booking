@@ -1,6 +1,7 @@
 const { getSupabase } = require('./_lib/supabase');
 const { sendInvite } = require('./_lib/email');
 const { requireAuth } = require('./_lib/auth');
+const { checkRateLimit } = require('./_lib/rateLimit');
 
 module.exports = async (req, res) => {
   const supabase = getSupabase();
@@ -37,13 +38,20 @@ module.exports = async (req, res) => {
   }
 
   if (req.method === 'POST') {
+    let requester;
     try {
-      const { member } = await requireAuth(req);
-      if (!member || member.user_type !== 'administrator') {
+      const auth = await requireAuth(req);
+      requester = auth.member;
+      if (!requester || requester.user_type !== 'administrator') {
         return res.status(403).json({ error: 'Only administrators can send invites' });
       }
     } catch (e) {
       return res.status(e.status || 401).json({ error: e.message });
+    }
+
+    const allowed = await checkRateLimit(`invite_create:${requester.id}`, 20, 3600);
+    if (!allowed) {
+      return res.status(429).json({ error: 'Too many invites sent recently. Please wait a while before sending more.' });
     }
 
     const { email, user_type, personal_note } = req.body || {};
