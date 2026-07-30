@@ -28,20 +28,27 @@ async function exchangeCodeForTokens(code) {
   return tokens; // { access_token, refresh_token, expiry_date, ... }
 }
 
-async function createCalendarEvent({ refreshToken, summary, description, startISO, endISO }) {
+async function createCalendarEvent({ refreshToken, summary, description, startISO, endISO, allDay, startDate, endDate }) {
   const client = getOAuthClient();
   client.setCredentials({ refresh_token: refreshToken });
   const calendar = google.calendar({ version: 'v3', auth: client });
-  const res = await calendar.events.insert({
-    calendarId: 'primary',
-    requestBody: {
-      summary,
-      description,
-      start: { dateTime: startISO },
-      end: { dateTime: endISO },
-    },
-  });
+  const requestBody = { summary, description };
+  if (allDay) {
+    requestBody.start = { date: startDate };
+    requestBody.end = { date: endDate };
+  } else {
+    requestBody.start = { dateTime: startISO };
+    requestBody.end = { dateTime: endISO };
+  }
+  const res = await calendar.events.insert({ calendarId: 'primary', requestBody });
   return res.data; // includes .id (google_event_id) and .htmlLink
 }
 
-module.exports = { getAuthUrl, exchangeCodeForTokens, createCalendarEvent };
+async function deleteCalendarEvent({ refreshToken, eventId }) {
+  const client = getOAuthClient();
+  client.setCredentials({ refresh_token: refreshToken });
+  const calendar = google.calendar({ version: 'v3', auth: client });
+  await calendar.events.delete({ calendarId: 'primary', eventId });
+}
+
+module.exports = { getAuthUrl, exchangeCodeForTokens, createCalendarEvent, deleteCalendarEvent };

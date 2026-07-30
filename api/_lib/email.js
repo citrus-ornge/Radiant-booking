@@ -163,4 +163,24 @@ Sign in any time at ${appUrl} to get started.
   return resend.emails.send({ from: FROM_EMAIL, to: [to], subject: 'Welcome to the Radiant Booking Platform', text: body });
 }
 
-module.exports = { sendBookingConfirmation, sendCancellationAlert, sendReminder, sendInvite, sendWelcomeEmail };
+async function sendRotaUpdate({ to, staffName, shiftDate, dayOfWeek, timeRange, status, removed }) {
+  const resend = getResend();
+  const statusText = { scheduled: `working ${timeRange || ''}`, closed: 'closed', annual_leave: 'on annual leave', tbc: 'TBC' }[status] || status;
+  const dateStr = new Date(shiftDate).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const body = removed
+    ? `Hi ${staffName},\n\nA shift on your rota has been removed: ${dateStr}.\n\n— Radiant Booking`
+    : `Hi ${staffName},\n\nYour rota has been updated:\n\n${dateStr} — ${statusText}\n\n— Radiant Booking`;
+  return resend.emails.send({ from: FROM_EMAIL, to: [to], subject: `Rota update: ${dateStr}`, text: body });
+}
+
+async function sendLeaveUpdate({ to, staffName, leaveDate, code, removed }) {
+  const resend = getResend();
+  const codeLabel = { AL: 'Annual Leave', BH: 'Bank Holiday', SICK: 'Sick Leave', OTHER: 'Leave' }[code] || code;
+  const dateStr = new Date(leaveDate).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const body = removed
+    ? `Hi ${staffName},\n\nA leave entry has been removed from the calendar: ${dateStr} (${codeLabel}).\n\n— Radiant Booking`
+    : `Hi ${staffName},\n\n${codeLabel} has been booked for you:\n\n${dateStr}\n\n— Radiant Booking`;
+  return resend.emails.send({ from: FROM_EMAIL, to: [to], subject: `${codeLabel} booked: ${dateStr}`, text: body });
+}
+
+module.exports = { sendBookingConfirmation, sendCancellationAlert, sendReminder, sendInvite, sendWelcomeEmail, sendRotaUpdate, sendLeaveUpdate };
