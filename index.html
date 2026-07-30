@@ -431,10 +431,12 @@ textarea.form-input { resize: vertical; }
   max-width: 96vw;
   max-height: 90vh;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
   transform: translateY(14px) scale(0.98);
   transition: transform 0.22s;
 }
-.modal-overlay.open .modal { transform: translateY(0) scale(1); }
+.modal-overlay.open .modal { transform: none; }
 
 .modal-header {
   padding: 22px 26px 18px;
