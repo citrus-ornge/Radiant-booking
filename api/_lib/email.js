@@ -55,49 +55,72 @@ async function sendInvite({ to, userType, note, inviteUrl }) {
 
 const TIER_LABELS = { community: 'Community', flex: 'Flex', core: 'Core', resident: 'Resident' };
 
-function baseFeaturesFor(userType) {
-  const shared = [
-    '- Book treatment rooms in real time, with automatic clash-checking',
-    '- Get instant email confirmations and reminders before every session',
-    '- Sync bookings straight to your Google Calendar',
-  ];
-  if (userType === 'practitioner') {
-    return [
-      ...shared,
-      '- Manage your professional profile, qualifications and indemnity details',
-      '- See your upcoming sessions and booking history at a glance',
-    ];
+function tierSectionFor(userType, planTier) {
+  if (userType !== 'practitioner' && userType !== 'member') return '';
+  if (planTier && TIER_LABELS[planTier]) {
+    return `\n\nYour membership tier: ${TIER_LABELS[planTier]}\nYou can view the full details of your membership any time from your Profile page.`;
   }
-  if (userType === 'administrator') {
-    return [
-      ...shared,
-      '- Manage rooms, members and bookings across the whole clinic',
-      '- Send invitations and track onboarding for new practitioners',
-    ];
-  }
-  return shared;
+  return `\n\nMembership tier: not yet set\nYou can select your membership tier (Community, Flex, Core or Resident) from your Profile page.`;
 }
 
 async function sendWelcomeEmail({ to, firstName, userType, planTier }) {
   const resend = getResend();
-  const roleLabel = userType.charAt(0).toUpperCase() + userType.slice(1);
-  const features = baseFeaturesFor(userType).join('\n');
+  const name = firstName || 'there';
+  const appUrl = process.env.PUBLIC_APP_URL || 'https://radiant-booking.vercel.app';
 
-  let tierSection = '';
-  if (userType === 'practitioner') {
-    if (planTier && TIER_LABELS[planTier]) {
-      tierSection = `\n\nYour membership tier: ${TIER_LABELS[planTier]}\nYour tier determines your room booking priority and access. You can view the full details of your membership any time from your Profile page.`;
-    } else {
-      tierSection = `\n\nMembership tier: not yet set\nYou can select your membership tier (Community, Flex, Core or Resident) from your Profile page — this determines your room booking priority and access.`;
-    }
+  if (userType === 'member') {
+    const body = `Hi ${name},
+
+Welcome to Radiant Membership! We're delighted to have you join us.
+
+As a Radiant member, you get:
+- A listing on our practitioner and member site, so clients can find and book with you
+- Priority booking access ahead of general availability
+- Invitations to member-only events and networking evenings
+- A dedicated space to manage your bookings and profile
+
+Your membership tier: ${planTier && TIER_LABELS[planTier] ? TIER_LABELS[planTier] : 'not yet set — you can choose this from your Profile page'}
+
+Sign in any time at ${appUrl} to get started.
+
+— Radiant Booking`;
+    return resend.emails.send({ from: FROM_EMAIL, to: [to], subject: 'Welcome to Radiant Membership', text: body });
   }
 
-  return resend.emails.send({
-    from: FROM_EMAIL,
-    to: [to],
-    subject: 'Welcome to the Radiant Booking Platform',
-    text: `Hi ${firstName || 'there'},\n\nWelcome to the Radiant Booking Platform — you're all set up as a ${roleLabel}.\n\nHere's what you can do:\n${features}${tierSection}\n\nSign in any time at ${process.env.PUBLIC_APP_URL || 'https://radiant-booking.vercel.app'} to get started.\n\n— Radiant Booking`,
-  });
+  if (userType === 'practitioner') {
+    const body = `Hi ${name},
+
+Welcome to the Radiant Booking Platform — you're all set up as a Practitioner.
+
+Here's how it works:
+- Check live room availability before you book — no more double-bookings
+- Book a room in a few taps, with instant confirmation by email
+- Sync every booking straight to your Google Calendar
+- Manage your professional profile, qualifications and indemnity details
+
+One important step first: before you can book a room, you'll need to complete your onboarding — filling in your profile and reading and signing our clinical and operational documents. You'll be guided through this automatically the first time you sign in.${tierSectionFor(userType, planTier)}
+
+Sign in any time at ${appUrl} to get started.
+
+— Radiant Booking`;
+    return resend.emails.send({ from: FROM_EMAIL, to: [to], subject: 'Welcome to the Radiant Booking Platform', text: body });
+  }
+
+  // Administrator / guest / fallback
+  const body = `Hi ${name},
+
+Welcome to the Radiant Booking Platform — you're all set up as a ${userType.charAt(0).toUpperCase() + userType.slice(1)}.
+
+Here's what you can do:
+- Book treatment rooms in real time, with automatic clash-checking
+- Get instant email confirmations and reminders before every session
+- Sync bookings straight to your Google Calendar
+${userType === 'administrator' ? '- Manage rooms, members and bookings across the whole clinic\n- Send invitations and track onboarding for new practitioners' : ''}
+
+Sign in any time at ${appUrl} to get started.
+
+— Radiant Booking`;
+  return resend.emails.send({ from: FROM_EMAIL, to: [to], subject: 'Welcome to the Radiant Booking Platform', text: body });
 }
 
 module.exports = { sendBookingConfirmation, sendCancellationAlert, sendReminder, sendInvite, sendWelcomeEmail };

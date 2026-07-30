@@ -1814,7 +1814,8 @@ function openManageMember(id) {
   document.getElementById('mm-qualifications').value = m.qualifications || '';
 
   const isPractitioner = m.user_type === 'practitioner';
-  document.getElementById('mm-tier-row').style.display = isPractitioner ? 'block' : 'none';
+  const isMember = m.user_type === 'member';
+  document.getElementById('mm-tier-row').style.display = (isPractitioner || isMember) ? 'block' : 'none';
   document.getElementById('mm-onboarding-row').style.display = (isPractitioner || m.user_type === 'administrator') ? 'block' : 'none';
 
   openModal('manage-member-modal');
@@ -2578,7 +2579,7 @@ function renderProfilePage() {
   document.getElementById('profile-qualifications').value = m.qualifications || '';
 
   const tierRow = document.getElementById('profile-tier-row');
-  if (m.user_type === 'practitioner') {
+  if (m.user_type === 'practitioner' || m.user_type === 'member') {
     tierRow.style.display = 'block';
     document.getElementById('profile-plan-tier').value = m.plan_tier || '';
   } else {
@@ -2602,7 +2603,7 @@ async function saveProfile() {
     phone: document.getElementById('profile-phone').value.trim(),
     qualifications: document.getElementById('profile-qualifications').value.trim(),
   };
-  if (m.user_type === 'practitioner') {
+  if (m.user_type === 'practitioner' || m.user_type === 'member') {
     updates.plan_tier = document.getElementById('profile-plan-tier').value || null;
   }
   try {
