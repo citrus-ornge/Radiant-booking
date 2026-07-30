@@ -1045,6 +1045,15 @@ textarea.form-input { resize: vertical; }
         </button>
       </div>
       <div class="sidebar-section">
+        <div class="sidebar-section-label">Team</div>
+        <button class="nav-item" onclick="showView('staff-area')">
+          <span class="nav-icon">📅</span> Staff Area
+        </button>
+        <button class="nav-item" onclick="showView('messages')">
+          <span class="nav-icon">✉</span> Messages <span class="notif-dot" id="admin-msg-dot" style="display:none;"></span>
+        </button>
+      </div>
+      <div class="sidebar-section">
         <div class="sidebar-section-label">System</div>
         <button class="nav-item" onclick="showView('notifications')">
           <span class="nav-icon">◉</span> Notifications <span class="notif-dot"></span>
@@ -1062,6 +1071,12 @@ textarea.form-input { resize: vertical; }
         </button>
         <button class="nav-item" onclick="showClientView('book-room')">
           <span class="nav-icon">⬡</span> Book a Room
+        </button>
+        <button class="nav-item" id="client-staff-area-btn" onclick="showClientView('staff-area')" style="display:none;">
+          <span class="nav-icon">📅</span> Staff Area
+        </button>
+        <button class="nav-item" onclick="showClientView('messages')">
+          <span class="nav-icon">✉</span> Messages <span class="notif-dot" id="client-msg-dot" style="display:none;"></span>
         </button>
         <button class="nav-item" onclick="showClientView('profile')">
           <span class="nav-icon">◎</span> My Profile
@@ -1316,6 +1331,67 @@ textarea.form-input { resize: vertical; }
                 <input type="checkbox" checked>
               </label>
               <button class="btn btn-primary btn-sm" onclick="showToast('✓ Settings saved')">Save Settings</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════ STAFF AREA (shared: Staff & Admin + Practitioner) ════ -->
+      <div class="view-section" id="view-staff-area">
+        <div class="page-header">
+          <div><div class="page-title">Staff Area</div><div class="gold-line"></div><div class="page-sub">Rota and annual leave</div></div>
+        </div>
+        <div class="tabs">
+          <button class="tab active" id="staff-tab-rota" onclick="switchStaffAreaTab('rota')">Rota</button>
+          <button class="tab" id="staff-tab-leave" onclick="switchStaffAreaTab('leave')">Annual Leave</button>
+        </div>
+
+        <div id="staff-area-rota-panel">
+          <div class="card">
+            <div class="card-header"><div class="card-title">Upcoming Shifts</div></div>
+            <div style="overflow-x:auto;">
+              <table class="data-table">
+                <thead><tr><th>Date</th><th>Day</th><th>Staff</th><th>Time</th><th>Status</th></tr></thead>
+                <tbody id="rota-table-body"><tr><td colspan="5" style="text-align:center;color:var(--r-warm-gray);padding:20px;">Loading…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div id="staff-area-leave-panel" style="display:none;">
+          <div class="card">
+            <div class="card-header"><div class="card-title">Annual Leave &amp; Bank Holidays</div></div>
+            <div style="overflow-x:auto;">
+              <table class="data-table">
+                <thead><tr><th>Date</th><th>Staff</th><th>Type</th></tr></thead>
+                <tbody id="leave-table-body"><tr><td colspan="3" style="text-align:center;color:var(--r-warm-gray);padding:20px;">Loading…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════ MESSAGES (shared: everyone) ════ -->
+      <div class="view-section" id="view-messages">
+        <div class="page-header">
+          <div><div class="page-title">Messages</div><div class="gold-line"></div><div class="page-sub">Talk with anyone on the team</div></div>
+          <button class="btn btn-primary" onclick="openNewMessageModal()">+ New Message</button>
+        </div>
+        <div class="two-col">
+          <div class="card">
+            <div class="card-header"><div class="card-title">Conversations</div></div>
+            <div id="conversations-list"><div style="padding:18px 22px;color:var(--r-warm-gray);font-size:13px;">Loading…</div></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title" id="thread-with-name">Select a conversation</div></div>
+            <div id="thread-messages" style="max-height:420px;overflow-y:auto;padding:18px 22px;display:flex;flex-direction:column;gap:12px;">
+              <div style="color:var(--r-warm-gray);font-size:13px;">No conversation selected.</div>
+            </div>
+            <div style="padding:14px 22px;border-top:1px solid var(--r-stone);display:none;" id="thread-compose-row">
+              <div style="display:flex;gap:8px;">
+                <input class="form-input" id="thread-reply-input" placeholder="Type a message…" onkeydown="if(event.key==='Enter')sendThreadReply()">
+                <button class="btn btn-primary" onclick="sendThreadReply()">Send</button>
+              </div>
             </div>
           </div>
         </div>
@@ -1632,6 +1708,28 @@ textarea.form-input { resize: vertical; }
 </div>
 
 <!-- DELETE ACCOUNT (self) -->
+<!-- NEW MESSAGE -->
+<div class="modal-overlay" id="new-message-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div><div class="modal-title">New Message</div></div>
+      <button class="close-btn" onclick="closeModal('new-message-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row"><label class="form-label">To</label>
+        <select class="form-input" id="nm-recipient"></select>
+      </div>
+      <div class="form-row"><label class="form-label">Message</label>
+        <textarea class="form-input" id="nm-body" rows="4" placeholder="Type your message…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('new-message-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="sendNewMessage()">Send</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="delete-account-modal">
   <div class="modal">
     <div class="modal-header">
@@ -1850,6 +1948,7 @@ async function loadAppData(isRetry) {
   renderNotificationsFeed();
   renderMyBookings();
   renderDashboardStats();
+  refreshMessageBadge();
 
   if (failures.length > 0) {
     if (!isRetry) {
@@ -2733,6 +2832,7 @@ function setupClientView(type) {
   document.getElementById('client-nav').style.display = 'block';
   document.getElementById('topbar-cta').textContent = '+ Book Room';
   document.getElementById('topbar-cta').onclick = () => showClientView('book-room');
+  document.getElementById('client-staff-area-btn').style.display = type === 'practitioner' ? 'flex' : 'none';
 
   const m = state.currentMember;
   const displayName = m ? `${m.first_name || ''} ${m.last_name || ''}`.trim() || m.email : '';
@@ -2744,8 +2844,8 @@ function setupClientView(type) {
 }
 
 // ── NAVIGATION ──
-const adminViews = { dashboard:'Dashboard', bookings:'All Bookings', rooms:'Rooms & Spaces', members:'Members', invite:'Invite Users', notifications:'Notifications', settings:'Settings' };
-const clientViews = { 'my-bookings':'My Bookings', 'book-room':'Book a Room', profile:'My Profile' };
+const adminViews = { dashboard:'Dashboard', bookings:'All Bookings', rooms:'Rooms & Spaces', members:'Members', invite:'Invite Users', 'staff-area':'Staff Area', messages:'Messages', notifications:'Notifications', settings:'Settings' };
+const clientViews = { 'my-bookings':'My Bookings', 'book-room':'Book a Room', 'staff-area':'Staff Area', messages:'Messages', profile:'My Profile' };
 
 let navHistory = ['dashboard']; // tracks in-app view stack for the back button
 
@@ -2760,6 +2860,8 @@ function _activateView(name, viewsMap, navSelector, containerSelector) {
   if (navItems[idx]) navItems[idx].classList.add('active');
   updateBackButton(name);
   closeSidebar();
+  if (name === 'staff-area') loadStaffArea();
+  if (name === 'messages') loadConversations();
 }
 
 function updateBackButton(name) {
@@ -2837,6 +2939,166 @@ async function loadMyDocuments() {
       </div>`).join('');
   } catch (e) {
     el.innerHTML = `<div style="color:var(--r-red);font-size:13px;">Could not load documents: ${esc(e.message)}</div>`;
+  }
+}
+
+function switchStaffAreaTab(tab) {
+  document.getElementById('staff-tab-rota').classList.toggle('active', tab === 'rota');
+  document.getElementById('staff-tab-leave').classList.toggle('active', tab === 'leave');
+  document.getElementById('staff-area-rota-panel').style.display = tab === 'rota' ? 'block' : 'none';
+  document.getElementById('staff-area-leave-panel').style.display = tab === 'leave' ? 'block' : 'none';
+}
+
+async function loadStaffArea() {
+  try {
+    const [rotaRes, leaveRes] = await Promise.all([api('/staff/rota'), api('/staff/leave')]);
+    renderRotaTable(rotaRes.shifts || []);
+    renderLeaveTable(leaveRes.leave || []);
+  } catch (e) {
+    document.getElementById('rota-table-body').innerHTML = `<tr><td colspan="5" style="color:var(--r-red);padding:16px;">${esc(e.message)}</td></tr>`;
+  }
+}
+
+function renderRotaTable(shifts) {
+  const tbody = document.getElementById('rota-table-body');
+  const today = new Date(); today.setHours(0,0,0,0);
+  const upcoming = shifts.filter(s => new Date(s.shift_date) >= today).slice(0, 40);
+  if (upcoming.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--r-warm-gray);padding:20px;">No upcoming shifts scheduled.</td></tr>`;
+    return;
+  }
+  const statusBadge = { scheduled: 'badge-green', closed: 'badge-gray', annual_leave: 'badge-gold', tbc: 'badge-blue' };
+  const statusLabel = { scheduled: 'Working', closed: 'Closed', annual_leave: 'Annual Leave', tbc: 'TBC' };
+  tbody.innerHTML = upcoming.map(s => `
+    <tr>
+      <td>${esc(new Date(s.shift_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }))}</td>
+      <td>${esc(s.day_of_week)}</td>
+      <td>${esc(s.staff_name)}</td>
+      <td>${esc(s.time_range || '—')}</td>
+      <td><span class="badge ${statusBadge[s.status] || 'badge-gray'}">${esc(statusLabel[s.status] || s.status)}</span></td>
+    </tr>`).join('');
+}
+
+function renderLeaveTable(leave) {
+  const tbody = document.getElementById('leave-table-body');
+  const today = new Date(); today.setHours(0,0,0,0);
+  const upcoming = leave.filter(l => new Date(l.leave_date) >= today).slice(0, 60);
+  if (upcoming.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;color:var(--r-warm-gray);padding:20px;">No upcoming leave or bank holidays.</td></tr>`;
+    return;
+  }
+  const codeLabel = { AL: 'Annual Leave', BH: 'Bank Holiday', SICK: 'Sick Leave', OTHER: 'Other' };
+  tbody.innerHTML = upcoming.map(l => `
+    <tr>
+      <td>${esc(new Date(l.leave_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }))}</td>
+      <td>${esc(l.staff_name)}</td>
+      <td><span class="badge ${l.code === 'BH' ? 'badge-blue' : 'badge-gold'}">${esc(codeLabel[l.code] || l.code)}</span></td>
+    </tr>`).join('');
+}
+
+// ── MESSAGES ──
+let currentThreadWith = null;
+
+async function refreshMessageBadge() {
+  try {
+    const res = await api('/messages');
+    const unread = (res.conversations || []).reduce((sum, c) => sum + c.unread, 0);
+    updateMessageBadges(unread);
+  } catch (e) { /* non-critical */ }
+}
+
+async function loadConversations() {
+  const el = document.getElementById('conversations-list');
+  try {
+    const res = await api('/messages');
+    const convos = res.conversations || [];
+    updateMessageBadges(convos.reduce((sum, c) => sum + c.unread, 0));
+    if (convos.length === 0) {
+      el.innerHTML = `<div style="padding:18px 22px;color:var(--r-warm-gray);font-size:13px;">No conversations yet — click "+ New Message" to start one.</div>`;
+      return;
+    }
+    const others = convos.map(c => ({ ...c, member: state.members.find(m => m.id === c.other_id) }));
+    el.innerHTML = others.map(c => `
+      <div style="display:flex;align-items:center;gap:12px;padding:14px 22px;border-bottom:1px solid var(--r-stone);cursor:pointer;" onclick="openThread('${c.other_id}')">
+        <div class="avatar" style="width:36px;height:36px;font-size:12px;">${esc(c.member ? initialsFor(c.member) : '?')}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13.5px;font-weight:500;">${esc(c.member ? `${c.member.first_name} ${c.member.last_name}`.trim() : 'Unknown')}</div>
+          <div style="font-size:12px;color:var(--r-warm-gray);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(c.last_message)}</div>
+        </div>
+        ${c.unread > 0 ? `<span class="badge badge-gold">${c.unread}</span>` : ''}
+      </div>`).join('');
+  } catch (e) {
+    el.innerHTML = `<div style="padding:18px 22px;color:var(--r-red);font-size:13px;">${esc(e.message)}</div>`;
+  }
+}
+
+function updateMessageBadges(count) {
+  ['admin-msg-dot', 'client-msg-dot'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = count > 0 ? 'inline-block' : 'none';
+  });
+}
+
+async function openThread(otherId) {
+  currentThreadWith = otherId;
+  const other = state.members.find(m => m.id === otherId);
+  document.getElementById('thread-with-name').textContent = other ? `${other.first_name} ${other.last_name}`.trim() : 'Conversation';
+  document.getElementById('thread-compose-row').style.display = 'block';
+  const container = document.getElementById('thread-messages');
+  container.innerHTML = `<div style="color:var(--r-warm-gray);font-size:13px;">Loading…</div>`;
+  try {
+    const res = await api('/messages?with=' + otherId);
+    const msgs = res.messages || [];
+    if (msgs.length === 0) {
+      container.innerHTML = `<div style="color:var(--r-warm-gray);font-size:13px;">No messages yet — say hello!</div>`;
+    } else {
+      container.innerHTML = msgs.map(m => {
+        const mine = m.sender_id === state.currentMember.id;
+        return `<div style="align-self:${mine ? 'flex-end' : 'flex-start'};max-width:75%;">
+          <div style="background:${mine ? 'var(--r-gold-light)' : 'var(--r-surface2)'};padding:10px 14px;border-radius:12px;font-size:13.5px;">${esc(m.body)}</div>
+          <div style="font-size:11px;color:var(--r-warm-gray);margin-top:3px;text-align:${mine ? 'right' : 'left'};">${esc(timeAgo(m.created_at))}</div>
+        </div>`;
+      }).join('');
+      container.scrollTop = container.scrollHeight;
+    }
+    loadConversations(); // refresh unread badges/list order
+  } catch (e) {
+    container.innerHTML = `<div style="color:var(--r-red);font-size:13px;">${esc(e.message)}</div>`;
+  }
+}
+
+async function sendThreadReply() {
+  const input = document.getElementById('thread-reply-input');
+  const body = input.value.trim();
+  if (!body || !currentThreadWith) return;
+  input.value = '';
+  try {
+    await api('/messages', { method: 'POST', body: JSON.stringify({ recipient_id: currentThreadWith, body }) });
+    openThread(currentThreadWith);
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  }
+}
+
+function openNewMessageModal() {
+  const sel = document.getElementById('nm-recipient');
+  const others = state.members.filter(m => m.id !== state.currentMember.id);
+  sel.innerHTML = others.map(m => `<option value="${m.id}">${esc(`${m.first_name} ${m.last_name}`.trim() || m.email)} — ${esc(roleLabel(m.user_type, m.is_owner))}</option>`).join('');
+  openModal('new-message-modal');
+}
+
+async function sendNewMessage() {
+  const recipient_id = document.getElementById('nm-recipient').value;
+  const body = document.getElementById('nm-body').value.trim();
+  if (!recipient_id || !body) { showToast('⚠ Please choose a recipient and write a message'); return; }
+  try {
+    await api('/messages', { method: 'POST', body: JSON.stringify({ recipient_id, body }) });
+    closeModal('new-message-modal');
+    document.getElementById('nm-body').value = '';
+    showToast('✓ Message sent');
+    if (document.getElementById('view-messages').classList.contains('active')) openThread(recipient_id);
+  } catch (e) {
+    showToast('⚠ ' + e.message);
   }
 }
 
