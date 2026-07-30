@@ -1084,6 +1084,9 @@ textarea.form-input { resize: vertical; }
   <div class="main">
     <div class="topbar">
       <button class="menu-toggle" id="menu-toggle-btn" onclick="toggleSidebar()" aria-label="Open menu">☰</button>
+      <button class="menu-toggle" id="topbar-back-btn" onclick="goBackInApp()" aria-label="Go back" style="display:none;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+      </button>
       <div class="topbar-title" id="topbar-title">Dashboard</div>
       <div class="topbar-spacer"></div>
       <button class="btn btn-outline btn-sm" onclick="openModal('notif-modal')"><span style="width:14px;height:14px;display:inline-flex;margin-right:5px;vertical-align:-2px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="100%" height="100%"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg></span>Alerts</button>
@@ -2495,30 +2498,72 @@ function setupClientView(type) {
 const adminViews = { dashboard:'Dashboard', bookings:'All Bookings', rooms:'Rooms & Spaces', members:'Members', invite:'Invite Users', notifications:'Notifications', settings:'Settings' };
 const clientViews = { 'my-bookings':'My Bookings', 'book-room':'Book a Room', profile:'My Profile' };
 
-function showView(name) {
+let navHistory = ['dashboard']; // tracks in-app view stack for the back button
+
+function _activateView(name, viewsMap, navSelector, containerSelector) {
   document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
   const el = document.getElementById('view-' + name);
   if (el) el.classList.add('active');
-  document.getElementById('topbar-title').textContent = adminViews[name] || name;
-  document.querySelectorAll('#admin-nav .nav-item').forEach(n => n.classList.remove('active'));
-  const navItems = document.querySelectorAll('#admin-nav .nav-item');
-  const idx = Object.keys(adminViews).indexOf(name);
+  document.getElementById('topbar-title').textContent = viewsMap[name] || name;
+  document.querySelectorAll(navSelector + ' .nav-item').forEach(n => n.classList.remove('active'));
+  const navItems = document.querySelectorAll(navSelector + ' .nav-item');
+  const idx = Object.keys(viewsMap).indexOf(name);
   if (navItems[idx]) navItems[idx].classList.add('active');
+  updateBackButton(name);
   closeSidebar();
 }
 
-function showClientView(name) {
-  document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
-  const el = document.getElementById('view-' + name);
-  if (el) el.classList.add('active');
-  document.getElementById('topbar-title').textContent = clientViews[name] || name;
-  document.querySelectorAll('#client-nav .nav-item').forEach(n => n.classList.remove('active'));
-  const navItems = document.querySelectorAll('#client-nav .nav-item');
-  const idx = Object.keys(clientViews).indexOf(name);
-  if (navItems[idx]) navItems[idx].classList.add('active');
-  if (name === 'profile') renderProfilePage();
-  closeSidebar();
+function updateBackButton(name) {
+  const btn = document.getElementById('topbar-back-btn');
+  if (!btn) return;
+  const homeViews = ['dashboard', 'my-bookings'];
+  btn.style.display = homeViews.includes(name) ? 'none' : 'inline-flex';
 }
+
+function showView(name, _fromHistory) {
+  _activateView(name, adminViews, '#admin-nav');
+  if (!_fromHistory) {
+    navHistory.push(name);
+    history.pushState({ appView: name, role: 'admin' }, '', '#' + name);
+  }
+}
+
+function showClientView(name, _fromHistory) {
+  _activateView(name, clientViews, '#client-nav');
+  if (name === 'profile') renderProfilePage();
+  if (!_fromHistory) {
+    navHistory.push(name);
+    history.pushState({ appView: name, role: 'client' }, '', '#' + name);
+  }
+}
+
+function goBackInApp() {
+  history.back();
+}
+
+window.addEventListener('popstate', (event) => {
+  const shellVisible = document.getElementById('app-shell').style.display !== 'none';
+  if (!shellVisible) return; // not logged in yet — let normal browser behaviour apply
+
+  if (event.state && event.state.appView) {
+    navHistory.pop();
+    if (event.state.role === 'admin') {
+      _activateView(event.state.appView, adminViews, '#admin-nav');
+    } else {
+      _activateView(event.state.appView, clientViews, '#client-nav');
+      if (event.state.appView === 'profile') renderProfilePage();
+    }
+  } else {
+    // Popped past our own in-app history (e.g. back to the invite/login redirect) —
+    // re-plant a state here so the user stays inside the app instead of being
+    // dropped onto a stale pre-login URL.
+    const fallback = currentRole === 'admin' ? 'dashboard' : 'my-bookings';
+    const roleTag = currentRole === 'admin' ? 'admin' : 'client';
+    history.pushState({ appView: fallback, role: roleTag }, '', '#' + fallback);
+    if (roleTag === 'admin') _activateView(fallback, adminViews, '#admin-nav');
+    else _activateView(fallback, clientViews, '#client-nav');
+  }
+});
 
 function renderProfilePage() {
   const m = state.currentMember;
