@@ -53,4 +53,51 @@ async function sendInvite({ to, userType, note, inviteUrl }) {
   });
 }
 
-module.exports = { sendBookingConfirmation, sendCancellationAlert, sendReminder, sendInvite };
+const TIER_LABELS = { community: 'Community', flex: 'Flex', core: 'Core', resident: 'Resident' };
+
+function baseFeaturesFor(userType) {
+  const shared = [
+    '- Book treatment rooms in real time, with automatic clash-checking',
+    '- Get instant email confirmations and reminders before every session',
+    '- Sync bookings straight to your Google Calendar',
+  ];
+  if (userType === 'practitioner') {
+    return [
+      ...shared,
+      '- Manage your professional profile, qualifications and indemnity details',
+      '- See your upcoming sessions and booking history at a glance',
+    ];
+  }
+  if (userType === 'administrator') {
+    return [
+      ...shared,
+      '- Manage rooms, members and bookings across the whole clinic',
+      '- Send invitations and track onboarding for new practitioners',
+    ];
+  }
+  return shared;
+}
+
+async function sendWelcomeEmail({ to, firstName, userType, planTier }) {
+  const resend = getResend();
+  const roleLabel = userType.charAt(0).toUpperCase() + userType.slice(1);
+  const features = baseFeaturesFor(userType).join('\n');
+
+  let tierSection = '';
+  if (userType === 'practitioner') {
+    if (planTier && TIER_LABELS[planTier]) {
+      tierSection = `\n\nYour membership tier: ${TIER_LABELS[planTier]}\nYour tier determines your room booking priority and access. You can view the full details of your membership any time from your Profile page.`;
+    } else {
+      tierSection = `\n\nMembership tier: not yet set\nYou can select your membership tier (Community, Flex, Core or Resident) from your Profile page — this determines your room booking priority and access.`;
+    }
+  }
+
+  return resend.emails.send({
+    from: FROM_EMAIL,
+    to: [to],
+    subject: 'Welcome to the Radiant Booking Platform',
+    text: `Hi ${firstName || 'there'},\n\nWelcome to the Radiant Booking Platform — you're all set up as a ${roleLabel}.\n\nHere's what you can do:\n${features}${tierSection}\n\nSign in any time at ${process.env.PUBLIC_APP_URL || 'https://radiant-booking.vercel.app'} to get started.\n\n— Radiant Booking`,
+  });
+}
+
+module.exports = { sendBookingConfirmation, sendCancellationAlert, sendReminder, sendInvite, sendWelcomeEmail };

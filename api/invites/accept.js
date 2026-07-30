@@ -1,5 +1,6 @@
 const { createClient } = require('@supabase/supabase-js');
 const { getSupabase } = require('../_lib/supabase');
+const { sendWelcomeEmail } = require('../_lib/email');
 
 const SUPABASE_URL = 'https://lygzlpeslpwptjqxtjgs.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_zHXuiXcq7UGXRDeTtMAfgA_NVTwpsSA';
@@ -59,5 +60,18 @@ module.exports = async (req, res) => {
 
   await supabase.from('invites').update({ status: 'accepted' }).eq('id', invite.id);
 
-  res.status(200).json({ member });
+  let welcome_email_sent = false;
+  try {
+    await sendWelcomeEmail({
+      to: member.email,
+      firstName: member.first_name || member.email.split('@')[0],
+      userType: member.user_type,
+      planTier: member.plan_tier,
+    });
+    welcome_email_sent = true;
+  } catch (e) {
+    // don't fail account creation over a welcome email issue
+  }
+
+  res.status(200).json({ member, welcome_email_sent });
 };
