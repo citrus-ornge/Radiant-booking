@@ -2599,6 +2599,9 @@ function renderCurrentOnboardingDoc() {
       </div>
       <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;" onclick="signCurrentOnboardingDoc('${doc.id}')">Sign &amp; Continue</button>
     </div>`;
+  // Handle documents short enough to fit without any scrolling at all -
+  // otherwise the unlock checkbox would never fire (no scroll event to trigger it)
+  checkDocScrolled();
 }
 
 function checkDocScrolled() {
