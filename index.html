@@ -1603,6 +1603,10 @@ textarea.form-input { resize: vertical; }
       </div>
       <div class="form-row"><label class="form-label">Phone</label><input class="form-input" id="mm-phone"></div>
       <div class="form-row"><label class="form-label">Qualifications</label><textarea class="form-input" id="mm-qualifications" rows="2"></textarea></div>
+      <div class="form-row">
+        <label class="form-label">Google Calendar</label>
+        <div id="mm-gcal-status" style="padding:10px 12px;background:var(--r-surface2);border-radius:8px;font-size:13px;"></div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" style="border-color:var(--r-red);color:var(--r-red);margin-right:auto;" onclick="confirmDeleteManagedMember()">Delete Member</button>
@@ -1912,7 +1916,26 @@ function openManageMember(id) {
   document.getElementById('mm-tier-row').style.display = (isPractitioner || isMember) ? 'block' : 'none';
   document.getElementById('mm-onboarding-row').style.display = (isPractitioner || m.user_type === 'administrator') ? 'block' : 'none';
 
+  const gcalEl = document.getElementById('mm-gcal-status');
+  if (m.google_calendar_connected) {
+    gcalEl.innerHTML = `<span class="badge badge-green">Connected</span> <button class="btn btn-ghost btn-sm" style="color:var(--r-red);" onclick="disconnectManagedMemberCalendar('${m.id}')">Disconnect</button>`;
+  } else {
+    gcalEl.innerHTML = `<span class="badge badge-gray">Not connected</span>`;
+  }
+
   openModal('manage-member-modal');
+}
+
+async function disconnectManagedMemberCalendar(memberId) {
+  if (!window.confirm('Disconnect this member\'s Google Calendar?')) return;
+  try {
+    await api('/auth/google/disconnect', { method: 'POST', body: JSON.stringify({ member_id: memberId }) });
+    showToast('✓ Calendar disconnected');
+    await loadAppData();
+    openManageMember(memberId);
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  }
 }
 
 async function saveManagedMember() {
@@ -2266,7 +2289,7 @@ function renderGoogleCalendarStatus() {
     return;
   }
   if (state.currentMember.google_calendar_connected) {
-    slot.innerHTML = `<span class="badge badge-green">Connected</span>`;
+    slot.innerHTML = `<span class="badge badge-green">Connected</span><button class="btn btn-ghost btn-sm" style="margin-left:8px;color:var(--r-red);" onclick="disconnectGoogleCalendar()">Disconnect</button>`;
   } else {
     slot.innerHTML = `<button class="btn btn-outline btn-sm" onclick="connectGoogleCalendar()">Connect</button>`;
   }
@@ -2275,6 +2298,19 @@ function renderGoogleCalendarStatus() {
 function connectGoogleCalendar() {
   if (!state.currentMember) { showToast('⚠ No matching member record found'); return; }
   window.location.href = `/api/auth/google/start?member_id=${state.currentMember.id}`;
+}
+
+async function disconnectGoogleCalendar() {
+  if (!window.confirm('Disconnect Google Calendar? Future bookings will no longer sync automatically.')) return;
+  try {
+    await api('/auth/google/disconnect', { method: 'POST' });
+    if (state.currentMember) state.currentMember.google_calendar_connected = false;
+    renderGoogleCalendarStatus();
+    renderProfilePage();
+    showToast('✓ Google Calendar disconnected');
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  }
 }
 
 async function cancelBooking(id) {
@@ -2550,10 +2586,16 @@ async function submitOnboardingProfile() {
 }
 
 function simpleMarkdownToHtml(md) {
+  const escBold = (s) => esc(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   return md.split(/\n\n+/).map(block => {
     block = block.trim();
-    if (block.startsWith('# ')) return `<h1>${block.slice(2)}</h1>`;
-    return `<p>${block.replace(/\n/g, '<br>')}</p>`;
+    if (block.startsWith('## ')) return `<h2 style="font-size:14.5px;margin:14px 0 6px;font-weight:600;">${escBold(block.slice(3))}</h2>`;
+    if (block.startsWith('# ')) return `<h1>${escBold(block.slice(2))}</h1>`;
+    const lines = block.split('\n');
+    if (lines.every(l => l.trim().startsWith('- '))) {
+      return `<ul style="margin:4px 0 10px;padding-left:20px;">${lines.map(l => `<li>${escBold(l.trim().slice(2))}</li>`).join('')}</ul>`;
+    }
+    return `<p>${lines.map(escBold).join('<br>')}</p>`;
   }).join('');
 }
 
@@ -2771,7 +2813,7 @@ function renderProfilePage() {
   const gcalSlot = document.getElementById('profile-gcal-status');
   if (gcalSlot) {
     gcalSlot.innerHTML = m.google_calendar_connected
-      ? '<span class="badge badge-green">Connected</span>'
+      ? '<span class="badge badge-green">Connected</span><button class="btn btn-ghost btn-sm" style="margin-left:8px;color:var(--r-red);" onclick="disconnectGoogleCalendar()">Disconnect</button>'
       : '<button class="btn btn-outline btn-sm" onclick="connectGoogleCalendar()">Connect</button>';
   }
 }
