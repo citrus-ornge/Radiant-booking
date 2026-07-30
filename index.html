@@ -952,7 +952,7 @@ textarea.form-input { resize: vertical; }
   <div style="max-width:640px;margin:0 auto;padding:48px 24px 80px;">
     <div style="text-align:center;margin-bottom:8px;">
       <div class="login-logo" style="font-size:22px;">Radiant</div>
-      <div class="login-sub">Practitioner Onboarding</div>
+      <div class="login-sub" id="onboarding-subtitle">Account Setup</div>
     </div>
     <div id="onboarding-progress" style="display:flex;gap:6px;justify-content:center;margin:20px 0 36px;"></div>
 
@@ -966,23 +966,25 @@ textarea.form-input { resize: vertical; }
         <div class="form-row"><label class="form-label">Last Name</label><input class="form-input" id="ob-last-name"></div>
       </div>
       <div class="form-row"><label class="form-label">Phone</label><input class="form-input" id="ob-phone" placeholder="07…"></div>
-      <div class="form-row"><label class="form-label">Qualifications</label><textarea class="form-input" id="ob-qualifications" rows="2" placeholder="e.g. RGN, Level 7 Aesthetics, Independent Prescriber"></textarea></div>
-      <div class="form-two">
-        <div class="form-row"><label class="form-label">Professional Indemnity No.</label><input class="form-input" id="ob-indemnity-number"></div>
-        <div class="form-row"><label class="form-label">Indemnity Expiry</label><input type="date" class="form-input" id="ob-indemnity-expiry"></div>
-      </div>
-      <div class="form-two">
-        <div class="form-row"><label class="form-label">DBS Status</label>
-          <select class="form-input" id="ob-dbs-status">
-            <option value="not_started">Not started</option>
-            <option value="pending">Pending</option>
-            <option value="clear">Clear</option>
-            <option value="expired">Expired</option>
-          </select>
+      <div id="ob-practitioner-fields">
+        <div class="form-row"><label class="form-label">Qualifications</label><textarea class="form-input" id="ob-qualifications" rows="2" placeholder="e.g. RGN, Level 7 Aesthetics, Independent Prescriber"></textarea></div>
+        <div class="form-two">
+          <div class="form-row"><label class="form-label">Professional Indemnity No.</label><input class="form-input" id="ob-indemnity-number"></div>
+          <div class="form-row"><label class="form-label">Indemnity Expiry</label><input type="date" class="form-input" id="ob-indemnity-expiry"></div>
         </div>
-        <div class="form-row"><label class="form-label">DBS Expiry</label><input type="date" class="form-input" id="ob-dbs-expiry"></div>
+        <div class="form-two">
+          <div class="form-row"><label class="form-label">DBS Status</label>
+            <select class="form-input" id="ob-dbs-status">
+              <option value="not_started">Not started</option>
+              <option value="pending">Pending</option>
+              <option value="clear">Clear</option>
+              <option value="expired">Expired</option>
+            </select>
+          </div>
+          <div class="form-row"><label class="form-label">DBS Expiry</label><input type="date" class="form-input" id="ob-dbs-expiry"></div>
+        </div>
       </div>
-      <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;margin-top:8px;" onclick="submitOnboardingProfile()">Continue to Documents →</button>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;margin-top:8px;" id="ob-continue-btn" onclick="submitOnboardingProfile()">Continue to Documents →</button>
     </div>
 
     <!-- Step: Documents (rendered dynamically) -->
@@ -2283,7 +2285,7 @@ async function bootstrapSession(session) {
 
   document.getElementById('login-screen').style.display = 'none';
 
-  const needsOnboarding = ['practitioner', 'administrator'].includes(meData.member.user_type)
+  const needsOnboarding = ['practitioner', 'administrator', 'member'].includes(meData.member.user_type)
     && meData.member.onboarding_status !== 'completed';
 
   if (needsOnboarding) {
@@ -2337,6 +2339,11 @@ function startOnboarding() {
   renderOnboardingProgress(0);
 
   const m = state.currentMember;
+  const subtitleMap = { practitioner: 'Practitioner Onboarding', administrator: 'Administrator Setup', member: 'Welcome — Let\'s Get You Set Up' };
+  document.getElementById('onboarding-subtitle').textContent = subtitleMap[m.user_type] || 'Account Setup';
+  const isPractitioner = m.user_type === 'practitioner';
+  document.getElementById('ob-practitioner-fields').style.display = isPractitioner ? 'block' : 'none';
+  document.getElementById('ob-continue-btn').textContent = isPractitioner ? 'Continue to Documents →' : 'Continue →';
   document.getElementById('ob-first-name').value = m.first_name || '';
   document.getElementById('ob-last-name').value = m.last_name || '';
   document.getElementById('ob-phone').value = m.phone || '';
