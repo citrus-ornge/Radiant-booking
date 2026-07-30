@@ -2447,7 +2447,7 @@ async function bootstrapSession(session) {
 
   document.getElementById('login-screen').style.display = 'none';
 
-  const needsOnboarding = ['practitioner', 'administrator', 'member'].includes(meData.member.user_type)
+  const needsOnboarding = ['practitioner', 'member'].includes(meData.member.user_type)
     && meData.member.onboarding_status !== 'completed';
 
   if (needsOnboarding) {
