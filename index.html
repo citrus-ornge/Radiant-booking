@@ -1688,6 +1688,18 @@ let currentSession = null;
 const state = { rooms: [], members: [], bookings: [], invites: [], currentMember: null };
 
 // ── API HELPERS ──
+// Escapes user-controllable text before it's interpolated into innerHTML,
+// preventing stored XSS via names, notes, emails, qualifications, etc.
+function esc(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 async function api(path, options = {}) {
   const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
   if (currentSession && currentSession.access_token) {
@@ -1755,10 +1767,10 @@ function populateBookingModalSelects() {
   const memberSel = document.getElementById('nb-member');
   const roomSel = document.getElementById('nb-room');
   if (memberSel) {
-    memberSel.innerHTML = state.members.map(m => `<option value="${m.id}">${m.first_name} ${m.last_name}</option>`).join('');
+    memberSel.innerHTML = state.members.map(m => `<option value="${m.id}">${esc(m.first_name)} ${esc(m.last_name)}</option>`).join('');
   }
   if (roomSel) {
-    roomSel.innerHTML = state.rooms.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
+    roomSel.innerHTML = state.rooms.map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join('');
   }
 }
 
@@ -1790,8 +1802,8 @@ function renderBookingsTable() {
   }
   tbody.innerHTML = state.bookings.map(b => `
     <tr>
-      <td><strong>${b.room ? b.room.name : '—'}</strong></td>
-      <td>${b.member ? b.member.first_name + ' ' + b.member.last_name : '—'}</td>
+      <td><strong>${esc(b.room ? b.room.name : '—')}</strong></td>
+      <td>${b.member ? esc(b.member.first_name) + ' ' + esc(b.member.last_name) : '—'}</td>
       <td>${b.member ? typeBadge(b.member.user_type) : '—'}</td>
       <td>${fmtDateTime(b.start_time)}</td>
       <td>${durationLabel(b.start_time, b.end_time)}</td>
@@ -1875,9 +1887,9 @@ function renderMyBookings() {
     return `
     <div class="booking-item">
       <div class="date-box"><div class="date-day">${day}</div><div class="date-mon">${mon}</div></div>
-      <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">${b.room ? b.room.name : '—'}</div><div style="font-size:12px;color:var(--r-warm-gray);">${time} · ${b.room ? b.room.floor || '' : ''}</div></div>
+      <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">${esc(b.room ? b.room.name : '—')}</div><div style="font-size:12px;color:var(--r-warm-gray);">${time} · ${esc(b.room ? b.room.floor || '' : '')}</div></div>
       <div style="display:flex;gap:8px;">
-        <button class="btn btn-outline btn-sm" onclick="openCalModalFor('${b.room ? b.room.name.replace(/'/g, "\\'") : 'Room'}','${b.start_time}','${b.end_time}')">Add to Cal</button>
+        <button class="btn btn-outline btn-sm" onclick="openCalModalFor('${esc(b.room ? b.room.name : 'Room')}','${b.start_time}','${b.end_time}')">Add to Cal</button>
         <button class="btn btn-danger btn-sm" onclick="cancelBooking('${b.id}')">Cancel</button>
       </div>
     </div>`;
@@ -1901,8 +1913,8 @@ function renderMembersTable() {
     const bookingCount = state.bookings.filter(b => b.member && b.member.id === m.id).length;
     return `
     <tr>
-      <td><div style="display:flex;align-items:center;gap:10px;"><div class="avatar" style="width:30px;height:30px;font-size:11px;">${initials}</div>${m.first_name} ${m.last_name}</div></td>
-      <td style="color:var(--r-warm-gray);">${m.email}</td>
+      <td><div style="display:flex;align-items:center;gap:10px;"><div class="avatar" style="width:30px;height:30px;font-size:11px;">${esc(initials)}</div>${esc(m.first_name)} ${esc(m.last_name)}</div></td>
+      <td style="color:var(--r-warm-gray);">${esc(m.email)}</td>
       <td>${typeBadge(m.user_type)}</td>
       <td style="color:var(--r-warm-gray);">${new Date(m.created_at).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}</td>
       <td>${bookingCount}</td>
@@ -1921,10 +1933,10 @@ function renderRoomsGrid() {
   }
   grid.innerHTML = state.rooms.map(r => `
     <div class="room-card" onclick="openModal('new-booking-modal')">
-      <div class="room-visual"><div class="room-monogram">${(r.name || '?').charAt(0)}</div></div>
+      <div class="room-visual"><div class="room-monogram">${esc((r.name || '?').charAt(0))}</div></div>
       <div class="room-card-body">
-        <div class="room-name">${r.name}</div>
-        <div class="room-detail">Capacity: ${r.capacity} · ${r.floor || ''}</div>
+        <div class="room-name">${esc(r.name)}</div>
+        <div class="room-detail">Capacity: ${esc(r.capacity)} · ${esc(r.floor || '')}</div>
         <div style="font-size:12px;color:var(--r-green);font-weight:500;margin-top:8px;">● Available now</div>
       </div>
     </div>`).join('');
@@ -1938,9 +1950,9 @@ function renderBookRoomList() {
     return;
   }
   list.innerHTML = state.rooms.map(r => `
-    <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--r-stone);border-radius:10px;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.borderColor='var(--r-gold)'" onmouseout="this.style.borderColor='var(--r-stone)'" onclick="selectRoomOption(this,'${r.name}','${r.id}')">
-      <div class="room-monogram" style="width:34px;height:34px;font-size:14px;">${(r.name || '?').charAt(0)}</div>
-      <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">${r.name}</div><div style="font-size:12px;color:var(--r-warm-gray);">Capacity ${r.capacity} · ${r.floor || ''}</div></div>
+    <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--r-stone);border-radius:10px;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.borderColor='var(--r-gold)'" onmouseout="this.style.borderColor='var(--r-stone)'" onclick="selectRoomOption(this,'${esc(r.name)}','${r.id}')">
+      <div class="room-monogram" style="width:34px;height:34px;font-size:14px;">${esc((r.name || '?').charAt(0))}</div>
+      <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">${esc(r.name)}</div><div style="font-size:12px;color:var(--r-warm-gray);">Capacity ${esc(r.capacity)} · ${esc(r.floor || '')}</div></div>
       <span class="badge badge-green">Free</span>
     </div>`).join('');
 }
@@ -2009,11 +2021,11 @@ function renderUpcomingBookingsWidget() {
     const day = d.toLocaleDateString('en-GB', { day: 'numeric' });
     const mon = d.toLocaleDateString('en-GB', { month: 'short' });
     const time = fmtDateTime(b.start_time).split(' · ')[1] || '';
-    const who = b.member ? (b.member.first_name + ' ' + b.member.last_name[0] + '.') : '—';
+    const who = b.member ? (esc(b.member.first_name) + ' ' + esc(b.member.last_name[0]) + '.') : '—';
     return `
     <div class="booking-item">
       <div class="date-box"><div class="date-day">${day}</div><div class="date-mon">${mon}</div></div>
-      <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">${b.room ? b.room.name : '—'} — ${who}</div><div style="font-size:12px;color:var(--r-warm-gray);">${time} · ${b.member ? b.member.user_type.charAt(0).toUpperCase() + b.member.user_type.slice(1) : ''}</div></div>
+      <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">${esc(b.room ? b.room.name : '—')} — ${who}</div><div style="font-size:12px;color:var(--r-warm-gray);">${time} · ${b.member ? esc(b.member.user_type.charAt(0).toUpperCase() + b.member.user_type.slice(1)) : ''}</div></div>
       ${statusBadge(b.status)}
     </div>`;
   }).join('');
@@ -2027,8 +2039,8 @@ function renderPendingInvitesWidget() {
     ? `<div style="color:var(--r-warm-gray);font-size:13px;padding:4px 0 10px;">No pending invites.</div>`
     : pending.map(i => `
       <div class="invite-pill" style="${i.status === 'expired' ? 'opacity:0.55;' : ''}">
-        <div class="avatar" style="width:34px;height:34px;font-size:12px;background:var(--r-gold-light);color:var(--r-gold-dark);">${inviteInitials(i.email)}</div>
-        <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">${i.email}</div><div style="font-size:12px;color:${i.status === 'expired' ? 'var(--r-red)' : 'var(--r-warm-gray)'};">${i.user_type.charAt(0).toUpperCase() + i.user_type.slice(1)} · ${i.status === 'expired' ? 'expired' : 'sent'} ${timeAgo(i.invited_at)}</div></div>
+        <div class="avatar" style="width:34px;height:34px;font-size:12px;background:var(--r-gold-light);color:var(--r-gold-dark);">${esc(inviteInitials(i.email))}</div>
+        <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">${esc(i.email)}</div><div style="font-size:12px;color:${i.status === 'expired' ? 'var(--r-red)' : 'var(--r-warm-gray)'};">${esc(i.user_type.charAt(0).toUpperCase() + i.user_type.slice(1))} · ${i.status === 'expired' ? 'expired' : 'sent'} ${esc(timeAgo(i.invited_at))}</div></div>
         <span class="badge ${i.status === 'expired' ? 'badge-red' : 'badge-gold'}">${i.status.charAt(0).toUpperCase() + i.status.slice(1)}</span>
       </div>`).join('');
   el.innerHTML = listHtml + `<button class="btn btn-outline" style="width:100%;justify-content:center;margin-top:6px;" onclick="openModal('invite-modal')">+ Send New Invite</button>`;
@@ -2043,9 +2055,9 @@ function renderSentInvitesWidget() {
   }
   el.innerHTML = state.invites.map(i => `
     <div class="invite-pill" style="${i.status === 'expired' ? 'opacity:0.55;' : ''}">
-      <div class="avatar" style="width:34px;height:34px;font-size:12px;background:var(--r-gold-light);color:var(--r-gold-dark);">${inviteInitials(i.email)}</div>
-      <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">${i.email}</div><div style="font-size:12px;color:${i.status === 'expired' ? 'var(--r-red)' : 'var(--r-warm-gray)'};">${i.user_type.charAt(0).toUpperCase() + i.user_type.slice(1)} · ${i.status === 'expired' ? 'expired' : i.status}</div></div>
-      <button class="btn btn-ghost btn-sm" onclick="resendInvite('${i.email}','${i.user_type}')">Resend</button>
+      <div class="avatar" style="width:34px;height:34px;font-size:12px;background:var(--r-gold-light);color:var(--r-gold-dark);">${esc(inviteInitials(i.email))}</div>
+      <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">${esc(i.email)}</div><div style="font-size:12px;color:${i.status === 'expired' ? 'var(--r-red)' : 'var(--r-warm-gray)'};">${esc(i.user_type.charAt(0).toUpperCase() + i.user_type.slice(1))} · ${i.status === 'expired' ? 'expired' : esc(i.status)}</div></div>
+      <button class="btn btn-ghost btn-sm" onclick="resendInvite('${esc(i.email)}','${esc(i.user_type)}')">Resend</button>
     </div>`).join('');
 }
 
@@ -2089,11 +2101,11 @@ function renderEventsInto(el, events) {
   el.innerHTML = events.map(e => e.dim
     ? `<div class="notif-item" style="opacity:0.5;">
          <div style="width:9px;height:9px;border-radius:50%;background:var(--r-surface2);border:1px solid var(--r-warm-gray);flex-shrink:0;margin-top:5px;"></div>
-         <div><div style="font-size:13.5px;">${e.title}</div><div style="font-size:12px;color:var(--r-warm-gray);margin-top:2px;">${e.sub} · ${timeAgo(e.ts)}</div></div>
+         <div><div style="font-size:13.5px;">${esc(e.title)}</div><div style="font-size:12px;color:var(--r-warm-gray);margin-top:2px;">${esc(e.sub)} · ${timeAgo(e.ts)}</div></div>
        </div>`
     : `<div class="notif-item">
          <div class="notif-dot-lg" style="${e.dotColor ? 'background:' + e.dotColor + ';' : ''}"></div>
-         <div><div style="font-size:13.5px;font-weight:500;">${e.title}</div><div style="font-size:12px;color:var(--r-warm-gray);margin-top:2px;">${e.sub} · ${timeAgo(e.ts)}</div></div>
+         <div><div style="font-size:13.5px;font-weight:500;">${esc(e.title)}</div><div style="font-size:12px;color:var(--r-warm-gray);margin-top:2px;">${esc(e.sub)} · ${timeAgo(e.ts)}</div></div>
        </div>`
   ).join('');
 }
@@ -2410,7 +2422,7 @@ async function loadOnboardingDocuments() {
       renderCurrentOnboardingDoc();
     }
   } catch (e) {
-    document.getElementById('onboarding-doc-container').innerHTML = `<p style="color:var(--r-red);">Could not load documents: ${e.message}</p>`;
+    document.getElementById('onboarding-doc-container').innerHTML = `<p style="color:var(--r-red);">Could not load documents: ${esc(e.message)}</p>`;
   }
 }
 
@@ -2424,7 +2436,7 @@ function renderCurrentOnboardingDoc() {
     <div class="doc-card">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:2px;">
         <span class="badge ${doc.category === 'clinical' ? 'badge-blue' : 'badge-gold'}">${doc.category.charAt(0).toUpperCase() + doc.category.slice(1)}</span>
-        <div class="page-title" style="font-size:17px;">${doc.title}</div>
+        <div class="page-title" style="font-size:17px;">${esc(doc.title)}</div>
       </div>
       <div class="doc-scroll-box" id="doc-scroll-box" onscroll="checkDocScrolled()">${simpleMarkdownToHtml(doc.content)}</div>
       <label style="display:flex;align-items:flex-start;gap:9px;font-size:13px;color:var(--r-warm-gray);margin-bottom:16px;cursor:pointer;">
