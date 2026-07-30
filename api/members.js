@@ -7,6 +7,11 @@ const ADMIN_EDITABLE_FIELDS = [
   'plan_tier', 'onboarding_status', 'user_type', 'status',
 ];
 
+const SELF_EDITABLE_FIELDS = [
+  'first_name', 'last_name', 'phone', 'qualifications', 'specialties',
+  'indemnity_number', 'indemnity_expiry', 'dbs_status', 'dbs_expiry', 'plan_tier',
+];
+
 module.exports = async (req, res) => {
   const supabase = getSupabase();
 
@@ -36,16 +41,28 @@ module.exports = async (req, res) => {
   if (req.method === 'PATCH') {
     try {
       const { member: requester } = await requireAuth(req);
-      if (!requester || requester.user_type !== 'administrator') {
-        return res.status(403).json({ error: 'Only administrators can edit other members' });
-      }
+      if (!requester) return res.status(404).json({ error: 'No member record linked to this account' });
+
       const { id, ...fields } = req.body || {};
       if (!id) return res.status(400).json({ error: 'id is required' });
 
+      const isSelf = requester.id === id;
+      const isAdmin = requester.user_type === 'administrator';
+      if (!isSelf && !isAdmin) {
+        return res.status(403).json({ error: 'You can only update your own profile' });
+      }
+
+      const allowedFields = isAdmin ? ADMIN_EDITABLE_FIELDS : SELF_EDITABLE_FIELDS;
       const updates = {};
-      for (const key of ADMIN_EDITABLE_FIELDS) {
+      for (const key of allowedFields) {
         if (Object.prototype.hasOwnProperty.call(fields, key)) updates[key] = fields[key];
       }
+
+      // First time a self-service user fills in their name, nudge onboarding forward
+      if (isSelf && requester.onboarding_status === 'not_started' && (updates.first_name || updates.last_name)) {
+        updates.onboarding_status = 'documents_pending';
+      }
+
       const { data, error } = await supabase.from('members').update(updates).eq('id', id).select().single();
       if (error) return res.status(500).json({ error: error.message });
       return res.status(200).json({ member: data });

@@ -2359,7 +2359,7 @@ async function submitOnboardingProfile() {
   };
 
   try {
-    const result = await api(`/members/${state.currentMember.id}`, { method: 'PATCH', body: JSON.stringify(updates) });
+    const result = await api(`/members`, { method: 'PATCH', body: JSON.stringify({ id: state.currentMember.id, ...updates }) });
     state.currentMember = result.member;
     document.getElementById('onboarding-step-profile').style.display = 'none';
     document.getElementById('onboarding-step-documents').style.display = 'block';
@@ -2607,7 +2607,7 @@ async function saveProfile() {
     updates.plan_tier = document.getElementById('profile-plan-tier').value || null;
   }
   try {
-    const result = await api(`/members/${m.id}`, { method: 'PATCH', body: JSON.stringify(updates) });
+    const result = await api(`/members`, { method: 'PATCH', body: JSON.stringify({ id: m.id, ...updates }) });
     state.currentMember = result.member;
     renderProfilePage();
     showToast('✓ Profile updated');
