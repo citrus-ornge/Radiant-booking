@@ -1,6 +1,6 @@
-const { getSupabase } = require('../_lib/supabase');
-const { requireAuth } = require('../_lib/auth');
-const { checkRateLimit } = require('../_lib/rateLimit');
+const { getSupabase } = require('./_lib/supabase');
+const { requireAuth } = require('./_lib/auth');
+const { checkRateLimit } = require('./_lib/rateLimit');
 
 module.exports = async (req, res) => {
   let requester;

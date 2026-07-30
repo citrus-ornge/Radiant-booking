@@ -1072,9 +1072,6 @@ textarea.form-input { resize: vertical; }
         <button class="nav-item" onclick="showClientView('book-room')">
           <span class="nav-icon">⬡</span> Book a Room
         </button>
-        <button class="nav-item" id="client-staff-area-btn" onclick="showClientView('staff-area')" style="display:none;">
-          <span class="nav-icon">📅</span> Staff Area
-        </button>
         <button class="nav-item" onclick="showClientView('messages')">
           <span class="nav-icon">✉</span> Messages <span class="notif-dot" id="client-msg-dot" style="display:none;"></span>
         </button>
@@ -1348,11 +1345,11 @@ textarea.form-input { resize: vertical; }
 
         <div id="staff-area-rota-panel">
           <div class="card">
-            <div class="card-header"><div class="card-title">Upcoming Shifts</div></div>
+            <div class="card-header"><div class="card-title">Upcoming Shifts</div><button class="btn btn-primary btn-sm" onclick="openAddShiftModal()">+ Amend Rota</button></div>
             <div style="overflow-x:auto;">
               <table class="data-table">
-                <thead><tr><th>Date</th><th>Day</th><th>Staff</th><th>Time</th><th>Status</th></tr></thead>
-                <tbody id="rota-table-body"><tr><td colspan="5" style="text-align:center;color:var(--r-warm-gray);padding:20px;">Loading…</td></tr></tbody>
+                <thead><tr><th>Date</th><th>Day</th><th>Staff</th><th>Time</th><th>Status</th><th></th></tr></thead>
+                <tbody id="rota-table-body"><tr><td colspan="6" style="text-align:center;color:var(--r-warm-gray);padding:20px;">Loading…</td></tr></tbody>
               </table>
             </div>
           </div>
@@ -1360,11 +1357,11 @@ textarea.form-input { resize: vertical; }
 
         <div id="staff-area-leave-panel" style="display:none;">
           <div class="card">
-            <div class="card-header"><div class="card-title">Annual Leave &amp; Bank Holidays</div></div>
+            <div class="card-header"><div class="card-title">Annual Leave &amp; Bank Holidays</div><button class="btn btn-primary btn-sm" onclick="openAddLeaveModal()">+ Book Holiday</button></div>
             <div style="overflow-x:auto;">
               <table class="data-table">
-                <thead><tr><th>Date</th><th>Staff</th><th>Type</th></tr></thead>
-                <tbody id="leave-table-body"><tr><td colspan="3" style="text-align:center;color:var(--r-warm-gray);padding:20px;">Loading…</td></tr></tbody>
+                <thead><tr><th>Date</th><th>Staff</th><th>Type</th><th></th></tr></thead>
+                <tbody id="leave-table-body"><tr><td colspan="4" style="text-align:center;color:var(--r-warm-gray);padding:20px;">Loading…</td></tr></tbody>
               </table>
             </div>
           </div>
@@ -1709,6 +1706,65 @@ textarea.form-input { resize: vertical; }
 
 <!-- DELETE ACCOUNT (self) -->
 <!-- NEW MESSAGE -->
+<!-- ADD SHIFT (amend rota) -->
+<div class="modal-overlay" id="add-shift-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div><div class="modal-title">Amend Rota</div></div>
+      <button class="close-btn" onclick="closeModal('add-shift-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row"><label class="form-label">Staff Member</label>
+        <input class="form-input" id="as-staff" list="staff-names-list" placeholder="Staff name">
+      </div>
+      <div class="form-row"><label class="form-label">Date</label><input type="date" class="form-input" id="as-date" onchange="updateShiftDayOfWeek()"></div>
+      <input type="hidden" id="as-day-of-week">
+      <div class="form-row"><label class="form-label">Status</label>
+        <select class="form-input" id="as-status" onchange="toggleShiftTimeRow()">
+          <option value="scheduled">Working (set time below)</option>
+          <option value="closed">Closed</option>
+          <option value="annual_leave">Annual Leave</option>
+          <option value="tbc">TBC</option>
+        </select>
+      </div>
+      <div class="form-row" id="as-time-row"><label class="form-label">Time Range</label><input class="form-input" id="as-time" placeholder="e.g. 9:30 - 16:00"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('add-shift-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitShift()">Save Shift</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD LEAVE (book holiday) -->
+<div class="modal-overlay" id="add-leave-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div><div class="modal-title">Book Holiday</div></div>
+      <button class="close-btn" onclick="closeModal('add-leave-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row"><label class="form-label">Staff Member</label>
+        <input class="form-input" id="al-staff" list="staff-names-list" placeholder="Staff name">
+      </div>
+      <div class="form-row"><label class="form-label">Date</label><input type="date" class="form-input" id="al-date"></div>
+      <div class="form-row"><label class="form-label">Type</label>
+        <select class="form-input" id="al-code">
+          <option value="AL">Annual Leave</option>
+          <option value="BH">Bank Holiday</option>
+          <option value="SICK">Sick Leave</option>
+          <option value="OTHER">Other</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('add-leave-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitLeave()">Save</button>
+    </div>
+  </div>
+</div>
+<datalist id="staff-names-list"></datalist>
+
 <div class="modal-overlay" id="new-message-modal">
   <div class="modal">
     <div class="modal-header">
@@ -2832,7 +2888,6 @@ function setupClientView(type) {
   document.getElementById('client-nav').style.display = 'block';
   document.getElementById('topbar-cta').textContent = '+ Book Room';
   document.getElementById('topbar-cta').onclick = () => showClientView('book-room');
-  document.getElementById('client-staff-area-btn').style.display = type === 'practitioner' ? 'flex' : 'none';
 
   const m = state.currentMember;
   const displayName = m ? `${m.first_name || ''} ${m.last_name || ''}`.trim() || m.email : '';
@@ -2845,7 +2900,7 @@ function setupClientView(type) {
 
 // ── NAVIGATION ──
 const adminViews = { dashboard:'Dashboard', bookings:'All Bookings', rooms:'Rooms & Spaces', members:'Members', invite:'Invite Users', 'staff-area':'Staff Area', messages:'Messages', notifications:'Notifications', settings:'Settings' };
-const clientViews = { 'my-bookings':'My Bookings', 'book-room':'Book a Room', 'staff-area':'Staff Area', messages:'Messages', profile:'My Profile' };
+const clientViews = { 'my-bookings':'My Bookings', 'book-room':'Book a Room', messages:'Messages', profile:'My Profile' };
 
 let navHistory = ['dashboard']; // tracks in-app view stack for the back button
 
@@ -2964,7 +3019,7 @@ function renderRotaTable(shifts) {
   const today = new Date(); today.setHours(0,0,0,0);
   const upcoming = shifts.filter(s => new Date(s.shift_date) >= today).slice(0, 40);
   if (upcoming.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--r-warm-gray);padding:20px;">No upcoming shifts scheduled.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--r-warm-gray);padding:20px;">No upcoming shifts scheduled.</td></tr>`;
     return;
   }
   const statusBadge = { scheduled: 'badge-green', closed: 'badge-gray', annual_leave: 'badge-gold', tbc: 'badge-blue' };
@@ -2976,6 +3031,7 @@ function renderRotaTable(shifts) {
       <td>${esc(s.staff_name)}</td>
       <td>${esc(s.time_range || '—')}</td>
       <td><span class="badge ${statusBadge[s.status] || 'badge-gray'}">${esc(statusLabel[s.status] || s.status)}</span></td>
+      <td><button class="btn btn-ghost btn-sm" style="color:var(--r-red);" onclick="deleteShift('${s.id}')">Remove</button></td>
     </tr>`).join('');
 }
 
@@ -2984,7 +3040,7 @@ function renderLeaveTable(leave) {
   const today = new Date(); today.setHours(0,0,0,0);
   const upcoming = leave.filter(l => new Date(l.leave_date) >= today).slice(0, 60);
   if (upcoming.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;color:var(--r-warm-gray);padding:20px;">No upcoming leave or bank holidays.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--r-warm-gray);padding:20px;">No upcoming leave or bank holidays.</td></tr>`;
     return;
   }
   const codeLabel = { AL: 'Annual Leave', BH: 'Bank Holiday', SICK: 'Sick Leave', OTHER: 'Other' };
@@ -2993,7 +3049,111 @@ function renderLeaveTable(leave) {
       <td>${esc(new Date(l.leave_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }))}</td>
       <td>${esc(l.staff_name)}</td>
       <td><span class="badge ${l.code === 'BH' ? 'badge-blue' : 'badge-gold'}">${esc(codeLabel[l.code] || l.code)}</span></td>
+      <td><button class="btn btn-ghost btn-sm" style="color:var(--r-red);" onclick="deleteLeave('${l.id}')">Remove</button></td>
     </tr>`).join('');
+}
+
+function populateStaffNamesList() {
+  const dl = document.getElementById('staff-names-list');
+  const staff = state.members.filter(m => ['administrator', 'practitioner'].includes(m.user_type));
+  dl.innerHTML = staff.map(m => `<option value="${esc(`${m.first_name} ${m.last_name}`.trim())}">`).join('');
+}
+
+function findMemberIdByName(name) {
+  const staff = state.members.filter(m => ['administrator', 'practitioner'].includes(m.user_type));
+  const match = staff.find(m => `${m.first_name} ${m.last_name}`.trim().toLowerCase() === name.trim().toLowerCase());
+  return match ? match.id : null;
+}
+
+function openAddShiftModal() {
+  populateStaffNamesList();
+  document.getElementById('as-staff').value = '';
+  document.getElementById('as-date').valueAsDate = new Date();
+  document.getElementById('as-status').value = 'scheduled';
+  document.getElementById('as-time').value = '';
+  toggleShiftTimeRow();
+  updateShiftDayOfWeek();
+  openModal('add-shift-modal');
+}
+
+function updateShiftDayOfWeek() {
+  const dateVal = document.getElementById('as-date').value;
+  if (!dateVal) return;
+  const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  document.getElementById('as-day-of-week').value = days[new Date(dateVal + 'T00:00:00').getDay()];
+}
+
+function toggleShiftTimeRow() {
+  const status = document.getElementById('as-status').value;
+  document.getElementById('as-time-row').style.display = status === 'scheduled' ? 'block' : 'none';
+}
+
+async function submitShift() {
+  const staff_name = document.getElementById('as-staff').value.trim();
+  const shift_date = document.getElementById('as-date').value;
+  const day_of_week = document.getElementById('as-day-of-week').value;
+  const status = document.getElementById('as-status').value;
+  const time_range = status === 'scheduled' ? document.getElementById('as-time').value.trim() : null;
+  if (!staff_name || !shift_date) { showToast('⚠ Please enter a staff name and date'); return; }
+
+  try {
+    await api('/staff/rota', {
+      method: 'POST',
+      body: JSON.stringify({ staff_name, member_id: findMemberIdByName(staff_name), shift_date, day_of_week, time_range, status }),
+    });
+    closeModal('add-shift-modal');
+    showToast('✓ Shift saved');
+    loadStaffArea();
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  }
+}
+
+async function deleteShift(id) {
+  if (!window.confirm('Remove this shift?')) return;
+  try {
+    await api('/staff/rota', { method: 'DELETE', body: JSON.stringify({ id }) });
+    loadStaffArea();
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  }
+}
+
+function openAddLeaveModal() {
+  populateStaffNamesList();
+  document.getElementById('al-staff').value = '';
+  document.getElementById('al-date').valueAsDate = new Date();
+  document.getElementById('al-code').value = 'AL';
+  openModal('add-leave-modal');
+}
+
+async function submitLeave() {
+  const staff_name = document.getElementById('al-staff').value.trim();
+  const leave_date = document.getElementById('al-date').value;
+  const code = document.getElementById('al-code').value;
+  if (!staff_name || !leave_date) { showToast('⚠ Please enter a staff name and date'); return; }
+
+  try {
+    await api('/staff/leave', {
+      method: 'POST',
+      body: JSON.stringify({ staff_name, member_id: findMemberIdByName(staff_name), leave_date, code }),
+    });
+    closeModal('add-leave-modal');
+    showToast('✓ Leave booked');
+    loadStaffArea();
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  }
+}
+
+async function deleteLeave(id) {
+  if (!window.confirm('Remove this leave entry?')) return;
+  try {
+    await api('/staff/leave', { method: 'DELETE', body: JSON.stringify({ id }) });
+    loadStaffArea();
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  }
 }
 
 // ── MESSAGES ──

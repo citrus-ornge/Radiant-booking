@@ -11,8 +11,8 @@ module.exports = async (req, res) => {
     return res.status(e.status || 401).json({ error: e.message });
   }
 
-  if (!['administrator', 'practitioner'].includes(requester.user_type)) {
-    return res.status(403).json({ error: 'Leave calendar access is limited to staff and practitioners' });
+  if (requester.user_type !== 'administrator') {
+    return res.status(403).json({ error: 'Leave calendar access is limited to Staff & Admin' });
   }
 
   const supabase = getSupabase();

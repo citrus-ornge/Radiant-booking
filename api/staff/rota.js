@@ -11,9 +11,9 @@ module.exports = async (req, res) => {
     return res.status(e.status || 401).json({ error: e.message });
   }
 
-  // Only staff-facing roles can see the rota
-  if (!['administrator', 'practitioner'].includes(requester.user_type)) {
-    return res.status(403).json({ error: 'Rota access is limited to staff and practitioners' });
+  // Staff Area is Staff & Admin only
+  if (requester.user_type !== 'administrator') {
+    return res.status(403).json({ error: 'Staff Area is limited to Staff & Admin' });
   }
 
   const supabase = getSupabase();
