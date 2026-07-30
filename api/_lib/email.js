@@ -43,13 +43,16 @@ async function sendReminder({ to, memberName, roomName, start, hoursBefore }) {
   });
 }
 
+const ROLE_LABELS = { administrator: 'Staff & Admin member', practitioner: 'practitioner', member: 'member', guest: 'guest' };
+
 async function sendInvite({ to, userType, note, inviteUrl }) {
   const resend = getResend();
+  const roleText = ROLE_LABELS[userType] || userType;
   return resend.emails.send({
     from: FROM_EMAIL,
     to: [to],
     subject: `You're invited to Radiant Booking`,
-    text: `You've been invited to join Radiant Booking as a ${userType}.\n${note ? `\nNote: ${note}\n` : ''}\nAccept here: ${inviteUrl}\n\nThis invite expires in 7 days.`,
+    text: `You've been invited to join Radiant Booking as a ${roleText}.\n${note ? `\nNote: ${note}\n` : ''}\nAccept here: ${inviteUrl}\n\nThis invite expires in 7 days.`,
   });
 }
 
@@ -106,7 +109,26 @@ Sign in any time at ${appUrl} to get started.
     return resend.emails.send({ from: FROM_EMAIL, to: [to], subject: 'Welcome to the Radiant Booking Platform', text: body });
   }
 
-  // Administrator / guest / fallback
+  if (userType === 'administrator') {
+    const body = `Hi ${name},
+
+Welcome to the Radiant Booking Platform — you're all set up as Staff & Admin.
+
+Here's what you can do:
+- Manage rooms, members and bookings across the whole clinic
+- Send invitations and track onboarding for new practitioners and members
+- Book treatment rooms in real time, with automatic clash-checking
+- Sync bookings straight to your Google Calendar
+
+One important step first: you'll need to complete a short onboarding — filling in your profile and reading and signing the clinic's operational and clinical policies (health & safety, infection control, complaints, data protection, and our internal Standard Operating Procedures for reception, bookings, payments and more). You'll be guided through this automatically the first time you sign in, and every signed document stays available as a downloadable PDF from your Profile page any time you need to check back.
+
+Sign in any time at ${appUrl} to get started.
+
+— Radiant Booking`;
+    return resend.emails.send({ from: FROM_EMAIL, to: [to], subject: 'Welcome to the Radiant Booking Platform', text: body });
+  }
+
+  // Guest / fallback
   const body = `Hi ${name},
 
 Welcome to the Radiant Booking Platform — you're all set up as a ${userType.charAt(0).toUpperCase() + userType.slice(1)}.
@@ -115,7 +137,6 @@ Here's what you can do:
 - Book treatment rooms in real time, with automatic clash-checking
 - Get instant email confirmations and reminders before every session
 - Sync bookings straight to your Google Calendar
-${userType === 'administrator' ? '- Manage rooms, members and bookings across the whole clinic\n- Send invitations and track onboarding for new practitioners' : ''}
 
 Sign in any time at ${appUrl} to get started.
 
