@@ -183,4 +183,32 @@ async function sendLeaveUpdate({ to, staffName, leaveDate, code, removed, rangeT
   return resend.emails.send({ from: FROM_EMAIL, to: [to], subject: `${codeLabel} booked: ${dateStr}`, text: body });
 }
 
-module.exports = { sendBookingConfirmation, sendCancellationAlert, sendReminder, sendInvite, sendWelcomeEmail, sendRotaUpdate, sendLeaveUpdate };
+async function sendLeaveApprovalRequest({ to, approverName, staffName, rangeText, code, approveUrl, declineUrl }) {
+  const resend = getResend();
+  const codeLabel = { AL: 'Annual Leave', BH: 'Bank Holiday', SICK: 'Sick Leave', OTHER: 'Leave' }[code] || code;
+  const body = `Hi ${approverName || 'there'},
+
+A ${codeLabel} request needs your approval:
+
+${staffName} — ${rangeText}
+
+Approve: ${approveUrl}
+Decline: ${declineUrl}
+
+You can also review this from the Staff Area in the Radiant Booking Platform.
+
+— Radiant Booking`;
+  return resend.emails.send({ from: FROM_EMAIL, to: [to], subject: `Approval needed: ${staffName} — ${codeLabel}`, text: body });
+}
+
+async function sendLeaveDecision({ to, staffName, leaveDate, code, approved, reason, rangeText }) {
+  const resend = getResend();
+  const codeLabel = { AL: 'Annual Leave', BH: 'Bank Holiday', SICK: 'Sick Leave', OTHER: 'Leave' }[code] || code;
+  const dateStr = rangeText || new Date(leaveDate).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const body = approved
+    ? `Hi ${staffName},\n\nYour ${codeLabel} request for ${dateStr} has been approved.\n\n— Radiant Booking`
+    : `Hi ${staffName},\n\nYour ${codeLabel} request for ${dateStr} was not approved.${reason ? `\n\nReason: ${reason}` : ''}\n\n— Radiant Booking`;
+  return resend.emails.send({ from: FROM_EMAIL, to: [to], subject: `${codeLabel} request ${approved ? 'approved' : 'declined'}: ${dateStr}`, text: body });
+}
+
+module.exports = { sendBookingConfirmation, sendCancellationAlert, sendReminder, sendInvite, sendWelcomeEmail, sendRotaUpdate, sendLeaveUpdate, sendLeaveApprovalRequest, sendLeaveDecision };

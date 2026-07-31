@@ -1338,6 +1338,14 @@ textarea.form-input { resize: vertical; }
         <div class="page-header">
           <div><div class="page-title">Staff Area</div><div class="gold-line"></div><div class="page-sub">Rota and annual leave</div></div>
         </div>
+
+        <div id="pending-approvals-panel" style="display:none;margin-bottom:20px;">
+          <div class="card" style="border-color:rgba(201,169,110,0.4);">
+            <div class="card-header"><div class="card-title">Pending Holiday Approvals</div></div>
+            <div id="pending-approvals-list"></div>
+          </div>
+        </div>
+
         <div class="tabs">
           <button class="tab active" id="staff-tab-calendar" onclick="switchStaffAreaTab('calendar')">Calendar</button>
           <button class="tab" id="staff-tab-rota" onclick="switchStaffAreaTab('rota')">Rota List</button>
@@ -1375,8 +1383,8 @@ textarea.form-input { resize: vertical; }
             <div class="card-header"><div class="card-title">Annual Leave &amp; Bank Holidays</div><button class="btn btn-primary btn-sm" onclick="openAddLeaveModal()">+ Book Holiday</button></div>
             <div style="overflow-x:auto;">
               <table class="data-table">
-                <thead><tr><th>Date</th><th>Staff</th><th>Type</th><th></th></tr></thead>
-                <tbody id="leave-table-body"><tr><td colspan="4" style="text-align:center;color:var(--r-warm-gray);padding:20px;">Loading…</td></tr></tbody>
+                <thead><tr><th>Date</th><th>Staff</th><th>Type</th><th>Status</th><th></th></tr></thead>
+                <tbody id="leave-table-body"><tr><td colspan="5" style="text-align:center;color:var(--r-warm-gray);padding:20px;">Loading…</td></tr></tbody>
               </table>
             </div>
           </div>
@@ -1763,7 +1771,7 @@ textarea.form-input { resize: vertical; }
 <div class="modal-overlay" id="add-leave-modal">
   <div class="modal">
     <div class="modal-header">
-      <div><div class="modal-title">Book Holiday</div></div>
+      <div><div class="modal-title">Book Holiday (Requires Approval)</div></div>
       <button class="close-btn" onclick="closeModal('add-leave-modal')">✕</button>
     </div>
     <div class="modal-body">
@@ -1783,7 +1791,7 @@ textarea.form-input { resize: vertical; }
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('add-leave-modal')">Cancel</button>
-      <button class="btn btn-primary" onclick="submitLeave()">Save</button>
+      <button class="btn btn-primary" onclick="submitLeave()">Submit for Approval</button>
     </div>
   </div>
 </div>
@@ -1961,7 +1969,7 @@ let currentRole = 'admin'; // derived from the real member's user_type after log
 let currentSession = null;
 
 // ── LIVE APP STATE (populated from the real API) ──
-const state = { rooms: [], members: [], bookings: [], invites: [], currentMember: null };
+const state = { rooms: [], members: [], bookings: [], invites: [], currentMember: null, pendingLeaveRequests: [] };
 
 // ── API HELPERS ──
 // Escapes user-controllable text before it's interpolated into innerHTML,
@@ -1993,8 +2001,9 @@ async function loadAppData(isRetry) {
   const results = await Promise.allSettled([
     api('/rooms'), api('/members'), api('/bookings'),
     isAdmin ? api('/invites') : Promise.resolve({ invites: state.invites }),
+    isAdmin ? api('/staff/leave') : Promise.resolve({ leave: [] }),
   ]);
-  const [roomsR, membersR, bookingsR, invitesR] = results;
+  const [roomsR, membersR, bookingsR, invitesR, leaveR] = results;
   const failures = [];
 
   if (roomsR.status === 'fulfilled') state.rooms = roomsR.value.rooms || [];
@@ -2005,6 +2014,8 @@ async function loadAppData(isRetry) {
 
   if (bookingsR.status === 'fulfilled') state.bookings = bookingsR.value.bookings || [];
   else failures.push('bookings');
+
+  state.pendingLeaveRequests = leaveR.status === 'fulfilled' ? (leaveR.value.leave || []).filter(l => l.status === 'pending') : [];
 
   if (invitesR.status === 'fulfilled') state.invites = invitesR.value.invites || [];
   else if (isAdmin) failures.push('invites');
@@ -2455,6 +2466,9 @@ function buildNotificationEvents() {
     } else {
       events.push({ ts: i.invited_at, title: `Invitation sent: ${i.email}`, sub: `${roleLabel(i.user_type)} · awaiting response`, dim: true });
     }
+  });
+  (state.pendingLeaveRequests || []).forEach(l => {
+    events.push({ ts: l.created_at, title: `⏳ Holiday approval needed: ${l.staff_name}`, sub: `${fmtDateTime(l.leave_date).split(' · ')[0]} · tap to review in Staff Area`, dotColor: 'var(--r-gold)' });
   });
   events.sort((a, b) => new Date(b.ts) - new Date(a.ts));
   return events;
@@ -3041,8 +3055,51 @@ async function loadStaffArea() {
     renderRotaTable(staffAreaData.shifts);
     renderLeaveTable(staffAreaData.leave);
     renderStaffCalendar();
+    renderPendingApprovals();
   } catch (e) {
     document.getElementById('rota-table-body').innerHTML = `<tr><td colspan="5" style="color:var(--r-red);padding:16px;">${esc(e.message)}</td></tr>`;
+  }
+}
+
+function renderPendingApprovals() {
+  const panel = document.getElementById('pending-approvals-panel');
+  const list = document.getElementById('pending-approvals-list');
+  const pending = staffAreaData.leave.filter(l => l.status === 'pending');
+
+  if (pending.length === 0) {
+    panel.style.display = 'none';
+    return;
+  }
+  panel.style.display = 'block';
+
+  // Group by approval_token so a bulk request shows as one card
+  const byToken = {};
+  pending.forEach(l => { (byToken[l.approval_token] = byToken[l.approval_token] || []).push(l); });
+
+  const codeLabel = { AL: 'Annual Leave', BH: 'Bank Holiday', SICK: 'Sick Leave', OTHER: 'Leave' };
+  list.innerHTML = Object.entries(byToken).map(([token, rows]) => {
+    const dates = rows.map(r => new Date(r.leave_date)).sort((a, b) => a - b);
+    const fmt = d => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    const rangeText = rows.length === 1 ? fmt(dates[0]) : `${fmt(dates[0])} – ${fmt(dates[dates.length - 1])} (${rows.length} days)`;
+    return `
+    <div style="display:flex;align-items:center;gap:12px;padding:14px 22px;border-bottom:1px solid var(--r-stone);">
+      <div style="flex:1;">
+        <div style="font-size:13.5px;font-weight:500;">${esc(rows[0].staff_name)} — ${esc(codeLabel[rows[0].code] || rows[0].code)}</div>
+        <div style="font-size:12px;color:var(--r-warm-gray);">${esc(rangeText)}</div>
+      </div>
+      <button class="btn btn-outline btn-sm" style="border-color:var(--r-red);color:var(--r-red);" onclick="respondToLeaveRequest('${token}','decline')">Decline</button>
+      <button class="btn btn-primary btn-sm" onclick="respondToLeaveRequest('${token}','approve')">Approve</button>
+    </div>`;
+  }).join('');
+}
+
+async function respondToLeaveRequest(token, action) {
+  try {
+    await api('/staff/leave', { method: 'PATCH', body: JSON.stringify({ token, action }) });
+    showToast(action === 'approve' ? '✓ Leave approved' : '✓ Leave declined');
+    loadStaffArea();
+  } catch (e) {
+    showToast('⚠ ' + e.message);
   }
 }
 
@@ -3104,9 +3161,16 @@ function renderStaffCalendar() {
     if (entry) {
       const items = [
         ...entry.shifts.map(s => ({ label: s.staff_name.split(' ')[0], color: s.status === 'annual_leave' ? 'var(--r-gold)' : (s.status === 'closed' ? 'var(--r-warm-gray)' : 'var(--r-green)') })),
-        ...entry.leave.map(l => ({ label: l.staff_name.split(' ')[0], color: l.code === 'BH' ? 'var(--r-blue,#4a7ba6)' : 'var(--r-gold)' })),
+        ...entry.leave.map(l => ({
+          label: l.staff_name.split(' ')[0] + (l.status === 'pending' ? ' (pending)' : ''),
+          color: l.status === 'declined' ? 'var(--r-warm-gray)' : (l.code === 'BH' ? 'var(--r-blue,#4a7ba6)' : 'var(--r-gold)'),
+          dashed: l.status === 'pending',
+        })),
       ];
-      chips = items.slice(0, 3).map(it => `<div style="font-size:9.5px;background:${it.color};color:#fff;border-radius:4px;padding:1px 4px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(it.label)}</div>`).join('');
+      chips = items.slice(0, 3).map(it => it.dashed
+        ? `<div style="font-size:9.5px;border:1.5px dashed ${it.color};color:${it.color};border-radius:4px;padding:0.5px 4px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(it.label)}</div>`
+        : `<div style="font-size:9.5px;background:${it.color};color:#fff;border-radius:4px;padding:1px 4px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(it.label)}</div>`
+      ).join('');
       if (items.length > 3) chips += `<div style="font-size:9px;color:var(--r-warm-gray);">+${items.length - 3} more</div>`;
     }
     cells += `
@@ -3145,15 +3209,17 @@ function renderLeaveTable(leave) {
   const today = new Date(); today.setHours(0,0,0,0);
   const upcoming = leave.filter(l => new Date(l.leave_date) >= today).slice(0, 60);
   if (upcoming.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--r-warm-gray);padding:20px;">No upcoming leave or bank holidays.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--r-warm-gray);padding:20px;">No upcoming leave or bank holidays.</td></tr>`;
     return;
   }
   const codeLabel = { AL: 'Annual Leave', BH: 'Bank Holiday', SICK: 'Sick Leave', OTHER: 'Other' };
+  const statusBadge = { pending: 'badge-gray', approved: 'badge-green', declined: 'badge-red' };
   tbody.innerHTML = upcoming.map(l => `
     <tr>
       <td>${esc(new Date(l.leave_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }))}</td>
       <td>${esc(l.staff_name)}</td>
       <td><span class="badge ${l.code === 'BH' ? 'badge-blue' : 'badge-gold'}">${esc(codeLabel[l.code] || l.code)}</span></td>
+      <td><span class="badge ${statusBadge[l.status] || 'badge-gray'}">${esc((l.status || 'approved').charAt(0).toUpperCase() + (l.status || 'approved').slice(1))}</span></td>
       <td><button class="btn btn-ghost btn-sm" style="color:var(--r-red);" onclick="deleteLeave('${l.id}')">Remove</button></td>
     </tr>`).join('');
 }
@@ -3272,7 +3338,7 @@ async function submitLeave() {
   try {
     await api('/staff/leave', { method: 'POST', body: JSON.stringify(payload) });
     closeModal('add-leave-modal');
-    showToast(bulk ? `✓ Leave booked for ${selectedCalendarDates.size} days` : '✓ Leave booked');
+    showToast(bulk ? `✓ Leave request sent for approval (${selectedCalendarDates.size} days)` : '✓ Leave request sent for approval');
     if (bulk) clearCalendarSelection();
     loadStaffArea();
   } catch (e) {
