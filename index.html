@@ -1339,11 +1339,26 @@ textarea.form-input { resize: vertical; }
           <div><div class="page-title">Staff Area</div><div class="gold-line"></div><div class="page-sub">Rota and annual leave</div></div>
         </div>
         <div class="tabs">
-          <button class="tab active" id="staff-tab-rota" onclick="switchStaffAreaTab('rota')">Rota</button>
-          <button class="tab" id="staff-tab-leave" onclick="switchStaffAreaTab('leave')">Annual Leave</button>
+          <button class="tab active" id="staff-tab-calendar" onclick="switchStaffAreaTab('calendar')">Calendar</button>
+          <button class="tab" id="staff-tab-rota" onclick="switchStaffAreaTab('rota')">Rota List</button>
+          <button class="tab" id="staff-tab-leave" onclick="switchStaffAreaTab('leave')">Leave List</button>
         </div>
 
-        <div id="staff-area-rota-panel">
+        <div id="staff-area-calendar-panel">
+          <div class="card">
+            <div class="card-header">
+              <div style="display:flex;align-items:center;gap:10px;">
+                <button class="btn btn-ghost btn-sm" onclick="shiftCalendarMonth(-1)">←</button>
+                <div class="card-title" id="cal-month-label" style="min-width:150px;text-align:center;">–</div>
+                <button class="btn btn-ghost btn-sm" onclick="shiftCalendarMonth(1)">→</button>
+              </div>
+              <div style="font-size:12px;color:var(--r-warm-gray);">Tap days to select, then apply in bulk</div>
+            </div>
+            <div id="staff-calendar-grid" style="padding:14px;"></div>
+          </div>
+        </div>
+
+        <div id="staff-area-rota-panel" style="display:none;">
           <div class="card">
             <div class="card-header"><div class="card-title">Upcoming Shifts</div><button class="btn btn-primary btn-sm" onclick="openAddShiftModal()">+ Amend Rota</button></div>
             <div style="overflow-x:auto;">
@@ -1365,6 +1380,13 @@ textarea.form-input { resize: vertical; }
               </table>
             </div>
           </div>
+        </div>
+
+        <div id="bulk-apply-bar" style="display:none;position:fixed;left:16px;right:16px;bottom:16px;max-width:520px;margin:0 auto;background:var(--r-charcoal);color:#fff;border-radius:14px;padding:14px 18px;box-shadow:0 8px 24px rgba(0,0,0,0.3);z-index:50;display:flex;align-items:center;gap:12px;">
+          <div style="flex:1;font-size:13.5px;"><span id="bulk-count-label">0</span> day(s) selected</div>
+          <button class="btn btn-outline btn-sm" style="color:#fff;border-color:rgba(255,255,255,0.3);" onclick="clearCalendarSelection()">Clear</button>
+          <button class="btn btn-outline btn-sm" style="color:#fff;border-color:rgba(255,255,255,0.3);" onclick="openAddShiftModal()">Add Shift</button>
+          <button class="btn btn-primary btn-sm" onclick="openAddLeaveModal()">Book Leave</button>
         </div>
       </div>
 
@@ -1717,7 +1739,8 @@ textarea.form-input { resize: vertical; }
       <div class="form-row"><label class="form-label">Staff Member</label>
         <input class="form-input" id="as-staff" list="staff-names-list" placeholder="Staff name">
       </div>
-      <div class="form-row"><label class="form-label">Date</label><input type="date" class="form-input" id="as-date" onchange="updateShiftDayOfWeek()"></div>
+      <div class="form-row" id="as-date-row"><label class="form-label">Date</label><input type="date" class="form-input" id="as-date" onchange="updateShiftDayOfWeek()"></div>
+      <div class="form-row" id="as-bulk-summary" style="display:none;background:var(--r-surface2);border-radius:8px;padding:10px 14px;font-size:13px;"></div>
       <input type="hidden" id="as-day-of-week">
       <div class="form-row"><label class="form-label">Status</label>
         <select class="form-input" id="as-status" onchange="toggleShiftTimeRow()">
@@ -1747,7 +1770,8 @@ textarea.form-input { resize: vertical; }
       <div class="form-row"><label class="form-label">Staff Member</label>
         <input class="form-input" id="al-staff" list="staff-names-list" placeholder="Staff name">
       </div>
-      <div class="form-row"><label class="form-label">Date</label><input type="date" class="form-input" id="al-date"></div>
+      <div class="form-row" id="al-date-row"><label class="form-label">Date</label><input type="date" class="form-input" id="al-date"></div>
+      <div class="form-row" id="al-bulk-summary" style="display:none;background:var(--r-surface2);border-radius:8px;padding:10px 14px;font-size:13px;"></div>
       <div class="form-row"><label class="form-label">Type</label>
         <select class="form-input" id="al-code">
           <option value="AL">Annual Leave</option>
@@ -2998,20 +3022,101 @@ async function loadMyDocuments() {
 }
 
 function switchStaffAreaTab(tab) {
+  document.getElementById('staff-tab-calendar').classList.toggle('active', tab === 'calendar');
   document.getElementById('staff-tab-rota').classList.toggle('active', tab === 'rota');
   document.getElementById('staff-tab-leave').classList.toggle('active', tab === 'leave');
+  document.getElementById('staff-area-calendar-panel').style.display = tab === 'calendar' ? 'block' : 'none';
   document.getElementById('staff-area-rota-panel').style.display = tab === 'rota' ? 'block' : 'none';
   document.getElementById('staff-area-leave-panel').style.display = tab === 'leave' ? 'block' : 'none';
+  document.getElementById('bulk-apply-bar').style.display = (tab === 'calendar' && selectedCalendarDates.size > 0) ? 'flex' : 'none';
 }
+
+const staffAreaData = { shifts: [], leave: [] };
 
 async function loadStaffArea() {
   try {
     const [rotaRes, leaveRes] = await Promise.all([api('/staff/rota'), api('/staff/leave')]);
-    renderRotaTable(rotaRes.shifts || []);
-    renderLeaveTable(leaveRes.leave || []);
+    staffAreaData.shifts = rotaRes.shifts || [];
+    staffAreaData.leave = leaveRes.leave || [];
+    renderRotaTable(staffAreaData.shifts);
+    renderLeaveTable(staffAreaData.leave);
+    renderStaffCalendar();
   } catch (e) {
     document.getElementById('rota-table-body').innerHTML = `<tr><td colspan="5" style="color:var(--r-red);padding:16px;">${esc(e.message)}</td></tr>`;
   }
+}
+
+// ── STAFF CALENDAR VIEW ──
+let calendarViewMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+let selectedCalendarDates = new Set();
+
+function shiftCalendarMonth(delta) {
+  calendarViewMonth = new Date(calendarViewMonth.getFullYear(), calendarViewMonth.getMonth() + delta, 1);
+  renderStaffCalendar();
+}
+
+function toIsoDate(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function toggleCalendarDay(iso) {
+  if (selectedCalendarDates.has(iso)) selectedCalendarDates.delete(iso);
+  else selectedCalendarDates.add(iso);
+  renderStaffCalendar();
+  const bar = document.getElementById('bulk-apply-bar');
+  const count = selectedCalendarDates.size;
+  document.getElementById('bulk-count-label').textContent = count;
+  bar.style.display = count > 0 ? 'flex' : 'none';
+}
+
+function clearCalendarSelection() {
+  selectedCalendarDates.clear();
+  document.getElementById('bulk-apply-bar').style.display = 'none';
+  renderStaffCalendar();
+}
+
+function renderStaffCalendar() {
+  const grid = document.getElementById('staff-calendar-grid');
+  if (!grid) return;
+  const year = calendarViewMonth.getFullYear();
+  const month = calendarViewMonth.getMonth();
+  document.getElementById('cal-month-label').textContent = calendarViewMonth.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+
+  const firstOfMonth = new Date(year, month, 1);
+  const startOffset = (firstOfMonth.getDay() + 6) % 7; // Monday-start
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const byDate = {};
+  staffAreaData.shifts.forEach(s => { (byDate[s.shift_date] = byDate[s.shift_date] || { shifts: [], leave: [] }).shifts.push(s); });
+  staffAreaData.leave.forEach(l => { (byDate[l.leave_date] = byDate[l.leave_date] || { shifts: [], leave: [] }).leave.push(l); });
+
+  const dayHeaders = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => `<div style="text-align:center;font-size:11px;color:var(--r-warm-gray);font-weight:600;padding:4px;">${d}</div>`).join('');
+
+  let cells = '';
+  for (let i = 0; i < startOffset; i++) cells += `<div></div>`;
+  for (let day = 1; day <= daysInMonth; day++) {
+    const d = new Date(year, month, day);
+    const iso = toIsoDate(d);
+    const entry = byDate[iso];
+    const isSelected = selectedCalendarDates.has(iso);
+    const isToday = toIsoDate(new Date()) === iso;
+    let chips = '';
+    if (entry) {
+      const items = [
+        ...entry.shifts.map(s => ({ label: s.staff_name.split(' ')[0], color: s.status === 'annual_leave' ? 'var(--r-gold)' : (s.status === 'closed' ? 'var(--r-warm-gray)' : 'var(--r-green)') })),
+        ...entry.leave.map(l => ({ label: l.staff_name.split(' ')[0], color: l.code === 'BH' ? 'var(--r-blue,#4a7ba6)' : 'var(--r-gold)' })),
+      ];
+      chips = items.slice(0, 3).map(it => `<div style="font-size:9.5px;background:${it.color};color:#fff;border-radius:4px;padding:1px 4px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(it.label)}</div>`).join('');
+      if (items.length > 3) chips += `<div style="font-size:9px;color:var(--r-warm-gray);">+${items.length - 3} more</div>`;
+    }
+    cells += `
+      <div onclick="toggleCalendarDay('${iso}')" style="min-height:64px;border-radius:8px;padding:5px;cursor:pointer;border:1.5px solid ${isSelected ? 'var(--r-gold)' : 'var(--r-stone)'};background:${isSelected ? 'rgba(201,169,110,0.12)' : 'var(--r-surface)'};">
+        <div style="font-size:11.5px;font-weight:${isToday ? '700' : '500'};color:${isToday ? 'var(--r-gold-dark)' : 'var(--r-charcoal)'};">${day}</div>
+        ${chips}
+      </div>`;
+  }
+
+  grid.innerHTML = `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px;">${dayHeaders}</div><div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;">${cells}</div>`;
 }
 
 function renderRotaTable(shifts) {
@@ -3068,11 +3173,20 @@ function findMemberIdByName(name) {
 function openAddShiftModal() {
   populateStaffNamesList();
   document.getElementById('as-staff').value = '';
-  document.getElementById('as-date').valueAsDate = new Date();
   document.getElementById('as-status').value = 'scheduled';
   document.getElementById('as-time').value = '';
   toggleShiftTimeRow();
-  updateShiftDayOfWeek();
+
+  const bulk = selectedCalendarDates.size > 0;
+  document.getElementById('as-date-row').style.display = bulk ? 'none' : 'block';
+  document.getElementById('as-bulk-summary').style.display = bulk ? 'block' : 'none';
+  if (bulk) {
+    const dates = [...selectedCalendarDates].sort();
+    document.getElementById('as-bulk-summary').textContent = `Applying to ${dates.length} selected day(s): ${dates[0]} to ${dates[dates.length - 1]}`;
+  } else {
+    document.getElementById('as-date').valueAsDate = new Date();
+    updateShiftDayOfWeek();
+  }
   openModal('add-shift-modal');
 }
 
@@ -3090,19 +3204,26 @@ function toggleShiftTimeRow() {
 
 async function submitShift() {
   const staff_name = document.getElementById('as-staff').value.trim();
-  const shift_date = document.getElementById('as-date').value;
-  const day_of_week = document.getElementById('as-day-of-week').value;
   const status = document.getElementById('as-status').value;
   const time_range = status === 'scheduled' ? document.getElementById('as-time').value.trim() : null;
-  if (!staff_name || !shift_date) { showToast('⚠ Please enter a staff name and date'); return; }
+  const bulk = selectedCalendarDates.size > 0;
+
+  if (!staff_name) { showToast('⚠ Please enter a staff name'); return; }
+  if (!bulk && !document.getElementById('as-date').value) { showToast('⚠ Please choose a date'); return; }
+
+  const payload = { staff_name, member_id: findMemberIdByName(staff_name), time_range, status };
+  if (bulk) {
+    payload.dates = [...selectedCalendarDates];
+  } else {
+    payload.shift_date = document.getElementById('as-date').value;
+    payload.day_of_week = document.getElementById('as-day-of-week').value;
+  }
 
   try {
-    await api('/staff/rota', {
-      method: 'POST',
-      body: JSON.stringify({ staff_name, member_id: findMemberIdByName(staff_name), shift_date, day_of_week, time_range, status }),
-    });
+    await api('/staff/rota', { method: 'POST', body: JSON.stringify(payload) });
     closeModal('add-shift-modal');
-    showToast('✓ Shift saved');
+    showToast(bulk ? `✓ Shift saved for ${selectedCalendarDates.size} days` : '✓ Shift saved');
+    if (bulk) clearCalendarSelection();
     loadStaffArea();
   } catch (e) {
     showToast('⚠ ' + e.message);
@@ -3122,24 +3243,37 @@ async function deleteShift(id) {
 function openAddLeaveModal() {
   populateStaffNamesList();
   document.getElementById('al-staff').value = '';
-  document.getElementById('al-date').valueAsDate = new Date();
   document.getElementById('al-code').value = 'AL';
+
+  const bulk = selectedCalendarDates.size > 0;
+  document.getElementById('al-date-row').style.display = bulk ? 'none' : 'block';
+  document.getElementById('al-bulk-summary').style.display = bulk ? 'block' : 'none';
+  if (bulk) {
+    const dates = [...selectedCalendarDates].sort();
+    document.getElementById('al-bulk-summary').textContent = `Applying to ${dates.length} selected day(s): ${dates[0]} to ${dates[dates.length - 1]}`;
+  } else {
+    document.getElementById('al-date').valueAsDate = new Date();
+  }
   openModal('add-leave-modal');
 }
 
 async function submitLeave() {
   const staff_name = document.getElementById('al-staff').value.trim();
-  const leave_date = document.getElementById('al-date').value;
   const code = document.getElementById('al-code').value;
-  if (!staff_name || !leave_date) { showToast('⚠ Please enter a staff name and date'); return; }
+  const bulk = selectedCalendarDates.size > 0;
+
+  if (!staff_name) { showToast('⚠ Please enter a staff name'); return; }
+  if (!bulk && !document.getElementById('al-date').value) { showToast('⚠ Please choose a date'); return; }
+
+  const payload = { staff_name, member_id: findMemberIdByName(staff_name), code };
+  if (bulk) payload.dates = [...selectedCalendarDates];
+  else payload.leave_date = document.getElementById('al-date').value;
 
   try {
-    await api('/staff/leave', {
-      method: 'POST',
-      body: JSON.stringify({ staff_name, member_id: findMemberIdByName(staff_name), leave_date, code }),
-    });
+    await api('/staff/leave', { method: 'POST', body: JSON.stringify(payload) });
     closeModal('add-leave-modal');
-    showToast('✓ Leave booked');
+    showToast(bulk ? `✓ Leave booked for ${selectedCalendarDates.size} days` : '✓ Leave booked');
+    if (bulk) clearCalendarSelection();
     loadStaffArea();
   } catch (e) {
     showToast('⚠ ' + e.message);
