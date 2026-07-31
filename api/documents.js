@@ -8,23 +8,33 @@ module.exports = async (req, res) => {
     const supabase = getSupabase();
 
     if (req.method === 'GET') {
+      let targetMember = member;
+      if (req.query.member_id && req.query.member_id !== member.id) {
+        if (member.user_type !== 'administrator') {
+          return res.status(403).json({ error: 'Only Staff & Admin can view another member\'s documents' });
+        }
+        const { data: target, error: targetErr } = await supabase.from('members').select('id, user_type').eq('id', req.query.member_id).maybeSingle();
+        if (targetErr || !target) return res.status(404).json({ error: 'Member not found' });
+        targetMember = target;
+      }
+
       const { data: docs, error } = await supabase
         .from('documents')
         .select('*')
         .eq('is_active', true)
-        .contains('required_for', [member.user_type])
+        .contains('required_for', [targetMember.user_type])
         .order('category');
       if (error) return res.status(500).json({ error: error.message });
 
       const { data: sigs, error: sigErr } = await supabase
         .from('document_signatures')
-        .select('document_id, version_signed, status, signed_at')
-        .eq('member_id', member.id);
+        .select('document_id, version_signed, status, signed_at, signature_name')
+        .eq('member_id', targetMember.id);
       if (sigErr) return res.status(500).json({ error: sigErr.message });
 
       const withStatus = docs.map(d => {
         const sig = sigs.find(s => s.document_id === d.id && s.version_signed === d.version && s.status === 'signed');
-        return { ...d, signed: !!sig, signed_at: sig ? sig.signed_at : null };
+        return { ...d, signed: !!sig, signed_at: sig ? sig.signed_at : null, signature_name: sig ? sig.signature_name : null };
       });
 
       return res.status(200).json({ documents: withStatus });

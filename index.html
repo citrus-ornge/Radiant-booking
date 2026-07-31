@@ -914,13 +914,38 @@ textarea.form-input { resize: vertical; }
         <label class="form-label">Password</label>
         <input type="password" class="form-input" id="login-password" placeholder="••••••••">
       </div>
-      <p style="text-align:right;margin:0 0 18px;">
+      <p style="text-align:right;margin:0 0 18px;display:flex;justify-content:space-between;">
+        <a href="#" style="font-size:12px;color:var(--r-warm-gray);" onclick="showForgotPasswordPanel();return false;">Forgot password?</a>
         <a href="#" style="font-size:12px;color:var(--r-gold-dark);" onclick="toggleMagicLinkMode();return false;" id="magic-link-toggle">Sign in with a magic link instead</a>
       </p>
 
       <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;" id="signin-btn" onclick="doSignIn()">Sign In to Radiant</button>
       <p id="auth-error" style="text-align:center;font-size:12.5px;color:var(--r-red);margin-top:12px;display:none;"></p>
       <p id="auth-info" style="text-align:center;font-size:12.5px;color:var(--r-green);margin-top:12px;display:none;"></p>
+    </div>
+
+    <!-- FORGOT PASSWORD -->
+    <div id="auth-forgot-panel" style="display:none;">
+      <p style="font-size:13px;color:var(--r-warm-gray);margin:20px 0 16px;">Enter your email and we'll send you a reset link — this only works for accounts that have already been invited and set up.</p>
+      <div class="form-row" style="margin-bottom:18px;">
+        <label class="form-label">Email</label>
+        <input type="email" class="form-input" id="forgot-email" placeholder="your@email.com">
+      </div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;" id="forgot-btn" onclick="doForgotPassword()">Send Reset Link</button>
+      <p style="text-align:center;margin-top:14px;"><a href="#" style="font-size:12px;color:var(--r-warm-gray);" onclick="hideForgotPasswordPanel();return false;">← Back to Sign In</a></p>
+      <p id="forgot-info" style="text-align:center;font-size:12.5px;color:var(--r-green);margin-top:12px;display:none;"></p>
+      <p id="forgot-error" style="text-align:center;font-size:12.5px;color:var(--r-red);margin-top:12px;display:none;"></p>
+    </div>
+
+    <!-- RESET PASSWORD (after clicking the email link) -->
+    <div id="auth-reset-panel" style="display:none;">
+      <p style="font-size:13px;color:var(--r-warm-gray);margin:20px 0 16px;">Choose a new password for your account.</p>
+      <div class="form-row" style="margin-bottom:18px;">
+        <label class="form-label">New Password</label>
+        <input type="password" class="form-input" id="reset-password" placeholder="At least 8 characters, incl. a letter and number">
+      </div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;" id="reset-btn" onclick="doResetPassword()">Set New Password</button>
+      <p id="reset-error" style="text-align:center;font-size:12.5px;color:var(--r-red);margin-top:12px;display:none;"></p>
     </div>
 
     <!-- SIGN UP (via invite link ?invite=TOKEN) -->
@@ -1725,6 +1750,10 @@ textarea.form-input { resize: vertical; }
         <label class="form-label">Google Calendar</label>
         <div id="mm-gcal-status" style="padding:10px 12px;background:var(--r-surface2);border-radius:8px;font-size:13px;"></div>
       </div>
+      <div class="form-row" id="mm-docs-row" style="display:none;">
+        <label class="form-label">Their Docs</label>
+        <div id="mm-docs-list" style="display:flex;flex-direction:column;gap:6px;"></div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" style="border-color:var(--r-red);color:var(--r-red);margin-right:auto;" onclick="confirmDeleteManagedMember()">Delete Member</button>
@@ -2135,7 +2164,38 @@ function openManageMember(id) {
     gcalEl.innerHTML = `<span class="badge badge-gray">Not connected</span>`;
   }
 
+  const docsRow = document.getElementById('mm-docs-row');
+  if (isPractitioner || m.user_type === 'administrator') {
+    docsRow.style.display = 'block';
+    loadTheirDocs(m.id);
+  } else {
+    docsRow.style.display = 'none';
+  }
+
   openModal('manage-member-modal');
+}
+
+async function loadTheirDocs(memberId) {
+  const list = document.getElementById('mm-docs-list');
+  list.innerHTML = `<div style="font-size:12px;color:var(--r-warm-gray);">Loading…</div>`;
+  try {
+    const res = await api('/documents?member_id=' + memberId);
+    const docs = res.documents || [];
+    if (docs.length === 0) {
+      list.innerHTML = `<div style="font-size:12px;color:var(--r-warm-gray);">No documents apply to this role.</div>`;
+      return;
+    }
+    list.innerHTML = docs.map(d => `
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;background:var(--r-surface2);border-radius:6px;">
+        <div style="font-size:12.5px;">${esc(d.title)}${d.signed ? ` <span style="color:var(--r-warm-gray);">— ${esc(fmtDateTime(d.signed_at))}</span>` : ''}</div>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+          <span class="badge ${d.signed ? 'badge-green' : 'badge-gray'}" style="font-size:10.5px;">${d.signed ? 'Signed' : 'Pending'}</span>
+          ${d.pdf_path ? `<a href="${esc(d.pdf_path)}" target="_blank" rel="noopener" style="font-size:11.5px;color:var(--r-gold-dark);">PDF</a>` : ''}
+        </div>
+      </div>`).join('');
+  } catch (e) {
+    list.innerHTML = `<div style="font-size:12px;color:var(--r-red);">${esc(e.message)}</div>`;
+  }
 }
 
 async function disconnectManagedMemberCalendar(memberId) {
@@ -2551,6 +2611,64 @@ function checkCalendarRedirectStatus() {
 }
 
 // ── LOGIN ──
+// ── AUTH: FORGOT / RESET PASSWORD ──
+function showForgotPasswordPanel() {
+  document.getElementById('auth-signin-panel').style.display = 'none';
+  document.getElementById('auth-forgot-panel').style.display = 'block';
+}
+function hideForgotPasswordPanel() {
+  document.getElementById('auth-forgot-panel').style.display = 'none';
+  document.getElementById('auth-signin-panel').style.display = 'block';
+}
+
+async function doForgotPassword() {
+  const email = document.getElementById('forgot-email').value.trim();
+  if (!email) { showToast('⚠ Please enter your email'); return; }
+  const btn = document.getElementById('forgot-btn');
+  btn.disabled = true;
+  document.getElementById('forgot-error').style.display = 'none';
+  try {
+    const { error } = await _sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
+    if (error) throw error;
+    // Deliberately vague either way - we never confirm/deny whether an
+    // account exists for a given email (this is what actually enforces
+    // "must be invited first": if there's no account, nothing gets sent,
+    // but we don't reveal that to whoever's asking).
+    document.getElementById('forgot-info').textContent = 'If an account exists for that email, a reset link is on its way.';
+    document.getElementById('forgot-info').style.display = 'block';
+  } catch (e) {
+    document.getElementById('forgot-error').textContent = e.message || 'Something went wrong.';
+    document.getElementById('forgot-error').style.display = 'block';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function doResetPassword() {
+  const password = document.getElementById('reset-password').value;
+  const pwError = isStrongPassword(password);
+  if (pwError) {
+    document.getElementById('reset-error').textContent = pwError;
+    document.getElementById('reset-error').style.display = 'block';
+    return;
+  }
+  const btn = document.getElementById('reset-btn');
+  btn.disabled = true;
+  try {
+    const { error } = await _sb.auth.updateUser({ password });
+    if (error) throw error;
+    showToast('✓ Password updated — signing you in');
+    const { data } = await _sb.auth.getSession();
+    document.getElementById('auth-reset-panel').style.display = 'none';
+    if (data && data.session) await bootstrapSession(data.session);
+  } catch (e) {
+    document.getElementById('reset-error').textContent = e.message || 'Could not update password.';
+    document.getElementById('reset-error').style.display = 'block';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 // ── AUTH: MAGIC LINK TOGGLE ──
 let magicLinkMode = false;
 function toggleMagicLinkMode() {
@@ -2579,7 +2697,7 @@ async function doSignIn() {
 
   try {
     if (magicLinkMode) {
-      const { error } = await _sb.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin } });
+      const { error } = await _sb.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin, shouldCreateUser: false } });
       if (error) throw error;
       showAuthInfo('Check your email for a sign-in link.');
     } else {
@@ -3824,6 +3942,16 @@ checkCalendarRedirectStatus();
 _sb.auth.onAuthStateChange((event, session) => {
   if (event === 'SIGNED_OUT') {
     currentSession = null;
+  }
+  if (event === 'PASSWORD_RECOVERY') {
+    document.getElementById('app-shell').style.display = 'none';
+    document.getElementById('onboarding-screen').style.display = 'none';
+    const login = document.getElementById('login-screen');
+    login.style.display = 'flex';
+    document.getElementById('auth-signin-panel').style.display = 'none';
+    document.getElementById('auth-signup-panel').style.display = 'none';
+    document.getElementById('auth-forgot-panel').style.display = 'none';
+    document.getElementById('auth-reset-panel').style.display = 'block';
   }
 });
 </script>
