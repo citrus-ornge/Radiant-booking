@@ -1077,11 +1077,17 @@ textarea.form-input { resize: vertical; }
         <button class="nav-item" onclick="showView('messages')">
           <span class="nav-icon">✉</span> Messages <span class="notif-dot" id="admin-msg-dot" style="display:none;"></span>
         </button>
+        <button class="nav-item" onclick="showView('my-documents')">
+          <span class="nav-icon">📄</span> My Documents
+        </button>
       </div>
       <div class="sidebar-section">
         <div class="sidebar-section-label">System</div>
         <button class="nav-item" onclick="showView('notifications')">
           <span class="nav-icon">◉</span> Notifications <span class="notif-dot"></span>
+        </button>
+        <button class="nav-item" onclick="showView('audit-log')">
+          <span class="nav-icon">🕓</span> Audit Log
         </button>
         <button class="nav-item" onclick="showView('settings')">
           <span class="nav-icon">⚙</span> Settings
@@ -1096,6 +1102,9 @@ textarea.form-input { resize: vertical; }
         </button>
         <button class="nav-item" onclick="showClientView('book-room')">
           <span class="nav-icon">⬡</span> Book a Room
+        </button>
+        <button class="nav-item" id="client-my-docs-btn" onclick="showClientView('my-documents')" style="display:none;">
+          <span class="nav-icon">📄</span> My Documents
         </button>
         <button class="nav-item" onclick="showClientView('messages')">
           <span class="nav-icon">✉</span> Messages <span class="notif-dot" id="client-msg-dot" style="display:none;"></span>
@@ -1260,7 +1269,11 @@ textarea.form-input { resize: vertical; }
           <div class="card">
             <div class="card-header"><div class="card-title">New Invitation</div></div>
             <div style="padding:20px 22px;">
-              <div class="form-row"><label class="form-label">Email Address</label><input type="email" class="form-input" placeholder="member@email.com" id="invite-email"></div>
+              <div class="form-row">
+                <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:8px;"><input type="checkbox" id="invite-bulk-toggle" onchange="toggleBulkInvite()"> Invite multiple people at once</label>
+              </div>
+              <div class="form-row" id="invite-email-row"><label class="form-label">Email Address</label><input type="email" class="form-input" placeholder="member@email.com" id="invite-email"></div>
+              <div class="form-row" id="invite-bulk-row" style="display:none;"><label class="form-label">Email Addresses (one per line, up to 50)</label><textarea class="form-input" id="invite-bulk-emails" rows="5" placeholder="jane@example.com&#10;john@example.com"></textarea></div>
               <div class="form-row"><label class="form-label">User Type</label>
                 <select class="form-input" id="invite-type" onchange="toggleInviteOwnerRow('invite')">
                   <option value="practitioner">Practitioner</option><option value="member">Member</option><option value="guest">Guest</option><option value="administrator">Staff & Admin</option>
@@ -1436,6 +1449,35 @@ textarea.form-input { resize: vertical; }
                 <button class="btn btn-primary" onclick="sendThreadReply()">Send</button>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════ MY DOCUMENTS (shared: Staff & Admin + Practitioner) ════ -->
+      <div class="view-section" id="view-my-documents">
+        <div class="page-header">
+          <div><div class="page-title">My Documents</div><div class="gold-line"></div><div class="page-sub">Your signed onboarding &amp; policy documents</div></div>
+        </div>
+        <div class="card">
+          <div id="my-documents-page-list" style="padding:8px 0;">
+            <div style="padding:18px 22px;color:var(--r-warm-gray);font-size:13px;">Loading…</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════ AUDIT LOG (admin only) ════ -->
+      <div class="view-section" id="view-audit-log">
+        <div class="page-header">
+          <div><div class="page-title">Audit Log</div><div class="gold-line"></div><div class="page-sub">Recent admin activity across the platform</div></div>
+        </div>
+        <div class="card">
+          <div class="table-scroll">
+          <table>
+            <thead><tr><th>When</th><th>Who</th><th>Action</th><th>Details</th></tr></thead>
+            <tbody id="audit-log-table">
+              <tr><td colspan="4" style="text-align:center;color:var(--r-warm-gray);padding:20px;">Loading…</td></tr>
+            </tbody>
+          </table>
           </div>
         </div>
       </div>
@@ -3082,6 +3124,7 @@ function setupClientView(type) {
   document.getElementById('client-nav').style.display = 'block';
   document.getElementById('topbar-cta').textContent = '+ Book Room';
   document.getElementById('topbar-cta').onclick = () => showClientView('book-room');
+  document.getElementById('client-my-docs-btn').style.display = type === 'practitioner' ? 'flex' : 'none';
 
   const m = state.currentMember;
   const displayName = m ? `${m.first_name || ''} ${m.last_name || ''}`.trim() || m.email : '';
@@ -3093,8 +3136,8 @@ function setupClientView(type) {
 }
 
 // ── NAVIGATION ──
-const adminViews = { dashboard:'Dashboard', bookings:'All Bookings', rooms:'Rooms & Spaces', members:'Members', invite:'Invite Users', 'staff-area':'Staff Area', messages:'Messages', notifications:'Notifications', settings:'Settings' };
-const clientViews = { 'my-bookings':'My Bookings', 'book-room':'Book a Room', messages:'Messages', profile:'My Profile' };
+const adminViews = { dashboard:'Dashboard', bookings:'All Bookings', rooms:'Rooms & Spaces', members:'Members', invite:'Invite Users', 'staff-area':'Staff Area', messages:'Messages', 'my-documents':'My Documents', notifications:'Notifications', 'audit-log':'Audit Log', settings:'Settings' };
+const clientViews = { 'my-bookings':'My Bookings', 'book-room':'Book a Room', 'my-documents':'My Documents', messages:'Messages', profile:'My Profile' };
 
 let navHistory = ['dashboard']; // tracks in-app view stack for the back button
 
@@ -3111,6 +3154,8 @@ function _activateView(name, viewsMap, navSelector, containerSelector) {
   closeSidebar();
   if (name === 'staff-area') loadStaffArea();
   if (name === 'messages') loadConversations();
+  if (name === 'my-documents') loadMyDocuments('my-documents-page-list');
+  if (name === 'audit-log') loadAuditLog();
 }
 
 function updateBackButton(name) {
@@ -3165,18 +3210,18 @@ window.addEventListener('popstate', (event) => {
   }
 });
 
-async function loadMyDocuments() {
-  const el = document.getElementById('my-documents-list');
+async function loadMyDocuments(targetId) {
+  const el = document.getElementById(targetId || 'my-documents-list');
   if (!el) return;
   try {
     const res = await api('/documents');
     const docs = res.documents || [];
     if (docs.length === 0) {
-      el.innerHTML = `<div style="color:var(--r-warm-gray);font-size:13px;">No documents apply to your role.</div>`;
+      el.innerHTML = `<div style="padding:18px 22px;color:var(--r-warm-gray);font-size:13px;">No documents apply to your role yet.</div>`;
       return;
     }
     el.innerHTML = docs.map(d => `
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--r-stone);">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 22px;border-bottom:1px solid var(--r-stone);">
         <div style="flex:1;">
           <div style="font-size:13.5px;font-weight:500;">${esc(d.title)}</div>
           <div style="font-size:12px;color:var(--r-warm-gray);margin-top:2px;">
@@ -3187,7 +3232,34 @@ async function loadMyDocuments() {
         ${d.pdf_path ? `<a class="btn btn-outline btn-sm" href="${esc(d.pdf_path)}" target="_blank" rel="noopener">Download PDF</a>` : ''}
       </div>`).join('');
   } catch (e) {
-    el.innerHTML = `<div style="color:var(--r-red);font-size:13px;">Could not load documents: ${esc(e.message)}</div>`;
+    el.innerHTML = `<div style="padding:18px 22px;color:var(--r-red);font-size:13px;">Could not load documents: ${esc(e.message)}</div>`;
+  }
+}
+
+async function loadAuditLog() {
+  const tbody = document.getElementById('audit-log-table');
+  try {
+    const res = await api('/audit-log');
+    const entries = res.entries || [];
+    if (entries.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--r-warm-gray);padding:20px;">No activity recorded yet.</td></tr>`;
+      return;
+    }
+    const actionLabel = {
+      'member.updated': 'Updated member', 'member.deleted': 'Deleted member',
+      'booking.cancelled': 'Cancelled booking', 'booking.updated': 'Updated booking',
+      'invite.sent': 'Sent invite', 'room.created': 'Added room', 'room.updated': 'Updated room',
+      'document.created': 'Created document', 'document.updated': 'Updated document', 'document.deactivated': 'Removed document',
+    };
+    tbody.innerHTML = entries.map(e => `
+      <tr>
+        <td style="white-space:nowrap;color:var(--r-warm-gray);">${esc(timeAgo(e.created_at))}</td>
+        <td>${esc(e.actor_name || 'System')}</td>
+        <td>${esc(actionLabel[e.action] || e.action)}</td>
+        <td style="color:var(--r-warm-gray);font-size:12px;">${esc(e.details ? JSON.stringify(e.details) : '')}</td>
+      </tr>`).join('');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="4" style="color:var(--r-red);padding:16px;">${esc(e.message)}</td></tr>`;
   }
 }
 
@@ -3877,11 +3949,35 @@ async function sendInviteModal() {
   }
 }
 
+function toggleBulkInvite() {
+  const bulk = document.getElementById('invite-bulk-toggle').checked;
+  document.getElementById('invite-email-row').style.display = bulk ? 'none' : 'block';
+  document.getElementById('invite-bulk-row').style.display = bulk ? 'block' : 'none';
+}
+
 async function sendInviteFromPage() {
-  const email = document.getElementById('invite-email').value;
+  const bulk = document.getElementById('invite-bulk-toggle').checked;
   const user_type = document.getElementById('invite-type').value;
   const personal_note = document.getElementById('invite-note').value;
   const is_owner = user_type === 'administrator' && document.getElementById('invite-is-owner').checked;
+
+  if (bulk) {
+    const raw = document.getElementById('invite-bulk-emails').value;
+    const emails = raw.split('\n').map(e => e.trim()).filter(Boolean);
+    if (emails.length === 0) { showToast('⚠ Please enter at least one email address'); return; }
+    try {
+      const result = await api('/invites', { method: 'POST', body: JSON.stringify({ emails, user_type, personal_note, is_owner }) });
+      showToast(`✓ ${result.sent} invite(s) sent${result.failed ? `, ${result.failed} failed` : ''}`);
+      document.getElementById('invite-bulk-emails').value = '';
+      document.getElementById('invite-note').value = '';
+      loadAppData();
+    } catch (e) {
+      showToast('⚠ ' + e.message);
+    }
+    return;
+  }
+
+  const email = document.getElementById('invite-email').value;
   if (!email) { showToast('⚠ Please enter an email address'); return; }
 
   try {

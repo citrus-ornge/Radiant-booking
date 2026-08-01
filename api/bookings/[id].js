@@ -1,6 +1,7 @@
 const { getSupabase } = require('../_lib/supabase');
 const { sendCancellationAlert } = require('../_lib/email');
 const { requireAuth } = require('../_lib/auth');
+const { logAudit } = require('../_lib/audit');
 
 module.exports = async (req, res) => {
   const { id } = req.query;
@@ -37,6 +38,12 @@ module.exports = async (req, res) => {
       `)
       .single();
     if (error) return res.status(500).json({ error: error.message });
+
+    logAudit({
+      actorId: requester.id, actorName: `${requester.first_name} ${requester.last_name}`.trim(),
+      action: status === 'cancelled' ? 'booking.cancelled' : 'booking.updated', entityType: 'booking', entityId: id,
+      details: { status, room: booking.room ? booking.room.name : null },
+    });
 
     let email_sent = false;
     if (status === 'cancelled') {

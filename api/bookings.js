@@ -43,6 +43,27 @@ module.exports = async (req, res) => {
       return res.status(403).json({ error: 'You can only create bookings for yourself' });
     }
 
+    // Room booking rules: min/max duration and blackout dates
+    const { data: roomRules, error: roomErr } = await supabase
+      .from('rooms')
+      .select('name, min_duration_minutes, max_duration_minutes, blackout_dates')
+      .eq('id', room_id)
+      .maybeSingle();
+    if (roomErr) return res.status(500).json({ error: roomErr.message });
+    if (roomRules) {
+      const durationMinutes = (new Date(end_time) - new Date(start_time)) / 60000;
+      if (roomRules.min_duration_minutes && durationMinutes < roomRules.min_duration_minutes) {
+        return res.status(400).json({ error: `${roomRules.name} requires a minimum booking of ${roomRules.min_duration_minutes} minutes` });
+      }
+      if (roomRules.max_duration_minutes && durationMinutes > roomRules.max_duration_minutes) {
+        return res.status(400).json({ error: `${roomRules.name} allows a maximum booking of ${roomRules.max_duration_minutes} minutes` });
+      }
+      const bookingDateStr = new Date(start_time).toISOString().slice(0, 10);
+      if (roomRules.blackout_dates && roomRules.blackout_dates.includes(bookingDateStr)) {
+        return res.status(400).json({ error: `${roomRules.name} is unavailable on ${bookingDateStr}` });
+      }
+    }
+
     // Overlap check: reject if the room already has a confirmed/pending
     // booking that overlaps the requested window.
     const { data: clashes, error: clashErr } = await supabase

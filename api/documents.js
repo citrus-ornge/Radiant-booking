@@ -1,5 +1,6 @@
 const { getSupabase } = require('./_lib/supabase');
 const { requireAuth } = require('./_lib/auth');
+const { logAudit } = require('./_lib/audit');
 
 module.exports = async (req, res) => {
   try {
@@ -8,6 +9,15 @@ module.exports = async (req, res) => {
     const supabase = getSupabase();
 
     if (req.method === 'GET') {
+      if (req.query.all === 'true') {
+        if (member.user_type !== 'administrator') {
+          return res.status(403).json({ error: 'Only Staff & Admin can view all documents' });
+        }
+        const { data: allDocs, error: allErr } = await supabase.from('documents').select('*').order('category').order('title');
+        if (allErr) return res.status(500).json({ error: allErr.message });
+        return res.status(200).json({ documents: allDocs });
+      }
+
       let targetMember = member;
       if (req.query.member_id && req.query.member_id !== member.id) {
         if (member.user_type !== 'administrator') {
@@ -57,6 +67,7 @@ module.exports = async (req, res) => {
         .upsert({
           document_id: doc.id, member_id: member.id, version_signed: doc.version,
           signature_name: signature_name.trim(), ip_address: ip, status: 'signed',
+          title_snapshot: doc.title, content_snapshot: doc.content,
         }, { onConflict: 'document_id,member_id,version_signed' })
         .select()
         .single();
@@ -81,6 +92,85 @@ module.exports = async (req, res) => {
       }
 
       return res.status(200).json({ signature: sig, onboarding_status });
+    }
+
+    if (req.method === 'PUT') {
+      // Admin: create a new document
+      if (member.user_type !== 'administrator') {
+        return res.status(403).json({ error: 'Only Staff & Admin can create documents' });
+      }
+      const { title, category, content, required_for } = req.body || {};
+      if (!title || !category || !content || !Array.isArray(required_for) || required_for.length === 0) {
+        return res.status(400).json({ error: 'title, category, content, and at least one required_for role are required' });
+      }
+      const { data, error } = await supabase
+        .from('documents')
+        .insert({ title, category, content, required_for, version: 1, is_active: true })
+        .select()
+        .single();
+      if (error) return res.status(500).json({ error: error.message });
+
+      logAudit({
+        actorId: member.id, actorName: `${member.first_name} ${member.last_name}`.trim(),
+        action: 'document.created', entityType: 'document', entityId: data.id, details: { title },
+      });
+
+      return res.status(201).json({ document: data });
+    }
+
+    if (req.method === 'PATCH') {
+      // Admin: edit a document. Changing the content bumps the version,
+      // which means everyone who already signed the old version now shows
+      // as needing to re-sign - correct, since what they agreed to changed.
+      if (member.user_type !== 'administrator') {
+        return res.status(403).json({ error: 'Only Staff & Admin can edit documents' });
+      }
+      const { id, title, category, content, required_for, is_active } = req.body || {};
+      if (!id) return res.status(400).json({ error: 'id is required' });
+
+      const { data: existing, error: fetchErr } = await supabase.from('documents').select('*').eq('id', id).single();
+      if (fetchErr) return res.status(404).json({ error: 'Document not found' });
+
+      const updates = {};
+      if (title !== undefined) updates.title = title;
+      if (category !== undefined) updates.category = category;
+      if (required_for !== undefined) updates.required_for = required_for;
+      if (is_active !== undefined) updates.is_active = is_active;
+      if (content !== undefined && content !== existing.content) {
+        updates.content = content;
+        updates.version = existing.version + 1;
+      }
+
+      const { data, error } = await supabase.from('documents').update(updates).eq('id', id).select().single();
+      if (error) return res.status(500).json({ error: error.message });
+
+      logAudit({
+        actorId: member.id, actorName: `${member.first_name} ${member.last_name}`.trim(),
+        action: 'document.updated', entityType: 'document', entityId: id,
+        details: { fields: Object.keys(updates), version_bumped: updates.version !== undefined },
+      });
+
+      return res.status(200).json({ document: data });
+    }
+
+    if (req.method === 'DELETE') {
+      // Soft-delete: deactivate rather than hard-delete, so past signatures
+      // remain valid historical records.
+      if (member.user_type !== 'administrator') {
+        return res.status(403).json({ error: 'Only Staff & Admin can remove documents' });
+      }
+      const { id } = req.body || {};
+      if (!id) return res.status(400).json({ error: 'id is required' });
+
+      const { error } = await supabase.from('documents').update({ is_active: false }).eq('id', id);
+      if (error) return res.status(500).json({ error: error.message });
+
+      logAudit({
+        actorId: member.id, actorName: `${member.first_name} ${member.last_name}`.trim(),
+        action: 'document.deactivated', entityType: 'document', entityId: id,
+      });
+
+      return res.status(200).json({ deactivated: true });
     }
 
     res.status(405).json({ error: 'Method not allowed' });

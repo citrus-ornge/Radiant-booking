@@ -1,5 +1,6 @@
 const { getSupabase } = require('./_lib/supabase');
 const { requireAuth } = require('./_lib/auth');
+const { logAudit } = require('./_lib/audit');
 
 const ADMIN_EDITABLE_FIELDS = [
   'first_name', 'last_name', 'phone', 'qualifications', 'specialties',
@@ -65,6 +66,13 @@ module.exports = async (req, res) => {
 
       const { data, error } = await supabase.from('members').update(updates).eq('id', id).select().single();
       if (error) return res.status(500).json({ error: error.message });
+      if (isAdmin) {
+        logAudit({
+          actorId: requester.id, actorName: `${requester.first_name} ${requester.last_name}`.trim(),
+          action: 'member.updated', entityType: 'member', entityId: id,
+          details: { fields: Object.keys(updates), target_name: `${data.first_name} ${data.last_name}`.trim() },
+        });
+      }
       return res.status(200).json({ member: data });
     } catch (e) {
       return res.status(e.status || 500).json({ error: e.message });
@@ -83,11 +91,17 @@ module.exports = async (req, res) => {
         return res.status(400).json({ error: 'Use the Profile page to delete your own account' });
       }
 
-      const { data: target, error: fetchErr } = await supabase.from('members').select('auth_user_id').eq('id', id).single();
+      const { data: target, error: fetchErr } = await supabase.from('members').select('auth_user_id, first_name, last_name, email').eq('id', id).single();
       if (fetchErr) return res.status(404).json({ error: 'Member not found' });
 
       const { error } = await supabase.from('members').delete().eq('id', id);
       if (error) return res.status(500).json({ error: error.message });
+
+      logAudit({
+        actorId: requester.id, actorName: `${requester.first_name} ${requester.last_name}`.trim(),
+        action: 'member.deleted', entityType: 'member', entityId: id,
+        details: { target_name: `${target.first_name} ${target.last_name}`.trim(), target_email: target.email },
+      });
 
       if (target.auth_user_id) {
         try {

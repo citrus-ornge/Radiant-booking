@@ -2,6 +2,7 @@ const { getSupabase } = require('./_lib/supabase');
 const { sendInvite } = require('./_lib/email');
 const { requireAuth } = require('./_lib/auth');
 const { checkRateLimit } = require('./_lib/rateLimit');
+const { logAudit } = require('./_lib/audit');
 
 module.exports = async (req, res) => {
   const supabase = getSupabase();
@@ -49,33 +50,60 @@ module.exports = async (req, res) => {
       return res.status(e.status || 401).json({ error: e.message });
     }
 
+    const { email, emails, user_type, personal_note, is_owner } = req.body || {};
+    const emailList = Array.isArray(emails) && emails.length > 0
+      ? emails.map(e => e.trim()).filter(Boolean)
+      : (email ? [email.trim()] : []);
+    if (emailList.length === 0 || !user_type) {
+      return res.status(400).json({ error: 'At least one email and user_type are required' });
+    }
+    if (emailList.length > 50) {
+      return res.status(400).json({ error: 'Please invite up to 50 people at a time' });
+    }
+
     const allowed = await checkRateLimit(`invite_create:${requester.id}`, 20, 3600);
     if (!allowed) {
       return res.status(429).json({ error: 'Too many invites sent recently. Please wait a while before sending more.' });
     }
 
-    const { email, user_type, personal_note, is_owner } = req.body || {};
-    if (!email || !user_type) return res.status(400).json({ error: 'email and user_type are required' });
-
-    const { data: invite, error } = await supabase
-      .from('invites')
-      .insert({ email, user_type, personal_note, is_owner: !!is_owner })
-      .select()
-      .single();
-    if (error) return res.status(500).json({ error: error.message });
-
     const baseUrl = process.env.PUBLIC_APP_URL || 'https://radiant-booking.vercel.app';
-    const inviteUrl = `${baseUrl}/?invite=${invite.token}`;
+    const results = [];
 
-    let email_sent = false;
-    try {
-      await sendInvite({ to: email, userType: user_type, note: personal_note, inviteUrl });
-      email_sent = true;
-    } catch (e) {
-      // invite record still created even if email delivery fails
+    for (const oneEmail of emailList) {
+      const { data: invite, error } = await supabase
+        .from('invites')
+        .insert({ email: oneEmail, user_type, personal_note, is_owner: !!is_owner })
+        .select()
+        .single();
+      if (error) {
+        results.push({ email: oneEmail, ok: false, error: error.message });
+        continue;
+      }
+
+      logAudit({
+        actorId: requester.id, actorName: `${requester.first_name} ${requester.last_name}`.trim(),
+        action: 'invite.sent', entityType: 'invite', entityId: invite.id,
+        details: { email: oneEmail, user_type, is_owner: !!is_owner },
+      });
+
+      const inviteUrl = `${baseUrl}/?invite=${invite.token}`;
+      let email_sent = false;
+      try {
+        await sendInvite({ to: oneEmail, userType: user_type, note: personal_note, inviteUrl });
+        email_sent = true;
+      } catch (e) {
+        // invite record still created even if email delivery fails
+      }
+      results.push({ email: oneEmail, ok: true, invite, email_sent });
     }
 
-    return res.status(201).json({ invite, email_sent });
+    if (emailList.length === 1) {
+      const r = results[0];
+      if (!r.ok) return res.status(500).json({ error: r.error });
+      return res.status(201).json({ invite: r.invite, email_sent: r.email_sent });
+    }
+
+    return res.status(201).json({ results, sent: results.filter(r => r.ok).length, failed: results.filter(r => !r.ok).length });
   }
 
   res.status(405).json({ error: 'Method not allowed' });
