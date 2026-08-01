@@ -1866,6 +1866,29 @@ textarea.form-input { resize: vertical; }
 </div>
 <datalist id="staff-names-list"></datalist>
 
+<!-- DAY ITEM DETAIL -->
+<div class="modal-overlay" id="day-item-detail-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div><div class="modal-title" id="did-title">Details</div></div>
+      <button class="close-btn" onclick="closeModal('day-item-detail-modal')">✕</button>
+    </div>
+    <div class="modal-body" id="did-body"></div>
+    <div class="modal-footer" id="did-footer"></div>
+  </div>
+</div>
+
+<!-- DAY SUMMARY (when more than 3 people on one day) -->
+<div class="modal-overlay" id="day-summary-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div><div class="modal-title" id="ds-title">This Day</div></div>
+      <button class="close-btn" onclick="closeModal('day-summary-modal')">✕</button>
+    </div>
+    <div class="modal-body" id="ds-body" style="padding:10px 0;"></div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="new-message-modal">
   <div class="modal">
     <div class="modal-header">
@@ -3367,6 +3390,66 @@ function clearCalendarSelection() {
   renderStaffCalendar();
 }
 
+function showDayItemDetail(type, id) {
+  const item = type === 'shift'
+    ? staffAreaData.shifts.find(s => s.id === id)
+    : staffAreaData.leave.find(l => l.id === id);
+  if (!item) { showToast('⚠ Could not find that entry'); return; }
+
+  const dateStr = new Date(type === 'shift' ? item.shift_date : item.leave_date).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+  if (type === 'shift') {
+    const statusLabel = { scheduled: 'Working', closed: 'Closed', annual_leave: 'Annual Leave', tbc: 'TBC' }[item.status] || item.status;
+    document.getElementById('did-title').textContent = 'Shift Details';
+    document.getElementById('did-body').innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:10px;font-size:13.5px;">
+        <div><strong>${esc(item.staff_name)}</strong></div>
+        <div style="color:var(--r-warm-gray);">${esc(dateStr)}</div>
+        <div>Status: <span class="badge ${item.status === 'annual_leave' ? 'badge-gold' : (item.status === 'closed' ? 'badge-gray' : 'badge-green')}">${esc(statusLabel)}</span></div>
+        ${item.time_range ? `<div>Time: ${esc(item.time_range)}</div>` : ''}
+      </div>`;
+    document.getElementById('did-footer').innerHTML = `
+      <button class="btn btn-outline" onclick="closeModal('day-item-detail-modal')">Close</button>
+      <button class="btn btn-outline" style="border-color:var(--r-red);color:var(--r-red);" onclick="closeModal('day-item-detail-modal');deleteShift('${item.id}')">Remove Shift</button>`;
+  } else {
+    const codeLabel = { AL: 'Annual Leave', BH: 'Bank Holiday', SICK: 'Sick Leave', OTHER: 'Leave' }[item.code] || item.code;
+    const statusLabel = { pending: 'Pending Approval', approved: 'Approved', declined: 'Declined' }[item.status] || item.status;
+    document.getElementById('did-title').textContent = 'Leave Details';
+    document.getElementById('did-body').innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:10px;font-size:13.5px;">
+        <div><strong>${esc(item.staff_name)}</strong></div>
+        <div style="color:var(--r-warm-gray);">${esc(dateStr)}</div>
+        <div>Type: ${esc(codeLabel)}</div>
+        <div>Status: <span class="badge ${item.status === 'approved' ? 'badge-green' : (item.status === 'declined' ? 'badge-red' : 'badge-gray')}">${esc(statusLabel)}</span></div>
+      </div>`;
+    const footerButtons = [`<button class="btn btn-outline" onclick="closeModal('day-item-detail-modal')">Close</button>`];
+    if (item.status === 'pending') {
+      footerButtons.push(`<button class="btn btn-outline" style="border-color:var(--r-red);color:var(--r-red);" onclick="closeModal('day-item-detail-modal');respondToLeaveRequest('${item.approval_token}','decline')">Decline</button>`);
+      footerButtons.push(`<button class="btn btn-primary" onclick="closeModal('day-item-detail-modal');respondToLeaveRequest('${item.approval_token}','approve')">Approve</button>`);
+    } else {
+      footerButtons.push(`<button class="btn btn-outline" style="border-color:var(--r-red);color:var(--r-red);" onclick="closeModal('day-item-detail-modal');deleteLeave('${item.id}')">Remove</button>`);
+    }
+    document.getElementById('did-footer').innerHTML = footerButtons.join('');
+  }
+  openModal('day-item-detail-modal');
+}
+
+function showDaySummary(iso) {
+  const dateStr = new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  document.getElementById('ds-title').textContent = dateStr;
+
+  const shifts = staffAreaData.shifts.filter(s => s.shift_date === iso);
+  const leave = staffAreaData.leave.filter(l => l.leave_date === iso);
+  const rows = [
+    ...shifts.map(s => ({ type: 'shift', id: s.id, label: `${s.staff_name} — ${s.status === 'scheduled' ? (s.time_range || 'Working') : s.status}` })),
+    ...leave.map(l => ({ type: 'leave', id: l.id, label: `${l.staff_name} — ${l.code}${l.status === 'pending' ? ' (pending)' : ''}` })),
+  ];
+  document.getElementById('ds-body').innerHTML = rows.map(r => `
+    <div style="padding:10px 22px;border-bottom:1px solid var(--r-stone);cursor:pointer;font-size:13.5px;" onclick="closeModal('day-summary-modal');showDayItemDetail('${r.type}','${r.id}')">${esc(r.label)}</div>
+  `).join('');
+  openModal('day-summary-modal');
+}
+
 function renderStaffCalendar() {
   const grid = document.getElementById('staff-calendar-grid');
   if (!grid) return;
@@ -3395,18 +3478,21 @@ function renderStaffCalendar() {
     let chips = '';
     if (entry) {
       const items = [
-        ...entry.shifts.map(s => ({ label: s.staff_name.split(' ')[0], color: s.status === 'annual_leave' ? 'var(--r-gold)' : (s.status === 'closed' ? 'var(--r-warm-gray)' : 'var(--r-green)') })),
+        ...entry.shifts.map(s => ({ type: 'shift', id: s.id, label: s.staff_name.split(' ')[0], color: s.status === 'annual_leave' ? 'var(--r-gold)' : (s.status === 'closed' ? 'var(--r-warm-gray)' : 'var(--r-green)') })),
         ...entry.leave.map(l => ({
+          type: 'leave', id: l.id,
           label: l.staff_name.split(' ')[0] + (l.status === 'pending' ? ' (pending)' : ''),
           color: l.status === 'declined' ? 'var(--r-warm-gray)' : (l.code === 'BH' ? 'var(--r-blue,#4a7ba6)' : 'var(--r-gold)'),
           dashed: l.status === 'pending',
         })),
       ];
-      chips = items.slice(0, 3).map(it => it.dashed
-        ? `<div style="font-size:9.5px;border:1.5px dashed ${it.color};color:${it.color};border-radius:4px;padding:0.5px 4px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(it.label)}</div>`
-        : `<div style="font-size:9.5px;background:${it.color};color:#fff;border-radius:4px;padding:1px 4px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(it.label)}</div>`
-      ).join('');
-      if (items.length > 3) chips += `<div style="font-size:9px;color:var(--r-warm-gray);">+${items.length - 3} more</div>`;
+      chips = items.slice(0, 3).map(it => {
+        const clickAttr = `onclick="event.stopPropagation();showDayItemDetail('${it.type}','${it.id}')"`;
+        return it.dashed
+          ? `<div ${clickAttr} style="font-size:9.5px;border:1.5px dashed ${it.color};color:${it.color};border-radius:4px;padding:0.5px 4px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;">${esc(it.label)}</div>`
+          : `<div ${clickAttr} style="font-size:9.5px;background:${it.color};color:#fff;border-radius:4px;padding:1px 4px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;">${esc(it.label)}</div>`;
+      }).join('');
+      if (items.length > 3) chips += `<div onclick="event.stopPropagation();showDaySummary('${iso}')" style="font-size:9px;color:var(--r-warm-gray);cursor:pointer;text-decoration:underline;">+${items.length - 3} more</div>`;
     }
     cells += `
       <div onclick="toggleCalendarDay('${iso}')" style="min-height:64px;border-radius:8px;padding:5px;cursor:pointer;border:1.5px solid ${isSelected ? 'var(--r-gold)' : 'var(--r-stone)'};background:${isSelected ? 'rgba(201,169,110,0.12)' : 'var(--r-surface)'};">
