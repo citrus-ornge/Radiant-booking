@@ -1196,22 +1196,17 @@ textarea.form-input { resize: vertical; }
           <button class="btn btn-primary" onclick="openModal('new-booking-modal')">+ New Booking</button>
         </div>
         <div class="tabs">
-          <button class="tab active" onclick="filterTab(this)">All</button>
-          <button class="tab" onclick="filterTab(this)">Confirmed</button>
-          <button class="tab" onclick="filterTab(this)">Pending</button>
-          <button class="tab" onclick="filterTab(this)">Cancelled</button>
+          <button class="tab active" onclick="filterBookingsTab('all', this)">All</button>
+          <button class="tab" onclick="filterBookingsTab('confirmed', this)">Confirmed</button>
+          <button class="tab" onclick="filterBookingsTab('pending', this)">Pending</button>
+          <button class="tab" onclick="filterBookingsTab('cancelled', this)">Cancelled</button>
         </div>
         <div class="card">
           <div class="table-scroll">
           <table>
             <thead><tr><th>Room</th><th>Member</th><th>Type</th><th>Date &amp; Time</th><th>Duration</th><th>Status</th><th>Actions</th></tr></thead>
             <tbody id="bookings-table">
-              <tr><td><strong>Amber Room</strong></td><td>Dr. Linda Chen</td><td><span class="badge badge-blue">Practitioner</span></td><td>30 Apr · 10:00–12:00</td><td>2 hrs</td><td><span class="badge badge-green">Confirmed</span></td><td><button class="btn btn-ghost btn-sm" onclick="openModal('new-booking-modal')">Edit</button></td></tr>
-              <tr><td><strong>Jade Suite</strong></td><td>Priya Nair</td><td><span class="badge badge-gold">Member</span></td><td>30 Apr · 14:00–16:00</td><td>2 hrs</td><td><span class="badge badge-gold">Pending</span></td><td><button class="btn btn-ghost btn-sm" onclick="openModal('new-booking-modal')">Edit</button></td></tr>
-              <tr><td><strong>Pearl Room</strong></td><td>Marcus Liu</td><td><span class="badge badge-blue">Practitioner</span></td><td>2 May · 09:00–11:00</td><td>2 hrs</td><td><span class="badge badge-green">Confirmed</span></td><td><button class="btn btn-ghost btn-sm" onclick="openModal('new-booking-modal')">Edit</button></td></tr>
-              <tr><td><strong>Amber Room</strong></td><td>Sophie Walsh</td><td><span class="badge badge-gold">Member</span></td><td>3 May · 11:00–13:00</td><td>2 hrs</td><td><span class="badge badge-green">Confirmed</span></td><td><button class="btn btn-ghost btn-sm" onclick="openModal('new-booking-modal')">Edit</button></td></tr>
-              <tr><td><strong>Onyx Studio</strong></td><td>Tom Reeves</td><td><span class="badge badge-gray">Guest</span></td><td>5 May · 15:00–16:00</td><td>1 hr</td><td><span class="badge badge-red">Cancelled</span></td><td><button class="btn btn-ghost btn-sm" onclick="openModal('new-booking-modal')">Edit</button></td></tr>
-              <tr><td><strong>Quartz Suite</strong></td><td>Dr. Linda Chen</td><td><span class="badge badge-blue">Practitioner</span></td><td>7 May · 13:00–15:00</td><td>2 hrs</td><td><span class="badge badge-green">Confirmed</span></td><td><button class="btn btn-ghost btn-sm" onclick="openModal('new-booking-modal')">Edit</button></td></tr>
+              <tr><td colspan="7" style="text-align:center;color:var(--r-warm-gray);padding:20px;">Loading…</td></tr>
             </tbody>
           </table>
           </div>
@@ -1239,21 +1234,17 @@ textarea.form-input { resize: vertical; }
           </div>
         </div>
         <div class="tabs">
-          <button class="tab active" onclick="filterTab(this)">All</button>
-          <button class="tab" onclick="filterTab(this)">Practitioners</button>
-          <button class="tab" onclick="filterTab(this)">Members</button>
-          <button class="tab" onclick="filterTab(this)">Guests</button>
+          <button class="tab active" onclick="filterMembersTab('all', this)">All</button>
+          <button class="tab" onclick="filterMembersTab('practitioner', this)">Practitioners</button>
+          <button class="tab" onclick="filterMembersTab('member', this)">Members</button>
+          <button class="tab" onclick="filterMembersTab('guest', this)">Guests</button>
         </div>
         <div class="card">
           <div class="table-scroll">
           <table>
             <thead><tr><th>Name</th><th>Email</th><th>Type</th><th>Joined</th><th>Bookings</th><th>Status</th><th></th></tr></thead>
             <tbody id="members-table">
-              <tr><td><div style="display:flex;align-items:center;gap:10px;"><div class="avatar" style="width:30px;height:30px;font-size:11px;">LC</div>Dr. Linda Chen</div></td><td style="color:var(--r-warm-gray);">l.chen@clinic.co</td><td><span class="badge badge-blue">Practitioner</span></td><td style="color:var(--r-warm-gray);">Jan 2024</td><td>48</td><td><span class="badge badge-green">Active</span></td><td><button class="btn btn-ghost btn-sm">Manage</button></td></tr>
-              <tr><td><div style="display:flex;align-items:center;gap:10px;"><div class="avatar" style="width:30px;height:30px;font-size:11px;background:var(--r-blue-light);color:var(--r-blue);">PN</div>Priya Nair</div></td><td style="color:var(--r-warm-gray);">priya.n@email.com</td><td><span class="badge badge-gold">Member</span></td><td style="color:var(--r-warm-gray);">Mar 2024</td><td>12</td><td><span class="badge badge-green">Active</span></td><td><button class="btn btn-ghost btn-sm">Manage</button></td></tr>
-              <tr><td><div style="display:flex;align-items:center;gap:10px;"><div class="avatar" style="width:30px;height:30px;font-size:11px;background:var(--r-green-light);color:var(--r-green);">ML</div>Marcus Liu</div></td><td style="color:var(--r-warm-gray);">m.liu@wellness.io</td><td><span class="badge badge-blue">Practitioner</span></td><td style="color:var(--r-warm-gray);">Feb 2024</td><td>31</td><td><span class="badge badge-green">Active</span></td><td><button class="btn btn-ghost btn-sm">Manage</button></td></tr>
-              <tr><td><div style="display:flex;align-items:center;gap:10px;"><div class="avatar" style="width:30px;height:30px;font-size:11px;background:var(--r-gold-light);color:var(--r-gold-dark);">SW</div>Sophie Walsh</div></td><td style="color:var(--r-warm-gray);">s.walsh@email.com</td><td><span class="badge badge-gold">Member</span></td><td style="color:var(--r-warm-gray);">Apr 2024</td><td>9</td><td><span class="badge badge-green">Active</span></td><td><button class="btn btn-ghost btn-sm">Manage</button></td></tr>
-              <tr><td><div style="display:flex;align-items:center;gap:10px;"><div class="avatar" style="width:30px;height:30px;font-size:11px;background:var(--r-red-light);color:var(--r-red);">TR</div>Tom Reeves</div></td><td style="color:var(--r-warm-gray);">t.reeves@gmail.com</td><td><span class="badge badge-gray">Guest</span></td><td style="color:var(--r-warm-gray);">Apr 2024</td><td>2</td><td><span class="badge badge-red">Inactive</span></td><td><button class="btn btn-ghost btn-sm">Manage</button></td></tr>
+              <tr><td colspan="7" style="text-align:center;color:var(--r-warm-gray);padding:20px;">Loading…</td></tr>
             </tbody>
           </table>
           </div>
@@ -2115,25 +2106,46 @@ function typeBadge(userType, isOwner) {
   return `<span class="badge ${isOwner ? 'badge-gold' : (map[userType] || 'badge-gray')}">${esc(roleLabel(userType, isOwner))}</span>`;
 }
 
+let bookingsTableFilter = 'all';
+
+function filterBookingsTab(status, el) {
+  bookingsTableFilter = status;
+  el.closest('.tabs').querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderBookingsTable();
+}
+
 function renderBookingsTable() {
   const tbody = document.getElementById('bookings-table');
   if (!tbody) return;
-  if (state.bookings.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" style="color:var(--r-warm-gray);text-align:center;padding:24px;">No bookings yet — click "+ New Booking" to create one.</td></tr>`;
+
+  const filtered = bookingsTableFilter === 'all'
+    ? state.bookings
+    : state.bookings.filter(b => (b.status || '') === bookingsTableFilter);
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="color:var(--r-warm-gray);text-align:center;padding:24px;">${state.bookings.length === 0 ? 'No bookings yet — click "+ New Booking" to create one.' : 'No bookings in this category.'}</td></tr>`;
     return;
   }
-  tbody.innerHTML = state.bookings.map(b => `
-    <tr>
-      <td><strong>${esc(b.room ? b.room.name : '—')}</strong></td>
-      <td>${b.member ? esc(b.member.first_name) + ' ' + esc(b.member.last_name) : '—'}</td>
-      <td>${b.member ? typeBadge(b.member.user_type, b.member.is_owner) : '—'}</td>
-      <td>${fmtDateTime(b.start_time)}</td>
-      <td>${durationLabel(b.start_time, b.end_time)}</td>
-      <td>${statusBadge(b.status)}</td>
-      <td>${b.status !== 'cancelled'
-        ? `<button class="btn btn-ghost btn-sm" onclick="cancelBooking('${b.id}')">Cancel</button>`
-        : '<span style="color:var(--r-warm-gray);font-size:12.5px;">—</span>'}</td>
-    </tr>`).join('');
+  tbody.innerHTML = filtered.map(b => {
+    try {
+      return `
+      <tr>
+        <td><strong>${esc(b.room ? b.room.name : '—')}</strong></td>
+        <td>${b.member ? esc(b.member.first_name) + ' ' + esc(b.member.last_name) : '—'}</td>
+        <td>${b.member ? typeBadge(b.member.user_type, b.member.is_owner) : '—'}</td>
+        <td>${fmtDateTime(b.start_time)}</td>
+        <td>${durationLabel(b.start_time, b.end_time)}</td>
+        <td>${statusBadge(b.status)}</td>
+        <td>${b.status !== 'cancelled'
+          ? `<button class="btn btn-ghost btn-sm" onclick="cancelBooking('${b.id}')">Cancel</button>`
+          : '<span style="color:var(--r-warm-gray);font-size:12.5px;">—</span>'}</td>
+      </tr>`;
+    } catch (e) {
+      console.error('Failed to render booking row', b, e);
+      return '';
+    }
+  }).join('');
 }
 
 function openManageMember(id) {
@@ -2344,22 +2356,48 @@ function initialsFor(m) {
   return '??';
 }
 
+let membersTableFilter = 'all';
+
+function filterMembersTab(type, el) {
+  membersTableFilter = type;
+  el.closest('.tabs').querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderMembersTable();
+}
+
 function renderMembersTable() {
   const tbody = document.getElementById('members-table');
   if (!tbody) return;
-  tbody.innerHTML = state.members.map(m => {
-    const initials = initialsFor(m);
-    const bookingCount = state.bookings.filter(b => b.member && b.member.id === m.id).length;
-    return `
-    <tr>
-      <td><div style="display:flex;align-items:center;gap:10px;"><div class="avatar" style="width:30px;height:30px;font-size:11px;">${esc(initials)}</div>${esc(m.first_name)} ${esc(m.last_name)}</div></td>
-      <td style="color:var(--r-warm-gray);">${esc(m.email)}</td>
-      <td>${typeBadge(m.user_type, m.is_owner)}</td>
-      <td style="color:var(--r-warm-gray);">${new Date(m.created_at).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}</td>
-      <td>${bookingCount}</td>
-      <td><span class="badge ${m.status === 'active' ? 'badge-green' : 'badge-red'}">${m.status.charAt(0).toUpperCase() + m.status.slice(1)}</span></td>
-      <td><button class="btn btn-ghost btn-sm" onclick="openManageMember('${m.id}')">Manage</button></td>
-    </tr>`;
+
+  const filtered = membersTableFilter === 'all'
+    ? state.members
+    : state.members.filter(m => (m.user_type || '') === membersTableFilter);
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--r-warm-gray);padding:20px;">No members in this category.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(m => {
+    try {
+      const initials = initialsFor(m);
+      const bookingCount = state.bookings.filter(b => b.member && b.member.id === m.id).length;
+      const statusVal = m.status || 'active';
+      const joined = m.created_at ? new Date(m.created_at).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }) : '—';
+      return `
+      <tr>
+        <td><div style="display:flex;align-items:center;gap:10px;"><div class="avatar" style="width:30px;height:30px;font-size:11px;">${esc(initials)}</div>${esc(m.first_name || '')} ${esc(m.last_name || '')}</div></td>
+        <td style="color:var(--r-warm-gray);">${esc(m.email || '—')}</td>
+        <td>${typeBadge(m.user_type, m.is_owner)}</td>
+        <td style="color:var(--r-warm-gray);">${esc(joined)}</td>
+        <td>${bookingCount}</td>
+        <td><span class="badge ${statusVal === 'active' ? 'badge-green' : 'badge-red'}">${esc(statusVal.charAt(0).toUpperCase() + statusVal.slice(1))}</span></td>
+        <td><button class="btn btn-ghost btn-sm" onclick="openManageMember('${m.id}')">Manage</button></td>
+      </tr>`;
+    } catch (e) {
+      console.error('Failed to render member row', m, e);
+      return `<tr><td colspan="7" style="color:var(--r-red);">Could not display this member (${esc(m.email || m.id)})</td></tr>`;
+    }
   }).join('');
 }
 
