@@ -55,9 +55,10 @@ async function notifyBulk(rows, removed, memberByShift) {
   const sorted = [...dates].sort((a, b) => a - b);
   const fmt = d => d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const rangeText = rows.length === 1 ? fmt(sorted[0]) : `${fmt(sorted[0])} to ${fmt(sorted[sorted.length - 1])} (${rows.length} day${rows.length > 1 ? 's' : ''})`;
+  const recipients = [...new Set([member.email, 'support@radiantfr.com', 'karen@radiantfr.com'])];
   try {
     await sendRotaUpdate({
-      to: member.email,
+      to: recipients,
       staffName: member.first_name || first.staff_name,
       shiftDate: first.shift_date,
       dayOfWeek: first.day_of_week,

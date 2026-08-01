@@ -13,11 +13,43 @@ const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'Radiant Booking <booking@bo
 async function sendBookingConfirmation({ to, memberName, roomName, start, end }) {
   const resend = getResend();
   const dateStr = new Date(start).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+  const endStr = new Date(end).toLocaleString('en-GB', { timeStyle: 'short' });
   return resend.emails.send({
     from: FROM_EMAIL,
     to: [to],
     subject: `Booking confirmed: ${roomName}`,
-    text: `Hi ${memberName},\n\nYour booking for ${roomName} on ${dateStr} is confirmed.\n\n— Radiant Booking`,
+    text: `Hi ${memberName},
+
+Your booking is confirmed:
+
+${roomName}
+${dateStr} – ${endStr}
+
+A couple of friendly reminders that help everyone using the space:
+- Please arrive on time so the room's ready for the person after you
+- Leave the room as you'd like to find it - tidy, restocked, and ready for the next booking
+- If your plans change, please cancel or amend as early as you can so someone else can use the slot
+
+Thanks for being part of what makes Radiant a great place to work. See you then!
+
+— Radiant Booking`,
+  });
+}
+
+async function sendTeamBookingNotice({ memberName, roomName, start, end }) {
+  const resend = getResend();
+  const dateStr = new Date(start).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+  const endStr = new Date(end).toLocaleString('en-GB', { timeStyle: 'short' });
+  return resend.emails.send({
+    from: FROM_EMAIL,
+    to: ['support@radiantfr.com'],
+    subject: `New booking: ${roomName} — ${memberName}`,
+    text: `A new room booking has been made:
+
+${memberName} — ${roomName}
+${dateStr} – ${endStr}
+
+— Radiant Booking`,
   });
 }
 
@@ -170,7 +202,7 @@ async function sendRotaUpdate({ to, staffName, shiftDate, dayOfWeek, timeRange, 
   const body = removed
     ? `Hi ${staffName},\n\nShifts on your rota have been removed: ${dateStr}.\n\n— Radiant Booking`
     : `Hi ${staffName},\n\nYour rota has been updated:\n\n${dateStr}${rangeText ? '' : ` — ${statusText}`}\n\n— Radiant Booking`;
-  return resend.emails.send({ from: FROM_EMAIL, to: [to], subject: `Rota update: ${dateStr}`, text: body });
+  return resend.emails.send({ from: FROM_EMAIL, to: Array.isArray(to) ? to : [to], subject: `Rota update: ${dateStr}`, text: body });
 }
 
 async function sendLeaveUpdate({ to, staffName, leaveDate, code, removed, rangeText }) {
@@ -180,7 +212,7 @@ async function sendLeaveUpdate({ to, staffName, leaveDate, code, removed, rangeT
   const body = removed
     ? `Hi ${staffName},\n\nA leave entry has been removed from the calendar: ${dateStr} (${codeLabel}).\n\n— Radiant Booking`
     : `Hi ${staffName},\n\n${codeLabel} has been booked for you:\n\n${dateStr}\n\n— Radiant Booking`;
-  return resend.emails.send({ from: FROM_EMAIL, to: [to], subject: `${codeLabel} booked: ${dateStr}`, text: body });
+  return resend.emails.send({ from: FROM_EMAIL, to: Array.isArray(to) ? to : [to], subject: `${codeLabel} booked: ${dateStr}`, text: body });
 }
 
 async function sendLeaveApprovalRequest({ to, approverName, staffName, rangeText, code, approveUrl, declineUrl }) {
@@ -208,7 +240,7 @@ async function sendLeaveDecision({ to, staffName, leaveDate, code, approved, rea
   const body = approved
     ? `Hi ${staffName},\n\nYour ${codeLabel} request for ${dateStr} has been approved.\n\n— Radiant Booking`
     : `Hi ${staffName},\n\nYour ${codeLabel} request for ${dateStr} was not approved.${reason ? `\n\nReason: ${reason}` : ''}\n\n— Radiant Booking`;
-  return resend.emails.send({ from: FROM_EMAIL, to: [to], subject: `${codeLabel} request ${approved ? 'approved' : 'declined'}: ${dateStr}`, text: body });
+  return resend.emails.send({ from: FROM_EMAIL, to: Array.isArray(to) ? to : [to], subject: `${codeLabel} request ${approved ? 'approved' : 'declined'}: ${dateStr}`, text: body });
 }
 
-module.exports = { sendBookingConfirmation, sendCancellationAlert, sendReminder, sendInvite, sendWelcomeEmail, sendRotaUpdate, sendLeaveUpdate, sendLeaveApprovalRequest, sendLeaveDecision };
+module.exports = { sendBookingConfirmation, sendTeamBookingNotice, sendCancellationAlert, sendReminder, sendInvite, sendWelcomeEmail, sendRotaUpdate, sendLeaveUpdate, sendLeaveApprovalRequest, sendLeaveDecision };

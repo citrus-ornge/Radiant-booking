@@ -56,7 +56,7 @@ async function approveLeaveBatch(supabase, token, approverId) {
 
   if (member) {
     try {
-      await sendLeaveUpdate({ to: member.email, staffName: member.first_name || updated[0].staff_name, leaveDate: updated[0].leave_date, code: updated[0].code, removed: false, rangeText: fmtRange(updated, 'leave_date') });
+      await sendLeaveUpdate({ to: [...new Set([member.email, 'support@radiantfr.com', 'karen@radiantfr.com'])], staffName: member.first_name || updated[0].staff_name, leaveDate: updated[0].leave_date, code: updated[0].code, removed: false, rangeText: fmtRange(updated, 'leave_date') });
     } catch (e) {}
   }
 

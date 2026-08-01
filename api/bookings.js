@@ -1,5 +1,5 @@
 const { getSupabase } = require('./_lib/supabase');
-const { sendBookingConfirmation } = require('./_lib/email');
+const { sendBookingConfirmation, sendTeamBookingNotice } = require('./_lib/email');
 const { createCalendarEvent } = require('./_lib/google');
 const { requireAuth } = require('./_lib/auth');
 const { checkRateLimit } = require('./_lib/rateLimit');
@@ -107,6 +107,17 @@ module.exports = async (req, res) => {
       sideEffects.email_sent = true;
     } catch (e) {
       sideEffects.warnings.push(`Email not sent: ${e.message}`);
+    }
+
+    try {
+      await sendTeamBookingNotice({
+        memberName: `${member.first_name} ${member.last_name}`,
+        roomName: room.name,
+        start: booking.start_time,
+        end: booking.end_time,
+      });
+    } catch (e) {
+      // non-critical - the practitioner's own confirmation already succeeded
     }
 
     if (member.google_calendar_connected && member.google_refresh_token) {
