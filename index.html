@@ -1029,6 +1029,7 @@ textarea.form-input { resize: vertical; }
       </div>
       <div class="page-title" style="font-size:20px;">You're all set</div>
       <p class="page-sub" style="margin:8px 0 24px;">Your profile is complete and all required documents are signed.</p>
+      <div id="onboarding-reserved-slot-info" style="display:none;background:var(--r-surface2);border-radius:10px;padding:16px 20px;text-align:left;max-width:420px;margin:0 auto 24px;font-size:13.5px;"></div>
       <button class="btn btn-primary" onclick="finishOnboarding()">Enter Radiant Booking →</button>
     </div>
   </div>
@@ -1089,6 +1090,9 @@ textarea.form-input { resize: vertical; }
         <button class="nav-item" onclick="showView('events')">
           <span class="nav-icon">🎉</span> Events
         </button>
+        <button class="nav-item" onclick="showView('membership-pricing')">
+          <span class="nav-icon">💷</span> Membership &amp; Pricing
+        </button>
       </div>
       <div class="sidebar-section">
         <div class="sidebar-section-label">System</div>
@@ -1123,6 +1127,9 @@ textarea.form-input { resize: vertical; }
         </button>
         <button class="nav-item" onclick="showClientView('events')">
           <span class="nav-icon">🎉</span> Events
+        </button>
+        <button class="nav-item" id="client-pricing-btn" onclick="showClientView('membership-pricing')" style="display:none;">
+          <span class="nav-icon">💷</span> Membership &amp; Pricing
         </button>
         <button class="nav-item" onclick="showClientView('profile')">
           <span class="nav-icon">◎</span> My Profile
@@ -1524,6 +1531,33 @@ textarea.form-input { resize: vertical; }
         <div class="card">
           <div id="events-list" style="padding:8px 0;">
             <div style="padding:18px 22px;color:var(--r-warm-gray);font-size:13px;">Loading…</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════ MEMBERSHIP & PRICING (shared, practitioner-facing) ════ -->
+      <div class="view-section" id="view-membership-pricing">
+        <div class="page-header">
+          <div><div class="page-title">Membership &amp; Pricing</div><div class="gold-line"></div><div class="page-sub">Room membership tiers for practitioners</div></div>
+        </div>
+
+        <div class="card" style="margin-bottom:20px;">
+          <div class="card-header"><div class="card-title">At a Glance</div></div>
+          <div class="table-scroll">
+          <table>
+            <thead><tr><th>Tier</th><th>Booking Window</th><th>Commitment</th><th>Cancellation</th><th>Exit Notice</th></tr></thead>
+            <tbody id="pricing-glance-body"></tbody>
+          </table>
+          </div>
+        </div>
+
+        <div id="pricing-tier-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;"></div>
+
+        <div class="card" style="margin-top:20px;">
+          <div class="card-header"><div class="card-title">Evening Sessions (6pm–8pm)</div></div>
+          <div style="padding:16px 22px;font-size:13.5px;line-height:1.6;">
+            Available on a priority basis to Resident, Core and Flex members. Ad Hoc members may book subject to availability.<br>
+            Clinical/Wellbeing Room: <strong>£30</strong> · Small Therapy Room: <strong>£25</strong> (all tiers)
           </div>
         </div>
       </div>
@@ -3282,6 +3316,19 @@ function showOnboardingDone() {
   document.getElementById('onboarding-step-done').style.display = 'block';
   renderOnboardingProgress(2);
   if (state.currentMember) state.currentMember.onboarding_status = 'completed';
+
+  const m = state.currentMember;
+  const infoEl = document.getElementById('onboarding-reserved-slot-info');
+  if (m && m.user_type === 'practitioner' && ['core', 'resident'].includes(m.plan_tier)) {
+    infoEl.style.display = 'block';
+    if (m.reserved_day_of_week) {
+      infoEl.innerHTML = `<strong>Your reserved session</strong><br>${esc(m.reserved_day_of_week)}, ${esc(m.reserved_time_start || '')}–${esc(m.reserved_time_end || '')}<br><span style="color:var(--r-warm-gray);">This is held for you every week as part of your ${esc(m.plan_tier === 'resident' ? 'Resident' : 'Core')} membership.</span>`;
+    } else {
+      infoEl.innerHTML = `<strong>Your reserved session</strong><br><span style="color:var(--r-warm-gray);">As a ${esc(m.plan_tier === 'resident' ? 'Resident' : 'Core')} member, you'll have a fixed recurring room slot. Staff & Admin will confirm the day, time and room with you shortly.</span>`;
+    }
+  } else {
+    infoEl.style.display = 'none';
+  }
 }
 
 function finishOnboarding() {
@@ -3313,6 +3360,7 @@ function setupClientView(type) {
   document.getElementById('topbar-cta').textContent = '+ Book Room';
   document.getElementById('topbar-cta').onclick = () => showClientView('book-room');
   document.getElementById('client-my-docs-btn').style.display = type === 'practitioner' ? 'flex' : 'none';
+  document.getElementById('client-pricing-btn').style.display = type === 'practitioner' ? 'flex' : 'none';
 
   const m = state.currentMember;
   const displayName = m ? `${m.first_name || ''} ${m.last_name || ''}`.trim() || m.email : '';
@@ -3323,8 +3371,8 @@ function setupClientView(type) {
 }
 
 // ── NAVIGATION ──
-const adminViews = { dashboard:'Dashboard', bookings:'All Bookings', rooms:'Rooms & Spaces', members:'Members', invite:'Invite Users', 'staff-area':'Staff Area', messages:'Messages', 'my-documents':'My Documents', directory:'Member Directory', events:'Events', notifications:'Notifications', 'audit-log':'Audit Log', settings:'Settings' };
-const clientViews = { 'my-bookings':'My Bookings', 'book-room':'Book a Room', 'my-documents':'My Documents', messages:'Messages', directory:'Member Directory', events:'Events', profile:'My Profile' };
+const adminViews = { dashboard:'Dashboard', bookings:'All Bookings', rooms:'Rooms & Spaces', members:'Members', invite:'Invite Users', 'staff-area':'Staff Area', messages:'Messages', 'my-documents':'My Documents', directory:'Member Directory', events:'Events', 'membership-pricing':'Membership & Pricing', notifications:'Notifications', 'audit-log':'Audit Log', settings:'Settings' };
+const clientViews = { 'my-bookings':'My Bookings', 'book-room':'Book a Room', 'my-documents':'My Documents', messages:'Messages', directory:'Member Directory', events:'Events', 'membership-pricing':'Membership & Pricing', profile:'My Profile' };
 
 let navHistory = ['dashboard']; // tracks in-app view stack for the back button
 
@@ -3344,6 +3392,7 @@ function _activateView(name, viewsMap, navSelector, containerSelector) {
   if (name === 'my-documents') loadMyDocuments('my-documents-page-list');
   if (name === 'directory') loadDirectory();
   if (name === 'events') loadEvents();
+  if (name === 'membership-pricing') renderMembershipPricing();
   if (name === 'audit-log') loadAuditLog();
 }
 
@@ -3460,6 +3509,63 @@ async function showMemberProfile(id) {
 }
 
 // ── EVENTS ──
+// ── MEMBERSHIP & PRICING (real data from the practitioner membership brochure) ──
+const TIER_DATA = {
+  ad_hoc: {
+    label: 'Ad Hoc', commitment: 'None', bookingWindow: 'Anytime, subject to availability',
+    cancellation: '48 hours notice (half/full day) · 50% late cancel · 100% no-show', exitNotice: 'None',
+    benefits: ['No minimum commitment', 'Flexible booking options', 'Access to premium clinic facilities', 'Practitioner networking', 'Directory listing'],
+    rates: { '1 Hour': ['£20', '£17'], '2 Hours': ['£35', '£30'], 'Half Day': ['£55', '£45'], '1 Day/Week': ['£105', '£90'], '2 Days/Week': ['£100', '£85'], '3 Days/Week': ['£95', '£80'] },
+  },
+  flex: {
+    label: 'Flex', commitment: '1 month', bookingWindow: 'Up to 1 month ahead',
+    cancellation: '7 days notice · 50% late cancel', exitNotice: '30 days written notice',
+    benefits: ['Member room pricing', 'Priority over Ad Hoc members', '1-month booking window', 'Directory listing', 'Networking events'],
+    rates: { '1 Hour': ['£18', '£15'], '2 Hours': ['£32', '£27'], 'Half Day': ['£52', '£44'], '1 Day/Week': ['£100', '£85'], '2 Days/Week': ['£95', '£80'], '3 Days/Week': ['£90', '£75'] },
+  },
+  core: {
+    label: 'Core', commitment: '3 months', bookingWindow: 'Fixed recurring slot, 3 months ahead',
+    cancellation: '2 weeks notice on recurring session · missed sessions chargeable', exitNotice: '14 days written notice (after minimum term)',
+    benefits: ['Guaranteed recurring clinic sessions', 'Preferential room rates', 'Monthly social media promotion', 'Newsletter inclusion', 'Priority booking'],
+    rates: { '1 Hour': ['£17', '£14'], '2 Hours': ['£30', '£26'], 'Half Day': ['£50', '£42'], '1 Day/Week': ['£95', '£80'], '2 Days/Week': ['£90', '£75'], '3 Days/Week': ['£85', '£70'] },
+  },
+  resident: {
+    label: 'Resident', commitment: '6 months', bookingWindow: 'Fixed recurring slot, 6 months ahead',
+    cancellation: '1 month notice on recurring session · missed sessions chargeable', exitNotice: '30 days written notice (after minimum term)',
+    benefits: ['First priority across all scheduling', 'Extended hours (8am–8pm)', 'Dedicated practitioner webpage', 'Fortnightly social media promotion', 'Priority referrals & spotlight'],
+    rates: { '1 Hour': ['£15', '£12'], '2 Hours': ['£28', '£24'], 'Half Day': ['£45', '£38'], '1 Day/Week': ['£90', '£75'], '2 Days/Week': ['£85', '£70'], '3 Days/Week': ['£80', '£65'] },
+  },
+};
+
+function renderMembershipPricing() {
+  const myTier = state.currentMember && state.currentMember.user_type === 'practitioner' ? state.currentMember.plan_tier : null;
+
+  document.getElementById('pricing-glance-body').innerHTML = Object.entries(TIER_DATA).map(([key, t]) => `
+    <tr style="${key === myTier ? 'background:rgba(201,169,110,0.1);' : ''}">
+      <td><strong>${esc(t.label)}</strong>${key === myTier ? ' <span class="badge badge-gold" style="margin-left:6px;">Your tier</span>' : ''}</td>
+      <td>${esc(t.bookingWindow)}</td>
+      <td>${esc(t.commitment)}</td>
+      <td>${esc(t.cancellation)}</td>
+      <td>${esc(t.exitNotice)}</td>
+    </tr>`).join('');
+
+  document.getElementById('pricing-tier-cards').innerHTML = Object.entries(TIER_DATA).map(([key, t]) => `
+    <div class="card" style="padding:18px;${key === myTier ? 'border-color:var(--r-gold);' : ''}">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <div style="font-family:'Playfair Display',serif;font-size:17px;">${esc(t.label)}</div>
+        ${key === myTier ? '<span class="badge badge-gold">Your tier</span>' : ''}
+      </div>
+      <div style="font-size:12px;color:var(--r-warm-gray);margin-bottom:10px;">Commitment: ${esc(t.commitment)}</div>
+      <table style="width:100%;font-size:12px;margin-bottom:12px;">
+        <thead><tr><th style="text-align:left;padding:3px 0;">Booking</th><th style="text-align:right;">Clinical/Wellbeing</th><th style="text-align:right;">Small Therapy</th></tr></thead>
+        <tbody>${Object.entries(t.rates).map(([label, [a, b]]) => `<tr><td style="padding:3px 0;color:var(--r-warm-gray);">${esc(label)}</td><td style="text-align:right;">${esc(a)}</td><td style="text-align:right;">${esc(b)}</td></tr>`).join('')}</tbody>
+      </table>
+      <ul style="margin:0;padding-left:18px;font-size:12.5px;color:var(--r-warm-gray);line-height:1.7;">
+        ${t.benefits.map(b => `<li>${esc(b)}</li>`).join('')}
+      </ul>
+    </div>`).join('');
+}
+
 async function loadEvents() {
   document.getElementById('events-add-btn').style.display = state.currentMember.user_type === 'administrator' ? 'inline-flex' : 'none';
   const list = document.getElementById('events-list');
