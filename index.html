@@ -201,6 +201,35 @@ body {
 }
 
 .btn-primary { background: var(--r-gold); color: var(--r-charcoal); }
+
+/* Rotating glow border - used sparingly on the main booking CTAs */
+@property --glow-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+@keyframes glow-spin { to { --glow-angle: 360deg; } }
+.btn-glow {
+  position: relative;
+  z-index: 0;
+}
+.btn-glow::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  padding: 2px;
+  background: conic-gradient(from var(--glow-angle), var(--r-gold-dark), var(--r-gold-light), var(--r-gold), var(--r-gold-dark));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: glow-spin 3.5s linear infinite;
+  z-index: -1;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn-glow::before { animation: none; }
+}
 .btn-primary:hover { background: #b8924f; }
 .btn-outline { background: none; border: 1px solid rgba(0,0,0,0.14); color: var(--r-charcoal); }
 .btn-outline:hover { border-color: var(--r-gold); color: var(--r-gold-dark); }
@@ -1165,7 +1194,7 @@ textarea.form-input { resize: vertical; }
       <div class="topbar-title" id="topbar-title">Dashboard</div>
       <div class="topbar-spacer"></div>
       <button class="btn btn-outline btn-sm" onclick="openModal('notif-modal')"><span style="width:14px;height:14px;display:inline-flex;margin-right:5px;vertical-align:-2px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="100%" height="100%"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg></span>Alerts</button>
-      <button class="btn btn-primary btn-sm" id="topbar-cta" onclick="openModal('new-booking-modal')">+ New Booking</button>
+      <button class="btn btn-primary btn-sm btn-glow" id="topbar-cta" onclick="openModal('new-booking-modal')">+ New Booking</button>
     </div>
 
     <div class="content">
@@ -1572,7 +1601,7 @@ textarea.form-input { resize: vertical; }
             <div style="font-family:'Playfair Display',serif;font-size:22px;color:#fff;" id="client-welcome-name">Dr. Linda Chen</div>
             <div style="font-size:12px;color:var(--r-gold);margin-top:5px;" id="client-welcome-role">Practitioner Member</div>
           </div>
-          <button class="btn btn-primary" onclick="showClientView('book-room')">Book a Room →</button>
+          <button class="btn btn-primary btn-glow" onclick="showClientView('book-room')">Book a Room →</button>
         </div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:24px;">
           <div class="stat-card"><div class="stat-label">Upcoming</div><div class="stat-value" id="my-stat-upcoming">–</div></div>
