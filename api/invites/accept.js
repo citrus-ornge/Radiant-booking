@@ -73,6 +73,7 @@ module.exports = async (req, res) => {
       firstName: member.first_name || member.email.split('@')[0],
       userType: member.user_type,
       planTier: member.plan_tier,
+      directoryTier: member.directory_tier,
       isOwner: member.is_owner,
     });
     welcome_email_sent = true;

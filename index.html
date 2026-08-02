@@ -1083,6 +1083,12 @@ textarea.form-input { resize: vertical; }
         <button class="nav-item" onclick="showView('my-documents')">
           <span class="nav-icon">📄</span> My Documents
         </button>
+        <button class="nav-item" onclick="showView('directory')">
+          <span class="nav-icon">👥</span> Member Directory
+        </button>
+        <button class="nav-item" onclick="showView('events')">
+          <span class="nav-icon">🎉</span> Events
+        </button>
       </div>
       <div class="sidebar-section">
         <div class="sidebar-section-label">System</div>
@@ -1111,6 +1117,12 @@ textarea.form-input { resize: vertical; }
         </button>
         <button class="nav-item" onclick="showClientView('messages')">
           <span class="nav-icon">✉</span> Messages <span class="notif-dot" id="client-msg-dot" style="display:none;"></span>
+        </button>
+        <button class="nav-item" onclick="showClientView('directory')">
+          <span class="nav-icon">👥</span> Member Directory
+        </button>
+        <button class="nav-item" onclick="showClientView('events')">
+          <span class="nav-icon">🎉</span> Events
         </button>
         <button class="nav-item" onclick="showClientView('profile')">
           <span class="nav-icon">◎</span> My Profile
@@ -1493,6 +1505,29 @@ textarea.form-input { resize: vertical; }
         </div>
       </div>
 
+      <!-- ════ MEMBER DIRECTORY (shared: everyone) ════ -->
+      <div class="view-section" id="view-directory">
+        <div class="page-header">
+          <div><div class="page-title">Member Directory</div><div class="gold-line"></div><div class="page-sub">Meet the Radiant member community</div></div>
+        </div>
+        <div id="directory-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px;">
+          <div style="color:var(--r-warm-gray);font-size:13px;">Loading…</div>
+        </div>
+      </div>
+
+      <!-- ════ EVENTS (shared: everyone, admin can create) ════ -->
+      <div class="view-section" id="view-events">
+        <div class="page-header">
+          <div><div class="page-title">Events</div><div class="gold-line"></div><div class="page-sub">What's happening at Radiant</div></div>
+          <button class="btn btn-primary" id="events-add-btn" style="display:none;" onclick="openAddEventModal()">+ Add Event</button>
+        </div>
+        <div class="card">
+          <div id="events-list" style="padding:8px 0;">
+            <div style="padding:18px 22px;color:var(--r-warm-gray);font-size:13px;">Loading…</div>
+          </div>
+        </div>
+      </div>
+
       <!-- ════ CLIENT VIEWS ════ -->
 
       <!-- MY BOOKINGS -->
@@ -1581,14 +1616,37 @@ textarea.form-input { resize: vertical; }
               <div class="form-row"><label class="form-label">Phone</label><input type="tel" class="form-input" id="profile-phone"></div>
               <div class="form-row"><label class="form-label">Qualifications</label><textarea class="form-input" id="profile-qualifications" rows="2"></textarea></div>
               <div class="form-row" id="profile-tier-row" style="display:none;">
-                <label class="form-label">Membership Tier</label>
+                <label class="form-label">Room Membership Tier</label>
                 <select class="form-input" id="profile-plan-tier">
                   <option value="">— Not set —</option>
-                  <option value="community">Community</option>
+                  <option value="ad_hoc">Ad Hoc</option>
                   <option value="flex">Flex</option>
                   <option value="core">Core</option>
                   <option value="resident">Resident</option>
                 </select>
+              </div>
+              <div class="form-row" id="profile-reserved-slot-row" style="display:none;background:var(--r-surface2);border-radius:8px;padding:12px 14px;"></div>
+              <div class="form-row" id="profile-community-tier-row" style="display:none;">
+                <label class="form-label">Community Membership</label>
+                <select class="form-input" id="profile-directory-tier">
+                  <option value="access">Access Member</option>
+                  <option value="enhanced">Enhanced Member</option>
+                </select>
+              </div>
+              <div class="form-row" id="profile-bio-row" style="display:none;">
+                <label class="form-label">Bio</label>
+                <textarea class="form-input" id="profile-bio" rows="3" placeholder="A short introduction for the member/practitioner directory…"></textarea>
+              </div>
+              <div class="form-row" id="profile-website-row" style="display:none;">
+                <label class="form-label">Website / Booking Link</label>
+                <input class="form-input" id="profile-website" placeholder="https://…">
+              </div>
+              <div id="profile-enhanced-fields" style="display:none;">
+                <div class="form-row"><label class="form-label">Logo URL</label><input class="form-input" id="profile-logo" placeholder="https://…/logo.png"></div>
+                <div class="form-two">
+                  <div class="form-row"><label class="form-label">Instagram</label><input class="form-input" id="profile-social-instagram" placeholder="https://instagram.com/…"></div>
+                  <div class="form-row"><label class="form-label">Facebook</label><input class="form-input" id="profile-social-facebook" placeholder="https://facebook.com/…"></div>
+                </div>
               </div>
               <button class="btn btn-primary btn-sm" onclick="saveProfile()">Save Changes</button>
             </div>
@@ -1770,14 +1828,36 @@ textarea.form-input { resize: vertical; }
         <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer;"><input type="checkbox" id="mm-is-owner"> Owner / Super Admin (skips onboarding, full access)</label>
       </div>
       <div class="form-row" id="mm-tier-row">
-        <label class="form-label">Membership Tier</label>
-        <select class="form-input" id="mm-plan-tier">
+        <label class="form-label" id="mm-tier-label">Room Membership Tier</label>
+        <select class="form-input" id="mm-plan-tier" onchange="toggleMmReservedSlot()">
           <option value="">— Not set —</option>
-          <option value="community">Community</option>
+          <option value="ad_hoc">Ad Hoc</option>
           <option value="flex">Flex</option>
           <option value="core">Core</option>
           <option value="resident">Resident</option>
         </select>
+      </div>
+      <div class="form-row" id="mm-community-tier-row" style="display:none;">
+        <label class="form-label">Community Membership</label>
+        <select class="form-input" id="mm-directory-tier">
+          <option value="access">Access Member</option>
+          <option value="enhanced">Enhanced Member</option>
+        </select>
+      </div>
+      <div class="form-row" id="mm-reserved-slot-row" style="display:none;background:var(--r-surface2);border-radius:8px;padding:12px;">
+        <label class="form-label" style="margin-bottom:8px;">Reserved Session (Core/Resident)</label>
+        <div class="form-two">
+          <select class="form-input" id="mm-reserved-day">
+            <option value="">Day…</option>
+            <option>Monday</option><option>Tuesday</option><option>Wednesday</option>
+            <option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option>
+          </select>
+          <select class="form-input" id="mm-reserved-room"></select>
+        </div>
+        <div class="form-two" style="margin-top:8px;">
+          <input type="time" class="form-input" id="mm-reserved-start" placeholder="Start">
+          <input type="time" class="form-input" id="mm-reserved-end" placeholder="End">
+        </div>
       </div>
       <div class="form-row" id="mm-onboarding-row">
         <label class="form-label">Onboarding Status</label>
@@ -1890,6 +1970,41 @@ textarea.form-input { resize: vertical; }
       <button class="close-btn" onclick="closeModal('day-summary-modal')">✕</button>
     </div>
     <div class="modal-body" id="ds-body" style="padding:10px 0;"></div>
+  </div>
+</div>
+
+<!-- ADD EVENT -->
+<div class="modal-overlay" id="add-event-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div><div class="modal-title">Add Event</div></div>
+      <button class="close-btn" onclick="closeModal('add-event-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row"><label class="form-label">Title</label><input class="form-input" id="ev-title" placeholder="e.g. Autumn Open Evening"></div>
+      <div class="form-row"><label class="form-label">Description</label><textarea class="form-input" id="ev-description" rows="3"></textarea></div>
+      <div class="form-two">
+        <div class="form-row"><label class="form-label">Start</label><input type="datetime-local" class="form-input" id="ev-start"></div>
+        <div class="form-row"><label class="form-label">End (optional)</label><input type="datetime-local" class="form-input" id="ev-end"></div>
+      </div>
+      <div class="form-row"><label class="form-label">Location</label><input class="form-input" id="ev-location" placeholder="e.g. Radiant Clinic, Heathfield"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('add-event-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitEvent()">Add Event</button>
+    </div>
+  </div>
+</div>
+
+<!-- MEMBER PROFILE DETAIL -->
+<div class="modal-overlay" id="member-profile-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div><div class="modal-title" id="mp-title">Member</div></div>
+      <button class="close-btn" onclick="closeModal('member-profile-modal')">✕</button>
+    </div>
+    <div class="modal-body" id="mp-body"></div>
+    <div class="modal-footer" id="mp-footer"></div>
   </div>
 </div>
 
@@ -2240,7 +2355,19 @@ function openManageMember(id) {
 
   const isPractitioner = m.user_type === 'practitioner';
   const isMember = m.user_type === 'member';
-  document.getElementById('mm-tier-row').style.display = (isPractitioner || isMember) ? 'block' : 'none';
+
+  document.getElementById('mm-tier-row').style.display = isPractitioner ? 'block' : 'none';
+  document.getElementById('mm-community-tier-row').style.display = isMember ? 'block' : 'none';
+  if (isMember) document.getElementById('mm-directory-tier').value = m.directory_tier || 'access';
+
+  const roomSel = document.getElementById('mm-reserved-room');
+  roomSel.innerHTML = '<option value="">Room…</option>' + state.rooms.map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join('');
+  document.getElementById('mm-reserved-day').value = m.reserved_day_of_week || '';
+  roomSel.value = m.reserved_room_id || '';
+  document.getElementById('mm-reserved-start').value = m.reserved_time_start ? m.reserved_time_start.slice(0, 5) : '';
+  document.getElementById('mm-reserved-end').value = m.reserved_time_end ? m.reserved_time_end.slice(0, 5) : '';
+  toggleMmReservedSlot();
+
   document.getElementById('mm-onboarding-row').style.display = (isPractitioner || m.user_type === 'administrator') ? 'block' : 'none';
   document.getElementById('mm-is-owner').checked = !!m.is_owner;
   toggleInviteOwnerRow('mm');
@@ -2298,20 +2425,35 @@ async function disconnectManagedMemberCalendar(memberId) {
   }
 }
 
+function toggleMmReservedSlot() {
+  const tier = document.getElementById('mm-plan-tier').value;
+  document.getElementById('mm-reserved-slot-row').style.display = ['core', 'resident'].includes(tier) ? 'block' : 'none';
+}
+
 async function saveManagedMember() {
   const id = document.getElementById('mm-id').value;
   const userType = document.getElementById('mm-user-type').value;
+  const planTier = document.getElementById('mm-plan-tier').value || null;
   const updates = {
     first_name: document.getElementById('mm-first-name').value.trim(),
     last_name: document.getElementById('mm-last-name').value.trim(),
     user_type: userType,
     status: document.getElementById('mm-status').value,
-    plan_tier: document.getElementById('mm-plan-tier').value || null,
+    plan_tier: planTier,
     onboarding_status: document.getElementById('mm-onboarding-status').value,
     phone: document.getElementById('mm-phone').value.trim(),
     qualifications: document.getElementById('mm-qualifications').value.trim(),
     is_owner: userType === 'administrator' && document.getElementById('mm-is-owner').checked,
   };
+  if (userType === 'member') {
+    updates.directory_tier = document.getElementById('mm-directory-tier').value || 'access';
+  }
+  if (['core', 'resident'].includes(planTier)) {
+    updates.reserved_day_of_week = document.getElementById('mm-reserved-day').value || null;
+    updates.reserved_room_id = document.getElementById('mm-reserved-room').value || null;
+    updates.reserved_time_start = document.getElementById('mm-reserved-start').value || null;
+    updates.reserved_time_end = document.getElementById('mm-reserved-end').value || null;
+  }
   try {
     await api('/members', { method: 'PATCH', body: JSON.stringify({ id, ...updates }) });
     closeModal('manage-member-modal');
@@ -3181,8 +3323,8 @@ function setupClientView(type) {
 }
 
 // ── NAVIGATION ──
-const adminViews = { dashboard:'Dashboard', bookings:'All Bookings', rooms:'Rooms & Spaces', members:'Members', invite:'Invite Users', 'staff-area':'Staff Area', messages:'Messages', 'my-documents':'My Documents', notifications:'Notifications', 'audit-log':'Audit Log', settings:'Settings' };
-const clientViews = { 'my-bookings':'My Bookings', 'book-room':'Book a Room', 'my-documents':'My Documents', messages:'Messages', profile:'My Profile' };
+const adminViews = { dashboard:'Dashboard', bookings:'All Bookings', rooms:'Rooms & Spaces', members:'Members', invite:'Invite Users', 'staff-area':'Staff Area', messages:'Messages', 'my-documents':'My Documents', directory:'Member Directory', events:'Events', notifications:'Notifications', 'audit-log':'Audit Log', settings:'Settings' };
+const clientViews = { 'my-bookings':'My Bookings', 'book-room':'Book a Room', 'my-documents':'My Documents', messages:'Messages', directory:'Member Directory', events:'Events', profile:'My Profile' };
 
 let navHistory = ['dashboard']; // tracks in-app view stack for the back button
 
@@ -3200,6 +3342,8 @@ function _activateView(name, viewsMap, navSelector, containerSelector) {
   if (name === 'staff-area') loadStaffArea();
   if (name === 'messages') loadConversations();
   if (name === 'my-documents') loadMyDocuments('my-documents-page-list');
+  if (name === 'directory') loadDirectory();
+  if (name === 'events') loadEvents();
   if (name === 'audit-log') loadAuditLog();
 }
 
@@ -3254,6 +3398,134 @@ window.addEventListener('popstate', (event) => {
     else _activateView(fallback, clientViews, '#client-nav');
   }
 });
+
+// ── MEMBER DIRECTORY ──
+async function loadDirectory() {
+  const grid = document.getElementById('directory-grid');
+  try {
+    const res = await api('/members?directory=true');
+    const members = res.members || [];
+    if (members.length === 0) {
+      grid.innerHTML = `<div style="color:var(--r-warm-gray);font-size:13px;">No profiles to show yet.</div>`;
+      return;
+    }
+    grid.innerHTML = members.map(m => {
+      const name = `${m.first_name || ''} ${m.last_name || ''}`.trim() || 'Member';
+      const isEnhanced = m.user_type === 'practitioner' ? m.plan_tier === 'resident' : m.directory_tier === 'enhanced';
+      const tierBadge = m.user_type === 'practitioner' ? esc(roleLabel('practitioner')) : (isEnhanced ? 'Enhanced Member' : 'Access Member');
+      const bioPreview = (m.bio || m.qualifications || '').slice(0, 90) + ((m.bio || m.qualifications || '').length > 90 ? '…' : '');
+      return `
+      <div class="card" style="padding:18px;cursor:pointer;" onclick="showMemberProfile('${m.id}')">
+        ${isEnhanced && m.logo_url ? `<img src="${esc(m.logo_url)}" style="width:100%;height:90px;object-fit:contain;margin-bottom:10px;" alt="">` : `<div class="room-monogram" style="margin-bottom:10px;">${esc(name.charAt(0))}</div>`}
+        <div style="font-family:'Playfair Display',serif;font-size:15px;font-weight:500;">${esc(name)}</div>
+        <span class="badge ${isEnhanced ? 'badge-gold' : 'badge-blue'}" style="margin-top:4px;">${tierBadge}</span>
+        <div style="font-size:12.5px;color:var(--r-warm-gray);margin-top:8px;">${esc(bioPreview) || 'No bio added yet.'}</div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    grid.innerHTML = `<div style="color:var(--r-red);font-size:13px;">${esc(e.message)}</div>`;
+  }
+}
+
+async function showMemberProfile(id) {
+  try {
+    const res = await api('/members?directory=true');
+    const m = (res.members || []).find(x => x.id === id);
+    if (!m) { showToast('⚠ Profile not found'); return; }
+    const name = `${m.first_name || ''} ${m.last_name || ''}`.trim() || 'Member';
+    const isEnhanced = m.user_type === 'practitioner' ? m.plan_tier === 'resident' : m.directory_tier === 'enhanced';
+    document.getElementById('mp-title').textContent = name;
+
+    const socials = m.social_links || {};
+    const socialLinks = Object.entries(socials).filter(([, v]) => v).map(([k, v]) =>
+      `<a href="${esc(v)}" target="_blank" rel="noopener" style="margin-right:12px;color:var(--r-gold-dark);font-size:12.5px;text-transform:capitalize;">${esc(k)}</a>`
+    ).join('');
+
+    document.getElementById('mp-body').innerHTML = `
+      ${isEnhanced && m.logo_url ? `<img src="${esc(m.logo_url)}" style="width:100%;max-height:140px;object-fit:contain;margin-bottom:14px;" alt="">` : ''}
+      <span class="badge ${isEnhanced ? 'badge-gold' : 'badge-blue'}" style="margin-bottom:10px;">${m.user_type === 'practitioner' ? esc(roleLabel('practitioner')) : (isEnhanced ? 'Enhanced Member' : 'Access Member')}</span>
+      ${m.qualifications ? `<p style="font-size:12.5px;color:var(--r-warm-gray);margin-top:6px;">${esc(m.qualifications)}</p>` : ''}
+      <p style="font-size:13.5px;line-height:1.6;margin-top:10px;">${esc(m.bio) || 'No bio added yet.'}</p>
+      ${m.website_url ? `<p style="margin-top:12px;"><a href="${esc(m.website_url)}" target="_blank" rel="noopener" style="color:var(--r-gold-dark);font-size:13px;">${esc(m.website_url)}</a></p>` : ''}
+      ${isEnhanced && socialLinks ? `<div style="margin-top:12px;">${socialLinks}</div>` : ''}
+    `;
+    const canMessage = !(state.currentMember.user_type === 'member' && state.currentMember.directory_tier !== 'enhanced' && m.user_type === 'member');
+    document.getElementById('mp-footer').innerHTML = canMessage && m.id !== state.currentMember.id
+      ? `<button class="btn btn-primary" onclick="closeModal('member-profile-modal');showClientView('messages');setTimeout(()=>openThread('${m.id}'),200)">Message</button>`
+      : '';
+    openModal('member-profile-modal');
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  }
+}
+
+// ── EVENTS ──
+async function loadEvents() {
+  document.getElementById('events-add-btn').style.display = state.currentMember.user_type === 'administrator' ? 'inline-flex' : 'none';
+  const list = document.getElementById('events-list');
+  try {
+    const res = await api('/events');
+    const events = res.events || [];
+    const upcoming = events.filter(e => !e.end_time || new Date(e.end_time) >= new Date());
+    if (upcoming.length === 0) {
+      list.innerHTML = `<div style="padding:18px 22px;color:var(--r-warm-gray);font-size:13px;">No upcoming events yet.</div>`;
+      return;
+    }
+    const isAdmin = state.currentMember.user_type === 'administrator';
+    list.innerHTML = upcoming.map(e => {
+      const start = new Date(e.start_time);
+      return `
+      <div style="display:flex;gap:14px;padding:16px 22px;border-bottom:1px solid var(--r-stone);">
+        <div class="date-box"><div class="date-day">${start.getDate()}</div><div class="date-mon">${start.toLocaleDateString('en-GB', { month: 'short' })}</div></div>
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:500;">${esc(e.title)}</div>
+          <div style="font-size:12px;color:var(--r-warm-gray);margin-top:2px;">${esc(fmtDateTime(e.start_time))}${e.location ? ' · ' + esc(e.location) : ''}</div>
+          ${e.description ? `<div style="font-size:12.5px;color:var(--r-warm-gray);margin-top:6px;">${esc(e.description)}</div>` : ''}
+        </div>
+        ${isAdmin ? `<button class="btn btn-ghost btn-sm" style="color:var(--r-red);height:fit-content;" onclick="deleteEvent('${e.id}')">Remove</button>` : ''}
+      </div>`;
+    }).join('');
+  } catch (e) {
+    list.innerHTML = `<div style="padding:18px 22px;color:var(--r-red);font-size:13px;">${esc(e.message)}</div>`;
+  }
+}
+
+function openAddEventModal() {
+  document.getElementById('ev-title').value = '';
+  document.getElementById('ev-description').value = '';
+  document.getElementById('ev-start').value = '';
+  document.getElementById('ev-end').value = '';
+  document.getElementById('ev-location').value = '';
+  openModal('add-event-modal');
+}
+
+async function submitEvent() {
+  const title = document.getElementById('ev-title').value.trim();
+  const description = document.getElementById('ev-description').value.trim();
+  const start_time = document.getElementById('ev-start').value;
+  const end_time = document.getElementById('ev-end').value;
+  const location = document.getElementById('ev-location').value.trim();
+  if (!title || !start_time) { showToast('⚠ Please enter a title and start time'); return; }
+
+  try {
+    await api('/events', { method: 'POST', body: JSON.stringify({ title, description, start_time: new Date(start_time).toISOString(), end_time: end_time ? new Date(end_time).toISOString() : null, location }) });
+    closeModal('add-event-modal');
+    showToast('✓ Event added');
+    loadEvents();
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  }
+}
+
+async function deleteEvent(id) {
+  if (!window.confirm('Remove this event?')) return;
+  try {
+    await api('/events', { method: 'DELETE', body: JSON.stringify({ id }) });
+    loadEvents();
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  }
+}
 
 async function loadMyDocuments(targetId) {
   const el = document.getElementById(targetId || 'my-documents-list');
@@ -3811,12 +4083,38 @@ function renderProfilePage() {
   document.getElementById('profile-qualifications').value = m.qualifications || '';
   loadMyDocuments();
 
-  const tierRow = document.getElementById('profile-tier-row');
-  if (m.user_type === 'practitioner' || m.user_type === 'member') {
-    tierRow.style.display = 'block';
-    document.getElementById('profile-plan-tier').value = m.plan_tier || '';
+  const isPractitioner = m.user_type === 'practitioner';
+  const isMember = m.user_type === 'member';
+
+  document.getElementById('profile-tier-row').style.display = isPractitioner ? 'block' : 'none';
+  if (isPractitioner) document.getElementById('profile-plan-tier').value = m.plan_tier || '';
+
+  const reservedRow = document.getElementById('profile-reserved-slot-row');
+  if (isPractitioner && ['core', 'resident'].includes(m.plan_tier) && m.reserved_day_of_week) {
+    const room = state.rooms.find(r => r.id === m.reserved_room_id);
+    reservedRow.style.display = 'block';
+    reservedRow.innerHTML = `<strong>Your reserved session:</strong> ${esc(m.reserved_day_of_week)}, ${esc(m.reserved_time_start || '')}–${esc(m.reserved_time_end || '')} in ${esc(room ? room.name : 'a room to be confirmed')}. Contact Staff & Admin to change this.`;
   } else {
-    tierRow.style.display = 'none';
+    reservedRow.style.display = 'none';
+  }
+
+  document.getElementById('profile-community-tier-row').style.display = isMember ? 'block' : 'none';
+  if (isMember) document.getElementById('profile-directory-tier').value = m.directory_tier || 'access';
+
+  document.getElementById('profile-bio-row').style.display = (isPractitioner || isMember) ? 'block' : 'none';
+  document.getElementById('profile-website-row').style.display = (isPractitioner || isMember) ? 'block' : 'none';
+  if (isPractitioner || isMember) {
+    document.getElementById('profile-bio').value = m.bio || '';
+    document.getElementById('profile-website').value = m.website_url || '';
+  }
+
+  const isEnhancedOrResident = (isMember && m.directory_tier === 'enhanced') || (isPractitioner && m.plan_tier === 'resident');
+  document.getElementById('profile-enhanced-fields').style.display = isEnhancedOrResident ? 'block' : 'none';
+  if (isEnhancedOrResident) {
+    document.getElementById('profile-logo').value = m.logo_url || '';
+    const socials = m.social_links || {};
+    document.getElementById('profile-social-instagram').value = socials.instagram || '';
+    document.getElementById('profile-social-facebook').value = socials.facebook || '';
   }
 
   const gcalSlot = document.getElementById('profile-gcal-status');
@@ -3836,9 +4134,28 @@ async function saveProfile() {
     phone: document.getElementById('profile-phone').value.trim(),
     qualifications: document.getElementById('profile-qualifications').value.trim(),
   };
-  if (m.user_type === 'practitioner' || m.user_type === 'member') {
+  const isPractitioner = m.user_type === 'practitioner';
+  const isMember = m.user_type === 'member';
+
+  if (isPractitioner) {
     updates.plan_tier = document.getElementById('profile-plan-tier').value || null;
   }
+  if (isMember) {
+    updates.directory_tier = document.getElementById('profile-directory-tier').value || 'access';
+  }
+  if (isPractitioner || isMember) {
+    updates.bio = document.getElementById('profile-bio').value.trim();
+    updates.website_url = document.getElementById('profile-website').value.trim();
+  }
+  const isEnhancedOrResident = (isMember && updates.directory_tier === 'enhanced') || (isPractitioner && updates.plan_tier === 'resident');
+  if (isEnhancedOrResident) {
+    updates.logo_url = document.getElementById('profile-logo').value.trim();
+    updates.social_links = {
+      instagram: document.getElementById('profile-social-instagram').value.trim(),
+      facebook: document.getElementById('profile-social-facebook').value.trim(),
+    };
+  }
+
   try {
     const result = await api(`/members`, { method: 'PATCH', body: JSON.stringify({ id: m.id, ...updates }) });
     state.currentMember = result.member;

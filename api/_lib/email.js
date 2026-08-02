@@ -88,17 +88,16 @@ async function sendInvite({ to, userType, note, inviteUrl }) {
   });
 }
 
-const TIER_LABELS = { community: 'Community', flex: 'Flex', core: 'Core', resident: 'Resident' };
+const TIER_LABELS = { ad_hoc: 'Ad Hoc', flex: 'Flex', core: 'Core', resident: 'Resident' };
 
-function tierSectionFor(userType, planTier) {
-  if (userType !== 'practitioner' && userType !== 'member') return '';
+function tierSectionFor(planTier) {
   if (planTier && TIER_LABELS[planTier]) {
-    return `\n\nYour membership tier: ${TIER_LABELS[planTier]}\nYou can view the full details of your membership any time from your Profile page.`;
+    return `\n\nYour room membership tier: ${TIER_LABELS[planTier]}\nYou can view the full details of your membership any time from your Profile page.`;
   }
-  return `\n\nMembership tier: not yet set\nYou can select your membership tier (Community, Flex, Core or Resident) from your Profile page.`;
+  return `\n\nRoom membership tier: not yet set\nYou can select your room membership tier (Ad Hoc, Flex, Core or Resident) from your Profile page.`;
 }
 
-async function sendWelcomeEmail({ to, firstName, userType, planTier, isOwner }) {
+async function sendWelcomeEmail({ to, firstName, userType, planTier, directoryTier, isOwner }) {
   const resend = getResend();
   const name = firstName || 'there';
   const appUrl = process.env.PUBLIC_APP_URL || 'https://radiant-booking.vercel.app';
@@ -123,6 +122,7 @@ Sign in any time at ${appUrl}.
   }
 
   if (userType === 'member') {
+    const tierLabel = { access: 'Access Member', enhanced: 'Enhanced Member' }[directoryTier] || 'Access Member';
     const body = `Hi ${name},
 
 Welcome to Radiant Membership! We're delighted to have you join us.
@@ -133,7 +133,7 @@ As a Radiant member, you get:
 - Invitations to member-only events and networking evenings
 - A dedicated space to manage your bookings and profile
 
-Your membership tier: ${planTier && TIER_LABELS[planTier] ? TIER_LABELS[planTier] : 'not yet set — you can choose this from your Profile page'}
+Your community membership: ${tierLabel}${directoryTier === 'access' ? '\n(Enhanced Membership adds a detailed profile page, logo and social links, plus the ability to message other members directly - ask Staff & Admin if you\'d like to upgrade.)' : ''}
 
 Sign in any time at ${appUrl} to get started.
 
@@ -152,7 +152,7 @@ Here's how it works:
 - Sync every booking straight to your Google Calendar
 - Manage your professional profile, qualifications and indemnity details
 
-One important step first: before you can book a room, you'll need to complete your onboarding — filling in your profile and reading and signing our clinical and operational documents. You'll be guided through this automatically the first time you sign in.${tierSectionFor(userType, planTier)}
+One important step first: before you can book a room, you'll need to complete your onboarding — filling in your profile and reading and signing our clinical and operational documents. You'll be guided through this automatically the first time you sign in.${tierSectionFor(planTier)}
 
 Sign in any time at ${appUrl} to get started.
 

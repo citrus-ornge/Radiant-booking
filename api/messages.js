@@ -64,8 +64,12 @@ module.exports = async (req, res) => {
     if (recipient_id === requester.id) {
       return res.status(400).json({ error: "You can't message yourself" });
     }
-    const { data: recipient } = await supabase.from('members').select('id').eq('id', recipient_id).maybeSingle();
+    const { data: recipient } = await supabase.from('members').select('id, user_type').eq('id', recipient_id).maybeSingle();
     if (!recipient) return res.status(404).json({ error: 'Recipient not found' });
+
+    if (requester.user_type === 'member' && recipient.user_type === 'member' && requester.directory_tier !== 'enhanced') {
+      return res.status(403).json({ error: 'Messaging other members is an Enhanced Member feature. Upgrade your membership to unlock it.' });
+    }
 
     const { data, error } = await supabase
       .from('messages')
