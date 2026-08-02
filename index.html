@@ -140,6 +140,7 @@ body {
   margin-top: auto;
   padding: 16px 14px;
   border-top: 1px solid rgba(255,255,255,0.08);
+  flex-shrink: 0;
 }
 
 .user-pill {
@@ -946,6 +947,7 @@ textarea.form-input { resize: vertical; }
       </div>
       <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;" id="reset-btn" onclick="doResetPassword()">Set New Password</button>
       <p id="reset-error" style="text-align:center;font-size:12.5px;color:var(--r-red);margin-top:12px;display:none;"></p>
+      <p style="text-align:center;margin-top:14px;"><a href="#" style="font-size:12px;color:var(--r-warm-gray);" onclick="hideResetPanel();return false;">← Back to Sign In</a></p>
     </div>
 
     <!-- SIGN UP (via invite link ?invite=TOKEN) -->
@@ -1042,6 +1044,7 @@ textarea.form-input { resize: vertical; }
       <div class="logo-sub">Booking Platform</div>
     </div>
 
+    <div style="flex:1;overflow-y:auto;min-height:0;">
     <div class="view-toggle" id="role-toggle" style="display:none;">
       <button class="toggle-btn active" id="toggle-admin" onclick="switchRole('admin')">Admin</button>
       <button class="toggle-btn" id="toggle-client" onclick="switchRole('client')">Client</button>
@@ -1113,6 +1116,7 @@ textarea.form-input { resize: vertical; }
           <span class="nav-icon">◎</span> My Profile
         </button>
       </div>
+    </div>
     </div>
 
     <div class="sidebar-footer">
@@ -2731,6 +2735,15 @@ function hideForgotPasswordPanel() {
   document.getElementById('auth-signin-panel').style.display = 'block';
 }
 
+async function hideResetPanel() {
+  // A recovery flow may have left a partial/expired session behind - clear
+  // it so the person lands on a clean, normal sign-in rather than a broken
+  // logged-in-ish state.
+  try { await _sb.auth.signOut(); } catch (e) {}
+  document.getElementById('auth-reset-panel').style.display = 'none';
+  document.getElementById('auth-signin-panel').style.display = 'block';
+}
+
 async function doForgotPassword() {
   const email = document.getElementById('forgot-email').value.trim();
   if (!email) { showToast('⚠ Please enter your email'); return; }
@@ -2772,7 +2785,10 @@ async function doResetPassword() {
     document.getElementById('auth-reset-panel').style.display = 'none';
     if (data && data.session) await bootstrapSession(data.session);
   } catch (e) {
-    document.getElementById('reset-error').textContent = e.message || 'Could not update password.';
+    const msg = (e.message || '').toLowerCase().includes('session missing') || (e.message || '').toLowerCase().includes('session_not_found')
+      ? 'This reset link has expired or was already used. Please request a new one from the sign-in screen.'
+      : (e.message || 'Could not update password.');
+    document.getElementById('reset-error').textContent = msg;
     document.getElementById('reset-error').style.display = 'block';
   } finally {
     btn.disabled = false;
@@ -3158,9 +3174,8 @@ function setupClientView(type) {
 
   const m = state.currentMember;
   const displayName = m ? `${m.first_name || ''} ${m.last_name || ''}`.trim() || m.email : '';
-  const roleLabel = type.charAt(0).toUpperCase() + type.slice(1);
   document.getElementById('client-welcome-name').textContent = displayName;
-  document.getElementById('client-welcome-role').textContent = roleLabel + ' Member';
+  document.getElementById('client-welcome-role').textContent = roleLabel(type, m && m.is_owner) + ' Account';
 
   showClientView('my-bookings');
 }
@@ -4179,6 +4194,9 @@ _sb.auth.onAuthStateChange((event, session) => {
     document.getElementById('auth-signup-panel').style.display = 'none';
     document.getElementById('auth-forgot-panel').style.display = 'none';
     document.getElementById('auth-reset-panel').style.display = 'block';
+    // Clear the recovery token from the URL immediately so this panel can't
+    // re-appear on a later reload of the same tab.
+    window.history.replaceState({}, '', window.location.pathname);
   }
 });
 </script>
