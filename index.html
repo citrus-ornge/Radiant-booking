@@ -3586,7 +3586,7 @@ function renderMembershipPricing() {
       </div>
       <div style="font-size:12px;color:var(--r-warm-gray);margin-bottom:10px;">Commitment: ${esc(t.commitment)}</div>
       <table style="width:100%;table-layout:fixed;font-size:12px;margin-bottom:12px;">
-        <thead><tr><th style="text-align:left;padding:3px 0;width:40%;">Booking</th><th style="text-align:right;white-space:normal;word-break:break-word;width:30%;">Clinical/Wellbeing</th><th style="text-align:right;white-space:normal;word-break:break-word;width:30%;">Small Therapy</th></tr></thead>
+        <thead><tr><th style="text-align:left;padding:3px 0;width:34%;">Booking</th><th style="text-align:right;white-space:normal;width:33%;">Clinical/<wbr>Wellbeing</th><th style="text-align:right;white-space:normal;width:33%;">Small Therapy</th></tr></thead>
         <tbody>${Object.entries(t.rates).map(([label, [a, b]]) => `<tr><td style="padding:3px 0;color:var(--r-warm-gray);">${esc(label)}</td><td style="text-align:right;">${esc(a)}</td><td style="text-align:right;">${esc(b)}</td></tr>`).join('')}</tbody>
       </table>
       <ul style="margin:0;padding-left:18px;font-size:12.5px;color:var(--r-warm-gray);line-height:1.7;">
