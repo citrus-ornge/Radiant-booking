@@ -50,7 +50,10 @@ module.exports = async (req, res) => {
       return res.status(e.status || 401).json({ error: e.message });
     }
 
-    const { email, emails, user_type, personal_note, is_owner } = req.body || {};
+    const {
+      email, emails, user_type, personal_note, is_owner, plan_tier,
+      reserved_day_of_week, reserved_time_start, reserved_time_end, reserved_room_id,
+    } = req.body || {};
     const emailList = Array.isArray(emails) && emails.length > 0
       ? emails.map(e => e.trim()).filter(Boolean)
       : (email ? [email.trim()] : []);
@@ -59,6 +62,10 @@ module.exports = async (req, res) => {
     }
     if (emailList.length > 50) {
       return res.status(400).json({ error: 'Please invite up to 50 people at a time' });
+    }
+    const lockedTiers = ['core', 'resident'];
+    if (plan_tier && lockedTiers.includes(plan_tier) && !reserved_day_of_week) {
+      return res.status(400).json({ error: 'Core and Resident invites need an agreed day of the week for their fixed recurring slot' });
     }
 
     const allowed = await checkRateLimit(`invite_create:${requester.id}`, 20, 3600);
@@ -72,7 +79,14 @@ module.exports = async (req, res) => {
     for (const oneEmail of emailList) {
       const { data: invite, error } = await supabase
         .from('invites')
-        .insert({ email: oneEmail, user_type, personal_note, is_owner: !!is_owner })
+        .insert({
+          email: oneEmail, user_type, personal_note, is_owner: !!is_owner,
+          plan_tier: plan_tier || null,
+          reserved_day_of_week: lockedTiers.includes(plan_tier) ? reserved_day_of_week : null,
+          reserved_time_start: lockedTiers.includes(plan_tier) ? (reserved_time_start || null) : null,
+          reserved_time_end: lockedTiers.includes(plan_tier) ? (reserved_time_end || null) : null,
+          reserved_room_id: lockedTiers.includes(plan_tier) ? (reserved_room_id || null) : null,
+        })
         .select()
         .single();
       if (error) {

@@ -42,6 +42,11 @@ module.exports = async (req, res) => {
         auth_user_id: authUser.id, status: 'active',
         is_owner: invite.is_owner,
         onboarding_status: invite.is_owner ? 'completed' : 'profile_pending',
+        plan_tier: invite.plan_tier || null,
+        reserved_day_of_week: invite.reserved_day_of_week || null,
+        reserved_time_start: invite.reserved_time_start || null,
+        reserved_time_end: invite.reserved_time_end || null,
+        reserved_room_id: invite.reserved_room_id || null,
       })
       .eq('id', existing.id)
       .select()
@@ -57,6 +62,11 @@ module.exports = async (req, res) => {
         is_owner: invite.is_owner,
         onboarding_status: invite.is_owner ? 'completed' : 'profile_pending',
         status: 'active',
+        plan_tier: invite.plan_tier || null,
+        reserved_day_of_week: invite.reserved_day_of_week || null,
+        reserved_time_start: invite.reserved_time_start || null,
+        reserved_time_end: invite.reserved_time_end || null,
+        reserved_room_id: invite.reserved_room_id || null,
       })
       .select()
       .single();

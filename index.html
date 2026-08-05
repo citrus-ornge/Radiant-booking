@@ -1334,6 +1334,32 @@ textarea.form-input { resize: vertical; }
               <div class="form-row" id="invite-owner-row" style="display:none;">
                 <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer;"><input type="checkbox" id="invite-is-owner"> This person is the clinic owner (Owner / Super Admin — skips onboarding)</label>
               </div>
+              <div class="form-row" id="invite-tier-row" style="display:none;">
+                <label class="form-label">Membership Tier</label>
+                <select class="form-input" id="invite-tier" onchange="toggleInviteReservedRow()">
+                  <option value="">Select tier…</option>
+                  <option value="community">Community</option>
+                  <option value="flex">Flex</option>
+                  <option value="core">Core</option>
+                  <option value="resident">Resident</option>
+                </select>
+              </div>
+              <div class="form-row" id="invite-reserved-slot-row" style="display:none;background:var(--r-surface2);border-radius:8px;padding:12px;">
+                <label class="form-label" style="margin-bottom:8px;">Agreed Recurring Session (required for Core/Resident)</label>
+                <p style="font-size:12px;color:var(--r-warm-gray);margin:0 0 8px;">Core and Resident members book a fixed slot for their whole term rather than choosing dates themselves — agree the day, room and time with them before sending this invite.</p>
+                <div class="form-two">
+                  <select class="form-input" id="invite-reserved-day">
+                    <option value="">Day…</option>
+                    <option>Monday</option><option>Tuesday</option><option>Wednesday</option>
+                    <option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option>
+                  </select>
+                  <select class="form-input" id="invite-reserved-room"></select>
+                </div>
+                <div class="form-two" style="margin-top:8px;">
+                  <input type="time" class="form-input" id="invite-reserved-start" placeholder="Start">
+                  <input type="time" class="form-input" id="invite-reserved-end" placeholder="End">
+                </div>
+              </div>
               <div class="form-row"><label class="form-label">Personal Note (optional)</label><textarea class="form-input" id="invite-note" rows="3" placeholder="Add a welcome message…"></textarea></div>
               <div class="form-row">
                 <label class="form-label">Permissions</label>
@@ -4487,6 +4513,26 @@ function toggleInviteOwnerRow(prefix) {
   const type = document.getElementById(prefix + '-type').value;
   const row = document.getElementById(prefix + '-owner-row');
   if (row) row.style.display = type === 'administrator' ? 'block' : 'none';
+  if (prefix === 'invite') {
+    const tierRow = document.getElementById('invite-tier-row');
+    if (tierRow) tierRow.style.display = type === 'practitioner' ? 'block' : 'none';
+    if (type !== 'practitioner') {
+      document.getElementById('invite-tier').value = '';
+      toggleInviteReservedRow();
+    }
+  }
+}
+
+function toggleInviteReservedRow() {
+  const bulk = document.getElementById('invite-bulk-toggle').checked;
+  const tier = document.getElementById('invite-tier').value;
+  const row = document.getElementById('invite-reserved-slot-row');
+  const roomSel = document.getElementById('invite-reserved-room');
+  if (roomSel && roomSel.options.length === 0) {
+    roomSel.innerHTML = '<option value="">Room…</option>' + state.rooms.map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join('');
+  }
+  const showReserved = ['core', 'resident'].includes(tier) && !bulk;
+  if (row) row.style.display = showReserved ? 'block' : 'none';
 }
 
 async function sendInviteModal() {
@@ -4513,6 +4559,7 @@ function toggleBulkInvite() {
   const bulk = document.getElementById('invite-bulk-toggle').checked;
   document.getElementById('invite-email-row').style.display = bulk ? 'none' : 'block';
   document.getElementById('invite-bulk-row').style.display = bulk ? 'block' : 'none';
+  toggleInviteReservedRow();
 }
 
 async function sendInviteFromPage() {
@@ -4520,13 +4567,24 @@ async function sendInviteFromPage() {
   const user_type = document.getElementById('invite-type').value;
   const personal_note = document.getElementById('invite-note').value;
   const is_owner = user_type === 'administrator' && document.getElementById('invite-is-owner').checked;
+  const plan_tier = user_type === 'practitioner' ? (document.getElementById('invite-tier').value || null) : null;
+  const lockedTiers = ['core', 'resident'];
+  const reserved_day_of_week = lockedTiers.includes(plan_tier) ? document.getElementById('invite-reserved-day').value : null;
+  const reserved_room_id = lockedTiers.includes(plan_tier) ? document.getElementById('invite-reserved-room').value : null;
+  const reserved_time_start = lockedTiers.includes(plan_tier) ? document.getElementById('invite-reserved-start').value : null;
+  const reserved_time_end = lockedTiers.includes(plan_tier) ? document.getElementById('invite-reserved-end').value : null;
+
+  if (!bulk && lockedTiers.includes(plan_tier) && !reserved_day_of_week) {
+    showToast('⚠ Core and Resident invites need an agreed day for their recurring slot');
+    return;
+  }
 
   if (bulk) {
     const raw = document.getElementById('invite-bulk-emails').value;
     const emails = raw.split('\n').map(e => e.trim()).filter(Boolean);
     if (emails.length === 0) { showToast('⚠ Please enter at least one email address'); return; }
     try {
-      const result = await api('/invites', { method: 'POST', body: JSON.stringify({ emails, user_type, personal_note, is_owner }) });
+      const result = await api('/invites', { method: 'POST', body: JSON.stringify({ emails, user_type, personal_note, is_owner, plan_tier }) });
       showToast(`✓ ${result.sent} invite(s) sent${result.failed ? `, ${result.failed} failed` : ''}`);
       document.getElementById('invite-bulk-emails').value = '';
       document.getElementById('invite-note').value = '';
@@ -4541,7 +4599,10 @@ async function sendInviteFromPage() {
   if (!email) { showToast('⚠ Please enter an email address'); return; }
 
   try {
-    const result = await api('/invites', { method: 'POST', body: JSON.stringify({ email, user_type, personal_note, is_owner }) });
+    const result = await api('/invites', {
+      method: 'POST',
+      body: JSON.stringify({ email, user_type, personal_note, is_owner, plan_tier, reserved_day_of_week, reserved_room_id, reserved_time_start, reserved_time_end }),
+    });
     showToast(result.email_sent ? `✓ Invite sent to ${email}` : `✓ Invite created for ${email} (email not sent)`);
     document.getElementById('invite-email').value = '';
     document.getElementById('invite-note').value = '';
