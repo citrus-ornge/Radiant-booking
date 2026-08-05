@@ -1791,17 +1791,30 @@ textarea.form-input { resize: vertical; }
     <div class="modal-body">
       <div class="form-two">
         <div class="form-row"><label class="form-label">Member</label>
-          <select class="form-input" id="nb-member" onchange="toggleTopupRow()"><option>Loading…</option></select>
+          <select class="form-input" id="nb-member" onchange="toggleTopupRow();renderBookingCalendar();"><option>Loading…</option></select>
         </div>
         <div class="form-row"><label class="form-label">Room</label>
           <select class="form-input" id="nb-room"><option>Loading…</option></select>
         </div>
       </div>
-      <div class="form-two">
-        <div class="form-row"><label class="form-label">Date</label><input type="date" class="form-input" id="nb-date"></div>
-        <div class="form-row"><label class="form-label">Start Time</label>
-          <select class="form-input" id="nb-time"><option>09:00</option><option>10:00</option><option>11:00</option><option>12:00</option><option>13:00</option><option>14:00</option><option>15:00</option><option>16:00</option></select>
+      <div class="form-row">
+        <label class="form-label">Date(s) <span id="nb-cal-window-note" style="font-weight:400;color:var(--r-warm-gray);font-size:12px;"></span></label>
+        <div style="background:var(--r-surface2);border-radius:10px;padding:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <button type="button" class="btn btn-outline btn-sm" onclick="navBookingCalendar(-1)">‹</button>
+            <div id="nb-cal-month-label" style="font-size:13.5px;font-weight:500;"></div>
+            <button type="button" class="btn btn-outline btn-sm" onclick="navBookingCalendar(1)">›</button>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;font-size:11px;text-align:center;color:var(--r-warm-gray);margin-bottom:4px;">
+            <div>Su</div><div>Mo</div><div>Tu</div><div>We</div><div>Th</div><div>Fr</div><div>Sa</div>
+          </div>
+          <div id="nb-cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;font-size:12.5px;text-align:center;"></div>
         </div>
+        <p id="nb-cal-selection-summary" style="font-size:12px;color:var(--r-warm-gray);margin:6px 0 0;"></p>
+        <input type="hidden" id="nb-date">
+      </div>
+      <div class="form-row"><label class="form-label">Start Time</label>
+        <select class="form-input" id="nb-time"><option>09:00</option><option>10:00</option><option>11:00</option><option>12:00</option><option>13:00</option><option>14:00</option><option>15:00</option><option>16:00</option></select>
       </div>
       <div class="form-row"><label class="form-label">Duration</label>
         <select class="form-input" id="nb-duration" onchange="toggleTopupRow()"><option value="1">1 hour</option><option value="2" selected>2 hours</option><option value="3">3 hours</option><option value="4">Half day</option><option value="8">Full day</option></select>
@@ -2373,6 +2386,112 @@ function toggleTopupRow() {
   parentSel.innerHTML = '<option value="">Select a booking…</option>' + eligible.map(b =>
     `<option value="${b.id}">${esc(b.room ? b.room.name : 'Room')} — ${esc(fmtDateTime(b.start_time))}</option>`
   ).join('');
+}
+
+// ── BOOKING CALENDAR (tier-aware date picker) ──
+let nbCalMonth = new Date();
+let nbSelectedDates = [];
+
+function dateKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function bookingWindowRuleFor(memberId) {
+  const m = (state.members || []).find(x => x.id === memberId);
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  if (!m || !m.plan_tier) {
+    return { allow: d => d >= today, multi: false, note: '' };
+  }
+  if (m.plan_tier === 'community') {
+    const max = new Date(today.getTime() + 7 * 24 * 3600e3);
+    return { allow: d => d >= today && d <= max, multi: false, note: 'Community: book up to 7 days ahead' };
+  }
+  if (m.plan_tier === 'flex') {
+    const max = new Date(today.getTime() + 30 * 24 * 3600e3);
+    return { allow: d => d >= today && d <= max, multi: true, note: 'Flex: book up to 30 days ahead — select multiple days to book them together' };
+  }
+  if (['core', 'resident'].includes(m.plan_tier)) {
+    if (!m.reserved_day_of_week) {
+      return { allow: () => false, multi: false, note: `⚠ No agreed recurring day set yet for this ${m.plan_tier === 'core' ? 'Core' : 'Resident'} member — set it in Manage Member first.` };
+    }
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const dayIdx = dayNames.indexOf(m.reserved_day_of_week);
+    return {
+      allow: d => d >= today && d.getDay() === dayIdx,
+      multi: false,
+      note: `${m.plan_tier === 'core' ? 'Core' : 'Resident'}: locked to every ${m.reserved_day_of_week}`,
+    };
+  }
+  return { allow: d => d >= today, multi: false, note: '' };
+}
+
+function navBookingCalendar(delta) {
+  nbCalMonth = new Date(nbCalMonth.getFullYear(), nbCalMonth.getMonth() + delta, 1);
+  renderBookingCalendar();
+}
+
+function renderBookingCalendar() {
+  const memberId = document.getElementById('nb-member').value;
+  const rule = bookingWindowRuleFor(memberId);
+  const grid = document.getElementById('nb-cal-grid');
+  const label = document.getElementById('nb-cal-month-label');
+  const note = document.getElementById('nb-cal-window-note');
+  if (!grid || !label) return;
+
+  // Selecting a new member whose rule no longer allows multi-select (or whose
+  // previously-picked dates fall outside their window) clears stale picks.
+  if (!rule.multi && nbSelectedDates.length > 1) nbSelectedDates = [nbSelectedDates[0]];
+  nbSelectedDates = nbSelectedDates.filter(k => {
+    const [y, mo, da] = k.split('-').map(Number);
+    return rule.allow(new Date(y, mo - 1, da));
+  });
+
+  if (note) note.textContent = rule.note;
+
+  const year = nbCalMonth.getFullYear();
+  const month = nbCalMonth.getMonth();
+  label.textContent = nbCalMonth.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+
+  const firstDay = new Date(year, month, 1);
+  const startOffset = firstDay.getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  let cells = '';
+  for (let i = 0; i < startOffset; i++) cells += '<div></div>';
+  for (let day = 1; day <= daysInMonth; day++) {
+    const d = new Date(year, month, day);
+    const key = dateKey(d);
+    const allowed = rule.allow(d);
+    const selected = nbSelectedDates.includes(key);
+    const style = selected
+      ? 'background:var(--r-gold);color:#fff;border-radius:6px;cursor:pointer;padding:5px 0;font-weight:600;'
+      : allowed
+        ? 'cursor:pointer;border-radius:6px;padding:5px 0;'
+        : 'color:var(--r-warm-gray);opacity:0.35;padding:5px 0;';
+    cells += `<div style="${style}" ${allowed ? `onclick="pickBookingDate('${key}')"` : ''}>${day}</div>`;
+  }
+  grid.innerHTML = cells;
+
+  document.getElementById('nb-date').value = nbSelectedDates[0] || '';
+  const summary = document.getElementById('nb-cal-selection-summary');
+  if (summary) {
+    summary.textContent = nbSelectedDates.length > 1
+      ? `${nbSelectedDates.length} days selected — one booking (and one payment) will be created per day`
+      : (nbSelectedDates.length === 1 ? `Selected: ${nbSelectedDates[0]}` : 'No date selected yet');
+  }
+}
+
+function pickBookingDate(key) {
+  const memberId = document.getElementById('nb-member').value;
+  const rule = bookingWindowRuleFor(memberId);
+  if (rule.multi) {
+    const idx = nbSelectedDates.indexOf(key);
+    if (idx >= 0) nbSelectedDates.splice(idx, 1);
+    else nbSelectedDates.push(key);
+  } else {
+    nbSelectedDates = [key];
+  }
+  renderBookingCalendar();
 }
 
 function fmtDateTime(iso) {
@@ -4412,8 +4531,9 @@ function closeSidebar() {
 function openModal(id) {
   document.getElementById(id).classList.add('open');
   if (id === 'new-booking-modal') {
-    const dateInput = document.getElementById('nb-date');
-    if (dateInput && !dateInput.value) dateInput.valueAsDate = new Date();
+    nbCalMonth = new Date();
+    nbSelectedDates = [];
+    renderBookingCalendar();
   }
 }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
@@ -4488,14 +4608,14 @@ let lastBookingForCal = null;
 async function confirmAdminBooking() {
   const memberId = document.getElementById('nb-member').value;
   const roomId = document.getElementById('nb-room').value;
-  const date = document.getElementById('nb-date').value;
   const time = document.getElementById('nb-time').value;
   const duration = parseFloat(document.getElementById('nb-duration').value);
   const notes = document.getElementById('nb-notes').value;
   const parentBookingId = duration === 1 ? document.getElementById('nb-topup-parent').value : '';
+  const dates = nbSelectedDates.slice();
 
-  if (!memberId || !roomId || !date || !time) {
-    showToast('⚠ Please fill in member, room, date and time');
+  if (!memberId || !roomId || dates.length === 0 || !time) {
+    showToast('⚠ Please fill in member, room, and at least one date and time');
     return;
   }
   if (duration === 1 && !parentBookingId) {
@@ -4503,44 +4623,56 @@ async function confirmAdminBooking() {
     return;
   }
 
-  const start = new Date(`${date}T${time}:00`);
-  const end = new Date(start.getTime() + duration * 3600000);
-
   const btn = document.getElementById('nb-submit-btn');
   btn.disabled = true;
-  btn.textContent = 'Booking…';
+  btn.textContent = dates.length > 1 ? `Booking ${dates.length} days…` : 'Booking…';
 
-  try {
-    const result = await api('/bookings', {
-      method: 'POST',
-      body: JSON.stringify({
-        room_id: roomId,
-        member_id: memberId,
-        start_time: start.toISOString(),
-        end_time: end.toISOString(),
-        notes,
-        parent_booking_id: parentBookingId || undefined,
-      }),
-    });
-    closeModal('new-booking-modal');
-    await loadAppData();
+  const room = state.rooms.find(r => r.id === roomId);
+  let succeeded = 0, failed = 0, paymentPending = 0;
+  const errors = [];
+  let firstBooking = null;
 
-    const room = state.rooms.find(r => r.id === roomId);
-    lastBookingForCal = { roomName: room ? room.name : 'Room', start: start.toISOString(), end: end.toISOString(), notes };
-
-    let msg = '✓ Booking confirmed';
-    if (result.booking && result.booking.payment_status === 'pending') msg += ' — payment required (collect manually for now)';
-    if (result.email_sent) msg += ' — email sent';
-    if (result.warnings && result.warnings.length) msg += ` (${result.warnings.join('; ')})`;
-    showToast(msg);
-
-    setTimeout(() => openModal('cal-modal'), 280);
-  } catch (e) {
-    showToast('⚠ ' + e.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Confirm Booking';
+  for (const date of dates) {
+    const start = new Date(`${date}T${time}:00`);
+    const end = new Date(start.getTime() + duration * 3600000);
+    try {
+      const result = await api('/bookings', {
+        method: 'POST',
+        body: JSON.stringify({
+          room_id: roomId,
+          member_id: memberId,
+          start_time: start.toISOString(),
+          end_time: end.toISOString(),
+          notes,
+          parent_booking_id: parentBookingId || undefined,
+        }),
+      });
+      succeeded++;
+      if (result.booking && result.booking.payment_status === 'pending') paymentPending++;
+      if (!firstBooking) firstBooking = { roomName: room ? room.name : 'Room', start: start.toISOString(), end: end.toISOString(), notes };
+    } catch (e) {
+      failed++;
+      errors.push(`${date}: ${e.message}`);
+    }
   }
+
+  closeModal('new-booking-modal');
+  await loadAppData();
+  lastBookingForCal = firstBooking;
+
+  let msg;
+  if (dates.length === 1) {
+    msg = failed ? `⚠ ${errors[0]}` : '✓ Booking confirmed';
+    if (succeeded && paymentPending) msg += ' — payment required (collect manually for now)';
+  } else {
+    msg = `✓ ${succeeded}/${dates.length} bookings confirmed`;
+    if (failed) msg += `, ${failed} failed`;
+    if (paymentPending) msg += ` — payment required for ${paymentPending} (collect manually for now)`;
+  }
+  showToast(msg);
+  if (succeeded > 0) setTimeout(() => openModal('cal-modal'), 280);
+  btn.disabled = false;
+  btn.textContent = 'Confirm Booking';
 }
 
 async function confirmClientBooking() {
