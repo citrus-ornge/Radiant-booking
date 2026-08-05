@@ -1682,7 +1682,7 @@ textarea.form-input { resize: vertical; }
                 <label class="form-label">Room Membership Tier</label>
                 <select class="form-input" id="profile-plan-tier">
                   <option value="">— Not set —</option>
-                  <option value="ad_hoc">Ad Hoc</option>
+                  <option value="community">Community</option>
                   <option value="flex">Flex</option>
                   <option value="core">Core</option>
                   <option value="resident">Resident</option>
@@ -1894,7 +1894,7 @@ textarea.form-input { resize: vertical; }
         <label class="form-label" id="mm-tier-label">Room Membership Tier</label>
         <select class="form-input" id="mm-plan-tier" onchange="toggleMmReservedSlot()">
           <option value="">— Not set —</option>
-          <option value="ad_hoc">Ad Hoc</option>
+          <option value="community">Community</option>
           <option value="flex">Flex</option>
           <option value="core">Core</option>
           <option value="resident">Resident</option>
@@ -3540,29 +3540,29 @@ async function showMemberProfile(id) {
 // ── EVENTS ──
 // ── MEMBERSHIP & PRICING (real data from the practitioner membership brochure) ──
 const TIER_DATA = {
-  ad_hoc: {
-    label: 'Ad Hoc', commitment: 'None', bookingWindow: 'Anytime, subject to availability',
+  community: {
+    label: 'Community', commitment: 'No commitment', bookingWindow: 'Anytime, subject to availability',
     cancellation: '48 hours notice (half/full day) · 50% late cancel · 100% no-show', exitNotice: 'None',
-    benefits: ['No minimum commitment', 'Flexible booking options', 'Access to premium clinic facilities', 'Practitioner networking', 'Directory listing'],
-    rates: { '1 Hour': ['£20', '£17'], '2 Hours': ['£35', '£30'], 'Half Day': ['£55', '£45'], '1 Day/Week': ['£105', '£90'], '2 Days/Week': ['£100', '£85'], '3 Days/Week': ['£95', '£80'] },
+    benefits: ['Perfect for occasional clinic space', 'No minimum commitment', 'Hourly appointments available', 'Half-day bookings available', 'Full-day bookings available'],
+    rates: { 'Full Day': ['£95', '£80'], 'Half Day': ['£47.50', '£40'] },
   },
   flex: {
-    label: 'Flex', commitment: '1 month', bookingWindow: 'Up to 1 month ahead',
+    label: 'Flex', commitment: '1 month commitment', bookingWindow: 'Up to 30 days ahead',
     cancellation: '7 days notice · 50% late cancel', exitNotice: '30 days written notice',
-    benefits: ['Member room pricing', 'Priority over Ad Hoc members', '1-month booking window', 'Directory listing', 'Networking events'],
-    rates: { '1 Hour': ['£18', '£15'], '2 Hours': ['£32', '£27'], 'Half Day': ['£52', '£44'], '1 Day/Week': ['£100', '£85'], '2 Days/Week': ['£95', '£80'], '3 Days/Week': ['£90', '£75'] },
+    benefits: ['Ideal for practitioners building their practice', 'Member room pricing', 'Fixed weekly clinics available', 'Directory listing', 'Networking events'],
+    rates: { 'Full Day': ['£90', '£75'], 'Half Day': ['£45', '£37.50'], 'Hourly': ['£18', '£15'] },
   },
   core: {
-    label: 'Core', commitment: '3 months', bookingWindow: 'Fixed recurring slot, 3 months ahead',
+    label: 'Core', commitment: '3 months commitment', bookingWindow: 'Fixed recurring slot, up to 30 days ahead',
     cancellation: '2 weeks notice on recurring session · missed sessions chargeable', exitNotice: '14 days written notice (after minimum term)',
-    benefits: ['Guaranteed recurring clinic sessions', 'Preferential room rates', 'Monthly social media promotion', 'Newsletter inclusion', 'Priority booking'],
-    rates: { '1 Hour': ['£17', '£14'], '2 Hours': ['£30', '£26'], 'Half Day': ['£50', '£42'], '1 Day/Week': ['£95', '£80'], '2 Days/Week': ['£90', '£75'], '3 Days/Week': ['£85', '£70'] },
+    benefits: ['For a regular clinic presence', 'Guaranteed recurring clinic sessions', 'Preferential room rates', 'Newsletter inclusion', 'Priority booking'],
+    rates: { 'Full Day': ['£85', '£70'], 'Half Day': ['£42.50', '£35'], 'Hourly': ['£17', '£14'] },
   },
   resident: {
-    label: 'Resident', commitment: '6 months', bookingWindow: 'Fixed recurring slot, 6 months ahead',
+    label: 'Resident', commitment: '6 months commitment', bookingWindow: 'Fixed recurring slot, up to 30 days ahead',
     cancellation: '1 month notice on recurring session · missed sessions chargeable', exitNotice: '30 days written notice (after minimum term)',
-    benefits: ['First priority across all scheduling', 'Extended hours (8am–8pm)', 'Dedicated practitioner webpage', 'Fortnightly social media promotion', 'Priority referrals & spotlight'],
-    rates: { '1 Hour': ['£15', '£12'], '2 Hours': ['£28', '£24'], 'Half Day': ['£45', '£38'], '1 Day/Week': ['£90', '£75'], '2 Days/Week': ['£85', '£70'], '3 Days/Week': ['£80', '£65'] },
+    benefits: ['For a long-term regular presence', 'First priority across all scheduling', 'Guaranteed recurring sessions', 'Dedicated practitioner webpage', 'Priority referrals & spotlight'],
+    rates: { 'Full Day': ['£80', '£65'], 'Half Day': ['£40', '£32.50'], 'Hourly': ['£15', '£12'] },
   },
 };
 

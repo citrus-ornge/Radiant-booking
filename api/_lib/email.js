@@ -88,7 +88,7 @@ async function sendInvite({ to, userType, note, inviteUrl }) {
   });
 }
 
-const TIER_LABELS = { ad_hoc: 'Ad Hoc', flex: 'Flex', core: 'Core', resident: 'Resident' };
+const TIER_LABELS = { community: 'Community', flex: 'Flex', core: 'Core', resident: 'Resident' };
 
 function tierSectionFor(planTier) {
   if (planTier && TIER_LABELS[planTier]) {
