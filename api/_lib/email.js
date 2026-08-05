@@ -243,4 +243,17 @@ async function sendLeaveDecision({ to, staffName, leaveDate, code, approved, rea
   return resend.emails.send({ from: FROM_EMAIL, to: Array.isArray(to) ? to : [to], subject: `${codeLabel} request ${approved ? 'approved' : 'declined'}: ${dateStr}`, text: body });
 }
 
-module.exports = { sendBookingConfirmation, sendTeamBookingNotice, sendCancellationAlert, sendReminder, sendInvite, sendWelcomeEmail, sendRotaUpdate, sendLeaveUpdate, sendLeaveApprovalRequest, sendLeaveDecision };
+async function sendExitNoticeReminder({ to, memberName, planTier, noticeDays, cycleEndDate, noticeDeadlineDate }) {
+  const resend = getResend();
+  const tierLabel = TIER_LABELS[planTier] || planTier;
+  const cycleEndStr = new Date(cycleEndDate).toLocaleDateString('en-GB', { dateStyle: 'long' });
+  const deadlineStr = new Date(noticeDeadlineDate).toLocaleDateString('en-GB', { dateStyle: 'long' });
+  return resend.emails.send({
+    from: FROM_EMAIL,
+    to: [to],
+    subject: `Your ${tierLabel} membership term ends ${cycleEndStr} — notice period coming up`,
+    text: `Hi ${memberName},\n\nYour current ${tierLabel} membership term ends on ${cycleEndStr}.\n\n${tierLabel} membership requires ${noticeDays} days' written notice to exit, which means the deadline to give notice if you don't wish to continue is ${deadlineStr}.\n\nIf you're happy to continue, there's nothing to do — your recurring slot carries on as normal. If you'd like to give notice, please contact Staff & Admin before ${deadlineStr}.\n\n— Radiant Booking`,
+  });
+}
+
+module.exports = { sendBookingConfirmation, sendTeamBookingNotice, sendCancellationAlert, sendReminder, sendInvite, sendWelcomeEmail, sendRotaUpdate, sendLeaveUpdate, sendLeaveApprovalRequest, sendLeaveDecision, sendExitNoticeReminder };

@@ -102,6 +102,19 @@ module.exports = async (req, res) => {
       updates.onboarding_status = 'documents_pending';
     }
 
+    // Track when a Core/Resident membership cycle starts, so we can time the
+    // exit-notice reminder off a real anchor date. Any change of tier resets
+    // the cycle clock and clears any prior reminder flag for the old cycle.
+    // (Fetch the target member's current tier — requester.plan_tier is the
+    // acting admin's own tier, not necessarily the same as the target's.)
+    if (Object.prototype.hasOwnProperty.call(updates, 'plan_tier')) {
+      const { data: targetCurrent } = await supabase.from('members').select('plan_tier').eq('id', id).maybeSingle();
+      if (!targetCurrent || updates.plan_tier !== targetCurrent.plan_tier) {
+        updates.plan_tier_started_at = ['core', 'resident'].includes(updates.plan_tier) ? new Date().toISOString() : null;
+        updates.exit_reminder_sent_for_cycle_end = null;
+      }
+    }
+
     const { data, error } = await supabase.from('members').update(updates).eq('id', id).select().single();
     if (error) return res.status(500).json({ error: error.message });
     if (isAdmin) {
