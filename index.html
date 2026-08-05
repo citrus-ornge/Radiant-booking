@@ -1031,17 +1031,6 @@ textarea.form-input { resize: vertical; }
           <div class="form-row"><label class="form-label">Professional Indemnity No.</label><input class="form-input" id="ob-indemnity-number"></div>
           <div class="form-row"><label class="form-label">Indemnity Expiry</label><input type="date" class="form-input" id="ob-indemnity-expiry"></div>
         </div>
-        <div class="form-two">
-          <div class="form-row"><label class="form-label">DBS Status</label>
-            <select class="form-input" id="ob-dbs-status">
-              <option value="not_started">Not started</option>
-              <option value="pending">Pending</option>
-              <option value="clear">Clear</option>
-              <option value="expired">Expired</option>
-            </select>
-          </div>
-          <div class="form-row"><label class="form-label">DBS Expiry</label><input type="date" class="form-input" id="ob-dbs-expiry"></div>
-        </div>
       </div>
       <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;margin-top:8px;" id="ob-continue-btn" onclick="submitOnboardingProfile()">Continue to Documents →</button>
     </div>
@@ -2153,7 +2142,7 @@ textarea.form-input { resize: vertical; }
       <p>Radiant Medical Aesthetics ("Radiant", "we", "us") operates this booking platform for the use of our practitioners, members and staff. Radiant is the data controller for the personal data processed here.</p>
 
       <h3 style="font-family:'Playfair Display',serif;font-size:16px;margin:18px 0 8px;">What we collect</h3>
-      <p>Account details (name, email, phone), professional details for practitioners (qualifications, indemnity insurance number and expiry, DBS status), booking records (room, date, time, notes), and — only if you choose to connect it — a link to your Google Calendar for syncing bookings.</p>
+      <p>Account details (name, email, phone), professional details for practitioners (qualifications, indemnity insurance number and expiry), booking records (room, date, time, notes), and — only if you choose to connect it — a link to your Google Calendar for syncing bookings.</p>
 
       <h3 style="font-family:'Playfair Display',serif;font-size:16px;margin:18px 0 8px;">Why we process it</h3>
       <p>To operate the booking platform and manage room availability (performance of a contract with you), to verify practitioner credentials where legally required (legal obligation), and to keep the platform secure and prevent misuse (legitimate interest).</p>
@@ -2162,7 +2151,7 @@ textarea.form-input { resize: vertical; }
       <p>We use the following processors to run this platform: Supabase (database and sign-in), Resend (sending booking and account emails), Google (calendar sync, only for accounts that connect it), and Vercel (hosting). None of these providers use your data for their own purposes.</p>
 
       <h3 style="font-family:'Playfair Display',serif;font-size:16px;margin:18px 0 8px;">How long we keep it</h3>
-      <p><em>[TBC — placeholder pending confirmation]</em> We intend to retain your account data for as long as your account is active, and for a limited period afterwards where needed for legitimate business or legal purposes (for example, professional indemnity or DBS records required for compliance). When you delete your account, your profile and bookings are removed immediately; any retention beyond that for compliance reasons will be clearly explained separately.</p>
+      <p><em>[TBC — placeholder pending confirmation]</em> We intend to retain your account data for as long as your account is active, and for a limited period afterwards where needed for legitimate business or legal purposes (for example, professional indemnity records required for compliance). When you delete your account, your profile and bookings are removed immediately; any retention beyond that for compliance reasons will be clearly explained separately.</p>
 
       <h3 style="font-family:'Playfair Display',serif;font-size:16px;margin:18px 0 8px;">Your rights</h3>
       <p>You can access, download or delete your personal data at any time from your Profile page ("Download my data" and "Delete my account"). You also have the right to ask us to correct inaccurate data, object to certain processing, or complain to the UK Information Commissioner's Office (ico.org.uk) if you believe your data has been mishandled.</p>
@@ -2596,8 +2585,7 @@ function downloadMyData() {
     profile: {
       first_name: m.first_name, last_name: m.last_name, email: m.email, phone: m.phone,
       user_type: m.user_type, qualifications: m.qualifications, plan_tier: m.plan_tier,
-      indemnity_number: m.indemnity_number, indemnity_expiry: m.indemnity_expiry,
-      dbs_status: m.dbs_status, dbs_expiry: m.dbs_expiry, created_at: m.created_at,
+      indemnity_number: m.indemnity_number, indemnity_expiry: m.indemnity_expiry, created_at: m.created_at,
     },
     bookings: myBookings.map(b => ({
       room: b.room ? b.room.name : null, start_time: b.start_time, end_time: b.end_time,
@@ -3240,8 +3228,6 @@ function startOnboarding() {
   document.getElementById('ob-qualifications').value = m.qualifications || '';
   document.getElementById('ob-indemnity-number').value = m.indemnity_number || '';
   document.getElementById('ob-indemnity-expiry').value = m.indemnity_expiry || '';
-  document.getElementById('ob-dbs-status').value = m.dbs_status || 'not_started';
-  document.getElementById('ob-dbs-expiry').value = m.dbs_expiry || '';
 
   // Skip straight to documents if profile basics are already filled in
   if (m.first_name && m.last_name) {
@@ -3261,8 +3247,6 @@ async function submitOnboardingProfile() {
     qualifications: document.getElementById('ob-qualifications').value.trim(),
     indemnity_number: document.getElementById('ob-indemnity-number').value.trim(),
     indemnity_expiry: document.getElementById('ob-indemnity-expiry').value || null,
-    dbs_status: document.getElementById('ob-dbs-status').value,
-    dbs_expiry: document.getElementById('ob-dbs-expiry').value || null,
   };
 
   try {
