@@ -43,6 +43,44 @@ module.exports = async (req, res) => {
       return res.status(403).json({ error: 'You can only create bookings for yourself' });
     }
 
+    // Tier-based booking window rules:
+    // - Community: rolling 7-day window
+    // - Flex: rolling 30-day window
+    // - Core / Resident: locked to their single agreed recurring day of the
+    //   week for the length of their membership term — they don't pick dates
+    //   themselves, they book their one fixed slot each week.
+    let tierMember = requester;
+    if (member_id !== requester.id) {
+      const { data: otherMember, error: otherErr } = await supabase
+        .from('members')
+        .select('plan_tier, reserved_day_of_week, reserved_time_start, reserved_time_end, reserved_room_id')
+        .eq('id', member_id)
+        .maybeSingle();
+      if (otherErr) return res.status(500).json({ error: otherErr.message });
+      tierMember = otherMember || {};
+    }
+
+    const bookingStart = new Date(start_time);
+    const now = new Date();
+    const ROLLING_WINDOWS = { community: 7, flex: 30 };
+    if (tierMember.plan_tier && ROLLING_WINDOWS[tierMember.plan_tier]) {
+      const maxDays = ROLLING_WINDOWS[tierMember.plan_tier];
+      const windowEnd = new Date(now.getTime() + maxDays * 24 * 60 * 60 * 1000);
+      if (bookingStart > windowEnd) {
+        return res.status(400).json({ error: `${tierMember.plan_tier === 'community' ? 'Community' : 'Flex'} members can only book up to ${maxDays} days ahead.` });
+      }
+    }
+    if (tierMember.plan_tier && ['core', 'resident'].includes(tierMember.plan_tier)) {
+      if (!tierMember.reserved_day_of_week) {
+        return res.status(400).json({ error: `This member's recurring day hasn't been agreed yet. An admin needs to set their reserved session before bookings can be made.` });
+      }
+      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const bookingDay = dayNames[bookingStart.getDay()];
+      if (bookingDay !== tierMember.reserved_day_of_week) {
+        return res.status(400).json({ error: `${tierMember.plan_tier === 'core' ? 'Core' : 'Resident'} members are booked on their agreed recurring day only: ${tierMember.reserved_day_of_week}.` });
+      }
+    }
+
     // Room booking rules: min/max duration and blackout dates
     const { data: roomRules, error: roomErr } = await supabase
       .from('rooms')
