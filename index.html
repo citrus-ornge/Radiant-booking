@@ -1791,7 +1791,7 @@ textarea.form-input { resize: vertical; }
     <div class="modal-body">
       <div class="form-two">
         <div class="form-row"><label class="form-label">Member</label>
-          <select class="form-input" id="nb-member"><option>Loading…</option></select>
+          <select class="form-input" id="nb-member" onchange="toggleTopupRow()"><option>Loading…</option></select>
         </div>
         <div class="form-row"><label class="form-label">Room</label>
           <select class="form-input" id="nb-room"><option>Loading…</option></select>
@@ -1804,7 +1804,12 @@ textarea.form-input { resize: vertical; }
         </div>
       </div>
       <div class="form-row"><label class="form-label">Duration</label>
-        <select class="form-input" id="nb-duration"><option value="1">1 hour</option><option value="2" selected>2 hours</option><option value="3">3 hours</option><option value="4">Half day</option><option value="8">Full day</option></select>
+        <select class="form-input" id="nb-duration" onchange="toggleTopupRow()"><option value="1">1 hour</option><option value="2" selected>2 hours</option><option value="3">3 hours</option><option value="4">Half day</option><option value="8">Full day</option></select>
+      </div>
+      <div class="form-row" id="nb-topup-row" style="display:none;background:var(--r-surface2);border-radius:8px;padding:12px;">
+        <label class="form-label">Attach to Existing Booking (required for 1-hour top-ups)</label>
+        <select class="form-input" id="nb-topup-parent"><option value="">Select a booking…</option></select>
+        <p style="font-size:12px;color:var(--r-warm-gray);margin:8px 0 0;">1-hour sessions are top-up only and carry an additional charge.</p>
       </div>
       <div class="form-row"><label class="form-label">Notes</label><textarea class="form-input" id="nb-notes" rows="2" placeholder="Optional…"></textarea></div>
       <div style="background:var(--r-surface2);border-radius:10px;padding:14px 16px;margin-top:4px;">
@@ -2349,6 +2354,25 @@ function populateBookingModalSelects() {
   if (roomSel) {
     roomSel.innerHTML = state.rooms.map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join('');
   }
+  toggleTopupRow();
+}
+
+function toggleTopupRow() {
+  const duration = document.getElementById('nb-duration').value;
+  const row = document.getElementById('nb-topup-row');
+  const parentSel = document.getElementById('nb-topup-parent');
+  const isOneHour = duration === '1';
+  if (row) row.style.display = isOneHour ? 'block' : 'none';
+  if (!isOneHour || !parentSel) return;
+
+  const memberId = document.getElementById('nb-member').value;
+  const now = new Date();
+  const eligible = (state.bookings || []).filter(b =>
+    b.member && b.member.id === memberId && b.status !== 'cancelled' && new Date(b.end_time) >= now
+  );
+  parentSel.innerHTML = '<option value="">Select a booking…</option>' + eligible.map(b =>
+    `<option value="${b.id}">${esc(b.room ? b.room.name : 'Room')} — ${esc(fmtDateTime(b.start_time))}</option>`
+  ).join('');
 }
 
 function fmtDateTime(iso) {
@@ -4405,9 +4429,14 @@ async function confirmAdminBooking() {
   const time = document.getElementById('nb-time').value;
   const duration = parseFloat(document.getElementById('nb-duration').value);
   const notes = document.getElementById('nb-notes').value;
+  const parentBookingId = duration === 1 ? document.getElementById('nb-topup-parent').value : '';
 
   if (!memberId || !roomId || !date || !time) {
     showToast('⚠ Please fill in member, room, date and time');
+    return;
+  }
+  if (duration === 1 && !parentBookingId) {
+    showToast('⚠ 1-hour sessions are top-up only — please select the booking to attach it to');
     return;
   }
 
@@ -4427,6 +4456,7 @@ async function confirmAdminBooking() {
         start_time: start.toISOString(),
         end_time: end.toISOString(),
         notes,
+        parent_booking_id: parentBookingId || undefined,
       }),
     });
     closeModal('new-booking-modal');
@@ -4436,6 +4466,7 @@ async function confirmAdminBooking() {
     lastBookingForCal = { roomName: room ? room.name : 'Room', start: start.toISOString(), end: end.toISOString(), notes };
 
     let msg = '✓ Booking confirmed';
+    if (result.booking && result.booking.payment_status === 'pending') msg += ' — payment required (collect manually for now)';
     if (result.email_sent) msg += ' — email sent';
     if (result.warnings && result.warnings.length) msg += ` (${result.warnings.join('; ')})`;
     showToast(msg);

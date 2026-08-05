@@ -20,7 +20,7 @@ module.exports = async (req, res) => {
     const { data, error } = await supabase
       .from('bookings')
       .select(`
-        id, start_time, end_time, status, notes, created_at,
+        id, start_time, end_time, status, notes, created_at, is_topup, payment_status, parent_booking_id,
         room:rooms ( id, name, emoji, floor ),
         member:members ( id, first_name, last_name, email, user_type, is_owner )
       `)
@@ -35,13 +35,38 @@ module.exports = async (req, res) => {
       return res.status(429).json({ error: 'Too many bookings created recently. Please wait a while before booking more.' });
     }
 
-    const { room_id, member_id, start_time, end_time, notes } = req.body || {};
+    const { room_id, member_id, start_time, end_time, notes, parent_booking_id } = req.body || {};
     if (!room_id || !member_id || !start_time || !end_time) {
       return res.status(400).json({ error: 'room_id, member_id, start_time, end_time are required' });
     }
     if (requester.user_type !== 'administrator' && member_id !== requester.id) {
       return res.status(403).json({ error: 'You can only create bookings for yourself' });
     }
+
+    // Top-up rule: a 1-hour booking can never stand alone — it must be
+    // attached to an existing (non-cancelled) booking belonging to the same
+    // member. Any top-up requires additional payment (payment provider is
+    // not yet wired in — flagged as 'pending' for staff to collect manually
+    // until that's built).
+    const durationMinutes = (new Date(end_time) - new Date(start_time)) / 60000;
+    const isOneHour = durationMinutes === 60;
+    let is_topup = false;
+
+    if (parent_booking_id) {
+      const { data: parentBooking, error: parentErr } = await supabase
+        .from('bookings')
+        .select('id, member_id, status')
+        .eq('id', parent_booking_id)
+        .maybeSingle();
+      if (parentErr) return res.status(500).json({ error: parentErr.message });
+      if (!parentBooking) return res.status(400).json({ error: 'The booking you\'re attaching this top-up to could not be found.' });
+      if (parentBooking.status === 'cancelled') return res.status(400).json({ error: 'You can\'t attach a top-up to a cancelled booking.' });
+      if (parentBooking.member_id !== member_id) return res.status(400).json({ error: 'A top-up must be attached to a booking for the same member.' });
+      is_topup = true;
+    } else if (isOneHour) {
+      return res.status(400).json({ error: '1-hour sessions are only available as a top-up attached to an existing booking. Please select the booking to attach it to.' });
+    }
+
 
     // Tier-based booking window rules:
     // - Community: rolling 7-day window
@@ -59,6 +84,11 @@ module.exports = async (req, res) => {
       if (otherErr) return res.status(500).json({ error: otherErr.message });
       tierMember = otherMember || {};
     }
+
+    // Flex members are charged at the time of booking rather than on a
+    // monthly invoice, so every Flex booking (not just top-ups) needs
+    // payment collected.
+    const finalPaymentStatus = (is_topup || tierMember.plan_tier === 'flex') ? 'pending' : 'not_required';
 
     const bookingStart = new Date(start_time);
     const now = new Date();
@@ -118,9 +148,9 @@ module.exports = async (req, res) => {
 
     const { data: booking, error } = await supabase
       .from('bookings')
-      .insert({ room_id, member_id, start_time, end_time, notes, status: 'confirmed' })
+      .insert({ room_id, member_id, start_time, end_time, notes, status: 'confirmed', parent_booking_id: parent_booking_id || null, is_topup, payment_status: finalPaymentStatus })
       .select(`
-        id, start_time, end_time, status, notes,
+        id, start_time, end_time, status, notes, is_topup, payment_status, parent_booking_id,
         room:rooms ( id, name, emoji, floor ),
         member:members ( id, first_name, last_name, email, user_type, google_calendar_connected, google_refresh_token )
       `)
