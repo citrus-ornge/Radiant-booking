@@ -1115,7 +1115,7 @@ textarea.form-input { resize: vertical; }
       <div class="sidebar-section">
         <div class="sidebar-section-label">System</div>
         <button class="nav-item" onclick="showView('notifications')">
-          <span class="nav-icon">◉</span> Notifications <span class="notif-dot"></span>
+          <span class="nav-icon">◉</span> Notifications <span class="notif-dot" id="admin-notif-dot" style="display:none;"></span>
         </button>
         <button class="nav-item" onclick="showView('audit-log')">
           <span class="nav-icon">🕓</span> Audit Log
@@ -1182,7 +1182,7 @@ textarea.form-input { resize: vertical; }
       </button>
       <div class="topbar-title" id="topbar-title">Dashboard</div>
       <div class="topbar-spacer"></div>
-      <button class="btn btn-outline btn-sm" onclick="openModal('notif-modal')"><span style="width:14px;height:14px;display:inline-flex;margin-right:5px;vertical-align:-2px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="100%" height="100%"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg></span>Alerts</button>
+      <button class="btn btn-outline btn-sm" onclick="openModal('notif-modal');markNotificationsSeen()"><span style="width:14px;height:14px;display:inline-flex;margin-right:5px;vertical-align:-2px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="100%" height="100%"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg></span>Alerts<span class="notif-dot" id="alerts-btn-dot" style="display:none;margin-left:6px;"></span></button>
       <button class="btn btn-primary btn-sm btn-glow" id="topbar-cta" onclick="openModal('new-booking-modal')">+ New Booking</button>
     </div>
 
@@ -1409,21 +1409,21 @@ textarea.form-input { resize: vertical; }
             <div style="padding:16px 22px;display:flex;flex-direction:column;gap:10px;">
               <label style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--r-surface2);border-radius:9px;cursor:pointer;">
                 <div><div style="font-size:13.5px;font-weight:500;">Booking confirmation</div><div style="font-size:12px;color:var(--r-warm-gray);">Instant email on booking</div></div>
-                <input type="checkbox" checked>
+                <input type="checkbox" id="notif-setting-booking_confirmation" checked>
               </label>
               <label style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--r-surface2);border-radius:9px;cursor:pointer;">
                 <div><div style="font-size:13.5px;font-weight:500;">24hr reminder</div><div style="font-size:12px;color:var(--r-warm-gray);">Email day before session</div></div>
-                <input type="checkbox" checked>
+                <input type="checkbox" id="notif-setting-reminder_24h" checked>
               </label>
               <label style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--r-surface2);border-radius:9px;cursor:pointer;">
                 <div><div style="font-size:13.5px;font-weight:500;">1hr reminder</div><div style="font-size:12px;color:var(--r-warm-gray);">Email 1 hour before session</div></div>
-                <input type="checkbox" checked>
+                <input type="checkbox" id="notif-setting-reminder_1h" checked>
               </label>
               <label style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--r-surface2);border-radius:9px;cursor:pointer;">
                 <div><div style="font-size:13.5px;font-weight:500;">Cancellation alert</div><div style="font-size:12px;color:var(--r-warm-gray);">Notify admin on cancellations</div></div>
-                <input type="checkbox" checked>
+                <input type="checkbox" id="notif-setting-cancellation_alert" checked>
               </label>
-              <button class="btn btn-primary btn-sm" onclick="showToast('✓ Settings saved')">Save Settings</button>
+              <button class="btn btn-primary btn-sm" onclick="saveNotificationSettings()">Save Settings</button>
             </div>
           </div>
         </div>
@@ -2876,6 +2876,9 @@ function buildNotificationEvents() {
     } else {
       events.push({ ts: b.created_at, title: `New booking: ${b.room.name}`, sub: `${b.member.first_name} ${b.member.last_name} booked ${fmtDateTime(b.start_time)}`, dotColor: null });
     }
+    if (b.payment_status === 'pending') {
+      events.push({ ts: b.created_at, title: `💳 Payment needed${b.is_topup ? ' (top-up)' : ''}`, sub: `${b.member.first_name} ${b.member.last_name} · ${b.room.name} · ${fmtDateTime(b.start_time)}`, dotColor: 'var(--r-gold)' });
+    }
   });
   state.invites.forEach(i => {
     if (i.status === 'expired') {
@@ -2886,6 +2889,11 @@ function buildNotificationEvents() {
   });
   (state.pendingLeaveRequests || []).forEach(l => {
     events.push({ ts: l.created_at, title: `⏳ Holiday approval needed: ${l.staff_name}`, sub: `${fmtDateTime(l.leave_date).split(' · ')[0]} · tap to review in Staff Area`, dotColor: 'var(--r-gold)' });
+  });
+  (state.members || []).forEach(m => {
+    if (['core', 'resident'].includes(m.plan_tier) && m.reserved_day_of_week && m.plan_tier_started_at) {
+      events.push({ ts: m.plan_tier_started_at, title: `Recurring slot agreed: ${m.first_name} ${m.last_name}`, sub: `${m.plan_tier === 'core' ? 'Core' : 'Resident'} · every ${m.reserved_day_of_week}`, dim: true });
+    }
   });
   events.sort((a, b) => new Date(b.ts) - new Date(a.ts));
   return events;
@@ -2913,6 +2921,58 @@ function renderNotificationsFeed() {
   const events = buildNotificationEvents();
   renderEventsInto(document.getElementById('notifications-feed'), events.slice(0, 8));
   renderEventsInto(document.getElementById('notif-modal-body'), events.slice(0, 3));
+  updateNotificationBadges(events);
+}
+
+function updateNotificationBadges(events) {
+  const lastSeen = state.currentMember && state.currentMember.notifications_last_seen_at
+    ? new Date(state.currentMember.notifications_last_seen_at) : null;
+  const unreadCount = lastSeen ? events.filter(e => new Date(e.ts) > lastSeen).length : events.length;
+  ['admin-notif-dot', 'alerts-btn-dot'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = unreadCount > 0 ? 'inline-block' : 'none';
+  });
+}
+
+async function markNotificationsSeen() {
+  if (!state.currentMember) return;
+  try {
+    const result = await api('/members', {
+      method: 'PATCH',
+      body: JSON.stringify({ id: state.currentMember.id, notifications_last_seen_at: new Date().toISOString() }),
+    });
+    state.currentMember = result.member;
+    updateNotificationBadges(buildNotificationEvents());
+  } catch (e) {
+    // non-critical — badge will just re-check next load
+  }
+}
+
+async function loadNotificationSettings() {
+  try {
+    const result = await api('/notification-settings');
+    const s = result.settings || {};
+    ['booking_confirmation', 'reminder_24h', 'reminder_1h', 'cancellation_alert'].forEach(key => {
+      const el = document.getElementById('notif-setting-' + key);
+      if (el) el.checked = s[key] !== false;
+    });
+  } catch (e) {
+    // leave checkboxes at their default (checked) state if this fails
+  }
+}
+
+async function saveNotificationSettings() {
+  const body = {};
+  ['booking_confirmation', 'reminder_24h', 'reminder_1h', 'cancellation_alert'].forEach(key => {
+    const el = document.getElementById('notif-setting-' + key);
+    if (el) body[key] = el.checked;
+  });
+  try {
+    await api('/notification-settings', { method: 'PATCH', body: JSON.stringify(body) });
+    showToast('✓ Settings saved');
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  }
 }
 
 function renderGoogleCalendarStatus() {
@@ -3468,6 +3528,8 @@ function updateBackButton(name) {
 
 function showView(name, _fromHistory) {
   _activateView(name, adminViews, '#admin-nav');
+  if (name === 'settings') loadNotificationSettings();
+  if (name === 'notifications') markNotificationsSeen();
   if (!_fromHistory) {
     navHistory.push(name);
     history.pushState({ appView: name, role: 'admin' }, '', '#' + name);
@@ -3477,6 +3539,7 @@ function showView(name, _fromHistory) {
 function showClientView(name, _fromHistory) {
   _activateView(name, clientViews, '#client-nav');
   if (name === 'profile') renderProfilePage();
+  if (name === 'notifications') markNotificationsSeen();
   if (!_fromHistory) {
     navHistory.push(name);
     history.pushState({ appView: name, role: 'client' }, '', '#' + name);

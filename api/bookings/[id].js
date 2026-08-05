@@ -2,6 +2,7 @@ const { getSupabase } = require('../_lib/supabase');
 const { sendCancellationAlert } = require('../_lib/email');
 const { requireAuth } = require('../_lib/auth');
 const { logAudit } = require('../_lib/audit');
+const { isNotificationEnabled } = require('../_lib/notificationSettings');
 
 module.exports = async (req, res) => {
   const { id } = req.query;
@@ -46,7 +47,7 @@ module.exports = async (req, res) => {
     });
 
     let email_sent = false;
-    if (status === 'cancelled') {
+    if (status === 'cancelled' && await isNotificationEnabled('cancellation_alert')) {
       try {
         await sendCancellationAlert({
           to: booking.member.email,

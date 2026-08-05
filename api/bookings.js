@@ -1,5 +1,6 @@
 const { getSupabase } = require('./_lib/supabase');
 const { sendBookingConfirmation, sendTeamBookingNotice } = require('./_lib/email');
+const { isNotificationEnabled } = require('./_lib/notificationSettings');
 const { createCalendarEvent } = require('./_lib/google');
 const { requireAuth } = require('./_lib/auth');
 const { checkRateLimit } = require('./_lib/rateLimit');
@@ -165,14 +166,16 @@ module.exports = async (req, res) => {
     const sideEffects = { email_sent: false, calendar_synced: false, warnings: [] };
 
     try {
-      await sendBookingConfirmation({
-        to: member.email,
-        memberName: `${member.first_name} ${member.last_name}`,
-        roomName: room.name,
-        start: booking.start_time,
-        end: booking.end_time,
-      });
-      sideEffects.email_sent = true;
+      if (await isNotificationEnabled('booking_confirmation')) {
+        await sendBookingConfirmation({
+          to: member.email,
+          memberName: `${member.first_name} ${member.last_name}`,
+          roomName: room.name,
+          start: booking.start_time,
+          end: booking.end_time,
+        });
+        sideEffects.email_sent = true;
+      }
     } catch (e) {
       sideEffects.warnings.push(`Email not sent: ${e.message}`);
     }
