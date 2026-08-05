@@ -1680,7 +1680,7 @@ textarea.form-input { resize: vertical; }
                 </div>
               </div>
               <div class="form-row"><label class="form-label">Duration</label>
-                <select class="form-input" id="client-duration"><option value="1">1 hour</option><option value="2" selected>2 hours</option><option value="3">3 hours</option><option value="4">Half day (4hrs)</option><option value="8">Full day</option></select>
+                <select class="form-input" id="client-duration" onchange="refreshClientTimeSlotAvailability()"><option value="1">1 hour</option><option value="2" selected>2 hours</option><option value="3">3 hours</option><option value="4">Half day (4hrs)</option><option value="8">Full day</option></select>
               </div>
               <div class="form-row"><label class="form-label">Notes</label><textarea class="form-input" id="client-notes" rows="2" placeholder="Any special requirements…"></textarea></div>
               <div style="height:64px;"></div>
@@ -1809,7 +1809,7 @@ textarea.form-input { resize: vertical; }
           <select class="form-input" id="nb-member" onchange="toggleTopupRow();renderBookingCalendar();"><option>Loading…</option></select>
         </div>
         <div class="form-row"><label class="form-label">Room</label>
-          <select class="form-input" id="nb-room"><option>Loading…</option></select>
+          <select class="form-input" id="nb-room" onchange="renderBookingCalendar();refreshAdminTimeSlotAvailability();"><option>Loading…</option></select>
         </div>
       </div>
       <div class="form-row">
@@ -1829,10 +1829,12 @@ textarea.form-input { resize: vertical; }
         <input type="hidden" id="nb-date">
       </div>
       <div class="form-row"><label class="form-label">Start Time</label>
-        <select class="form-input" id="nb-time"><option>09:00</option><option>10:00</option><option>11:00</option><option>12:00</option><option>13:00</option><option>14:00</option><option>15:00</option><option>16:00</option></select>
+        <select class="form-input" id="nb-time" onchange="toggleTopupRow()">
+          <option value="09:00">09:00</option><option value="10:00">10:00</option><option value="11:00">11:00</option><option value="12:00">12:00</option><option value="13:00">13:00</option><option value="14:00">14:00</option><option value="15:00">15:00</option><option value="16:00">16:00</option>
+        </select>
       </div>
       <div class="form-row"><label class="form-label">Duration</label>
-        <select class="form-input" id="nb-duration" onchange="toggleTopupRow()"><option value="1">1 hour</option><option value="2" selected>2 hours</option><option value="3">3 hours</option><option value="4">Half day</option><option value="8">Full day</option></select>
+        <select class="form-input" id="nb-duration" onchange="toggleTopupRow();refreshAdminTimeSlotAvailability();"><option value="1">1 hour</option><option value="2" selected>2 hours</option><option value="3">3 hours</option><option value="4">Half day</option><option value="8">Full day</option></select>
       </div>
       <div class="form-row" id="nb-topup-row" style="display:none;background:var(--r-surface2);border-radius:8px;padding:12px;">
         <label class="form-label">Attach to Existing Booking (required for 1-hour top-ups)</label>
@@ -2385,6 +2387,66 @@ function populateBookingModalSelects() {
   toggleTopupRow();
 }
 
+// ── CROSS-BOOKING CLASH CHECK (shared by both booking flows) ──
+// A room is unavailable for a given time if any non-cancelled booking for
+// that room overlaps it, regardless of which member/tier made it.
+function roomHasClash(roomId, startISO, endISO) {
+  if (!roomId) return false;
+  return (state.bookings || []).some(b =>
+    b.room && b.room.id === roomId && b.status !== 'cancelled' &&
+    new Date(b.start_time) < new Date(endISO) && new Date(b.end_time) > new Date(startISO)
+  );
+}
+
+function refreshAdminTimeSlotAvailability() {
+  const roomId = document.getElementById('nb-room').value;
+  const duration = parseFloat(document.getElementById('nb-duration').value);
+  const dates = nbSelectedDates;
+  const sel = document.getElementById('nb-time');
+  if (!sel) return;
+  Array.from(sel.options).forEach(opt => {
+    const time = opt.value;
+    let clash = false;
+    if (roomId && dates.length) {
+      clash = dates.some(date => {
+        const start = new Date(`${date}T${time}:00`);
+        const end = new Date(start.getTime() + duration * 3600000);
+        return roomHasClash(roomId, start.toISOString(), end.toISOString());
+      });
+    }
+    opt.disabled = clash;
+    opt.textContent = time + (clash ? ' (already booked)' : '');
+  });
+  if (sel.selectedOptions[0] && sel.selectedOptions[0].disabled) {
+    const firstFree = Array.from(sel.options).find(o => !o.disabled);
+    if (firstFree) sel.value = firstFree.value;
+  }
+}
+
+function refreshClientTimeSlotAvailability() {
+  const roomId = selectedClientRoomId;
+  const duration = parseFloat(document.getElementById('client-duration').value);
+  const dates = clientSelectedDates;
+  document.querySelectorAll('#client-time-slots .time-slot').forEach(el => {
+    const time = el.dataset.time || el.textContent.trim().replace(' (booked)', '');
+    el.dataset.time = time;
+    let clash = false;
+    if (roomId && dates.length) {
+      clash = dates.some(date => {
+        const start = new Date(`${date}T${time}:00`);
+        const end = new Date(start.getTime() + duration * 3600000);
+        return roomHasClash(roomId, start.toISOString(), end.toISOString());
+      });
+    }
+    el.classList.toggle('booked', clash);
+    el.textContent = clash ? `${time} (booked)` : time;
+    if (clash && el.classList.contains('selected')) {
+      el.classList.remove('selected');
+      selectedClientTime = null;
+    }
+  });
+}
+
 function toggleTopupRow() {
   const duration = document.getElementById('nb-duration').value;
   const row = document.getElementById('nb-topup-row');
@@ -2498,6 +2560,7 @@ function renderBookingCalendar() {
       ? `${nbSelectedDates.length} days selected — one booking (and one payment) will be created per day`
       : (nbSelectedDates.length === 1 ? `Selected: ${nbSelectedDates[0]}` : 'No date selected yet');
   }
+  refreshAdminTimeSlotAvailability();
 }
 
 function pickBookingDate(key) {
@@ -2569,6 +2632,7 @@ function renderClientBookingCalendar() {
       ? `${clientSelectedDates.length} days selected — one booking (and one payment) will be created per day`
       : (clientSelectedDates.length === 1 ? `Selected: ${clientSelectedDates[0]}` : 'No date selected yet');
   }
+  refreshClientTimeSlotAvailability();
 }
 
 function pickClientBookingDate(key) {
@@ -4967,15 +5031,17 @@ async function addRoom() {
 // ── TIME SLOTS ──
 let selectedClientTime = null;
 function selectSlot(el) {
+  if (el.classList.contains('booked')) return;
   document.querySelectorAll('.time-slot:not(.booked)').forEach(s => s.classList.remove('selected'));
   el.classList.add('selected');
-  selectedClientTime = el.textContent.trim();
+  selectedClientTime = el.dataset.time || el.textContent.trim();
 }
 
 // ── ROOM SELECTION ──
 let selectedClientRoomId = null;
 function selectRoomOption(el, name, roomId) {
   selectedClientRoomId = roomId || null;
+  refreshClientTimeSlotAvailability();
   document.querySelectorAll('#book-room-list > div').forEach(r => {
     r.style.borderColor = 'rgba(0,0,0,0.08)';
     r.style.background = '';
