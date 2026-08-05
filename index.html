@@ -1646,7 +1646,22 @@ textarea.form-input { resize: vertical; }
           <div class="card" style="overflow: visible;">
             <div class="card-header"><div class="card-title">Date &amp; Time</div></div>
             <div style="padding:18px 22px;">
-              <div class="form-row"><label class="form-label">Date</label><input type="date" class="form-input" id="booking-date-input"></div>
+              <div class="form-row">
+                <label class="form-label">Date(s) <span id="client-cal-window-note" style="font-weight:400;color:var(--r-warm-gray);font-size:12px;"></span></label>
+                <div style="background:var(--r-surface2);border-radius:10px;padding:12px;">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                    <button type="button" class="btn btn-outline btn-sm" onclick="navClientBookingCalendar(-1)">‹</button>
+                    <div id="client-cal-month-label" style="font-size:13.5px;font-weight:500;"></div>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="navClientBookingCalendar(1)">›</button>
+                  </div>
+                  <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;font-size:11px;text-align:center;color:var(--r-warm-gray);margin-bottom:4px;">
+                    <div>Su</div><div>Mo</div><div>Tu</div><div>We</div><div>Th</div><div>Fr</div><div>Sa</div>
+                  </div>
+                  <div id="client-cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;font-size:12.5px;text-align:center;"></div>
+                </div>
+                <p id="client-cal-selection-summary" style="font-size:12px;color:var(--r-warm-gray);margin:6px 0 0;"></p>
+                <input type="hidden" id="booking-date-input">
+              </div>
               <div class="form-row">
                 <label class="form-label">Start Time</label>
                 <div class="time-slots" id="client-time-slots">
@@ -2396,8 +2411,7 @@ function dateKey(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function bookingWindowRuleFor(memberId) {
-  const m = (state.members || []).find(x => x.id === memberId);
+function bookingWindowRuleForMember(m) {
   const today = new Date(); today.setHours(0, 0, 0, 0);
   if (!m || !m.plan_tier) {
     return { allow: d => d >= today, multi: false, note: '' };
@@ -2412,7 +2426,7 @@ function bookingWindowRuleFor(memberId) {
   }
   if (['core', 'resident'].includes(m.plan_tier)) {
     if (!m.reserved_day_of_week) {
-      return { allow: () => false, multi: false, note: `⚠ No agreed recurring day set yet for this ${m.plan_tier === 'core' ? 'Core' : 'Resident'} member — set it in Manage Member first.` };
+      return { allow: () => false, multi: false, note: `⚠ No agreed recurring day set yet for your ${m.plan_tier === 'core' ? 'Core' : 'Resident'} membership — contact Staff & Admin.` };
     }
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const dayIdx = dayNames.indexOf(m.reserved_day_of_week);
@@ -2423,6 +2437,11 @@ function bookingWindowRuleFor(memberId) {
     };
   }
   return { allow: d => d >= today, multi: false, note: '' };
+}
+
+function bookingWindowRuleFor(memberId) {
+  const m = (state.members || []).find(x => x.id === memberId);
+  return bookingWindowRuleForMember(m);
 }
 
 function navBookingCalendar(delta) {
@@ -2492,6 +2511,76 @@ function pickBookingDate(key) {
     nbSelectedDates = [key];
   }
   renderBookingCalendar();
+}
+
+// ── CLIENT (self-service) BOOKING CALENDAR ──
+let clientCalMonth = new Date();
+let clientSelectedDates = [];
+
+function navClientBookingCalendar(delta) {
+  clientCalMonth = new Date(clientCalMonth.getFullYear(), clientCalMonth.getMonth() + delta, 1);
+  renderClientBookingCalendar();
+}
+
+function renderClientBookingCalendar() {
+  const grid = document.getElementById('client-cal-grid');
+  const label = document.getElementById('client-cal-month-label');
+  const note = document.getElementById('client-cal-window-note');
+  if (!grid || !label) return;
+
+  const rule = bookingWindowRuleForMember(state.currentMember);
+
+  if (!rule.multi && clientSelectedDates.length > 1) clientSelectedDates = [clientSelectedDates[0]];
+  clientSelectedDates = clientSelectedDates.filter(k => {
+    const [y, mo, da] = k.split('-').map(Number);
+    return rule.allow(new Date(y, mo - 1, da));
+  });
+
+  if (note) note.textContent = rule.note;
+
+  const year = clientCalMonth.getFullYear();
+  const month = clientCalMonth.getMonth();
+  label.textContent = clientCalMonth.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+
+  const firstDay = new Date(year, month, 1);
+  const startOffset = firstDay.getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  let cells = '';
+  for (let i = 0; i < startOffset; i++) cells += '<div></div>';
+  for (let day = 1; day <= daysInMonth; day++) {
+    const d = new Date(year, month, day);
+    const key = dateKey(d);
+    const allowed = rule.allow(d);
+    const selected = clientSelectedDates.includes(key);
+    const style = selected
+      ? 'background:var(--r-gold);color:#fff;border-radius:6px;cursor:pointer;padding:5px 0;font-weight:600;'
+      : allowed
+        ? 'cursor:pointer;border-radius:6px;padding:5px 0;'
+        : 'color:var(--r-warm-gray);opacity:0.35;padding:5px 0;';
+    cells += `<div style="${style}" ${allowed ? `onclick="pickClientBookingDate('${key}')"` : ''}>${day}</div>`;
+  }
+  grid.innerHTML = cells;
+
+  document.getElementById('booking-date-input').value = clientSelectedDates[0] || '';
+  const summary = document.getElementById('client-cal-selection-summary');
+  if (summary) {
+    summary.textContent = clientSelectedDates.length > 1
+      ? `${clientSelectedDates.length} days selected — one booking (and one payment) will be created per day`
+      : (clientSelectedDates.length === 1 ? `Selected: ${clientSelectedDates[0]}` : 'No date selected yet');
+  }
+}
+
+function pickClientBookingDate(key) {
+  const rule = bookingWindowRuleForMember(state.currentMember);
+  if (rule.multi) {
+    const idx = clientSelectedDates.indexOf(key);
+    if (idx >= 0) clientSelectedDates.splice(idx, 1);
+    else clientSelectedDates.push(key);
+  } else {
+    clientSelectedDates = [key];
+  }
+  renderClientBookingCalendar();
 }
 
 function fmtDateTime(iso) {
@@ -3659,6 +3748,11 @@ function showClientView(name, _fromHistory) {
   _activateView(name, clientViews, '#client-nav');
   if (name === 'profile') renderProfilePage();
   if (name === 'notifications') markNotificationsSeen();
+  if (name === 'book-room') {
+    clientCalMonth = new Date();
+    clientSelectedDates = [];
+    renderClientBookingCalendar();
+  }
   if (!_fromHistory) {
     navHistory.push(name);
     history.pushState({ appView: name, role: 'client' }, '', '#' + name);
@@ -4677,46 +4771,63 @@ async function confirmAdminBooking() {
 
 async function confirmClientBooking() {
   if (!selectedClientRoomId) { showToast('⚠ Please select a room'); return; }
-  const date = document.getElementById('booking-date-input').value;
-  if (!date) { showToast('⚠ Please select a date'); return; }
+  const dates = clientSelectedDates.slice();
+  if (dates.length === 0) { showToast('⚠ Please select at least one date'); return; }
   if (!selectedClientTime) { showToast('⚠ Please select a start time'); return; }
   if (!state.currentMember) { showToast('⚠ Could not identify your account — try signing in again'); return; }
 
   const duration = parseFloat(document.getElementById('client-duration').value);
   const notes = document.getElementById('client-notes').value;
-  const start = new Date(`${date}T${selectedClientTime}:00`);
-  const end = new Date(start.getTime() + duration * 3600000);
 
   const btn = document.getElementById('client-book-btn');
   btn.disabled = true;
-  btn.textContent = 'Booking…';
+  btn.textContent = dates.length > 1 ? `Booking ${dates.length} days…` : 'Booking…';
 
-  try {
-    const result = await api('/bookings', {
-      method: 'POST',
-      body: JSON.stringify({
-        room_id: selectedClientRoomId,
-        member_id: state.currentMember.id,
-        start_time: start.toISOString(),
-        end_time: end.toISOString(),
-        notes,
-      }),
-    });
-    await loadAppData();
-    const room = state.rooms.find(r => r.id === selectedClientRoomId);
-    lastBookingForCal = { roomName: room ? room.name : 'Room', start: start.toISOString(), end: end.toISOString(), notes };
+  const room = state.rooms.find(r => r.id === selectedClientRoomId);
+  let succeeded = 0, failed = 0, paymentPending = 0;
+  const errors = [];
+  let firstBooking = null;
 
-    let msg = '✓ Booking confirmed';
-    if (result.email_sent) msg += ' — confirmation email sent';
-    showToast(msg);
-    openModal('cal-modal');
-    showClientView('my-bookings');
-  } catch (e) {
-    showToast('⚠ ' + e.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Confirm Booking';
+  for (const date of dates) {
+    const start = new Date(`${date}T${selectedClientTime}:00`);
+    const end = new Date(start.getTime() + duration * 3600000);
+    try {
+      const result = await api('/bookings', {
+        method: 'POST',
+        body: JSON.stringify({
+          room_id: selectedClientRoomId,
+          member_id: state.currentMember.id,
+          start_time: start.toISOString(),
+          end_time: end.toISOString(),
+          notes,
+        }),
+      });
+      succeeded++;
+      if (result.booking && result.booking.payment_status === 'pending') paymentPending++;
+      if (!firstBooking) firstBooking = { roomName: room ? room.name : 'Room', start: start.toISOString(), end: end.toISOString(), notes };
+    } catch (e) {
+      failed++;
+      errors.push(`${date}: ${e.message}`);
+    }
   }
+
+  await loadAppData();
+  lastBookingForCal = firstBooking;
+
+  let msg;
+  if (dates.length === 1) {
+    msg = failed ? `⚠ ${errors[0]}` : '✓ Booking confirmed';
+    if (succeeded && paymentPending) msg += ' — payment required (you\'ll be contacted to pay)';
+  } else {
+    msg = `✓ ${succeeded}/${dates.length} bookings confirmed`;
+    if (failed) msg += `, ${failed} failed`;
+    if (paymentPending) msg += ` — payment required for ${paymentPending} (you'll be contacted to pay)`;
+  }
+  showToast(msg);
+  if (succeeded > 0) openModal('cal-modal');
+  showClientView('my-bookings');
+  btn.disabled = false;
+  btn.textContent = 'Confirm Booking';
 }
 
 function toggleInviteOwnerRow(prefix) {
@@ -4891,7 +5002,6 @@ function showToast(msg) {
 }
 
 // ── INIT ──
-document.getElementById('booking-date-input') && (document.getElementById('booking-date-input').valueAsDate = new Date());
 checkCalendarRedirectStatus();
 
 (async function initAuth() {
