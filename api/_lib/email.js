@@ -94,7 +94,7 @@ function tierSectionFor(planTier) {
   if (planTier && TIER_LABELS[planTier]) {
     return `\n\nYour room membership tier: ${TIER_LABELS[planTier]}\nYou can view the full details of your membership any time from your Profile page.`;
   }
-  return `\n\nRoom membership tier: not yet set\nYou can select your room membership tier (Ad Hoc, Flex, Core or Resident) from your Profile page.`;
+  return `\n\nRoom membership tier: not yet set\nYou can select your room membership tier (Community, Flex, Core or Resident) from your Profile page.`;
 }
 
 async function sendWelcomeEmail({ to, firstName, userType, planTier, directoryTier, isOwner }) {

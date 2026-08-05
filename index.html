@@ -1609,10 +1609,10 @@ textarea.form-input { resize: vertical; }
         <div id="pricing-tier-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;"></div>
 
         <div class="card" style="margin-top:20px;">
-          <div class="card-header"><div class="card-title">Evening Sessions (6pm–8pm)</div></div>
+          <div class="card-header"><div class="card-title">Evening Sessions (6pm–8pm, Thursdays & Fridays)</div></div>
           <div style="padding:16px 22px;font-size:13.5px;line-height:1.6;">
-            Available on a priority basis to Resident, Core and Flex members. Ad Hoc members may book subject to availability.<br>
-            Clinical/Wellbeing Room: <strong>£30</strong> · Small Therapy Room: <strong>£25</strong> (all tiers)
+            Available on a priority basis to Resident, Core and Flex members. Community members may book subject to availability. Minimum two-hour booking.<br>
+            Clinical/Wellness Room: <strong>£35 total</strong> · Consultation Room: <strong>£35 total</strong>
           </div>
         </div>
       </div>
@@ -3567,28 +3567,28 @@ async function showMemberProfile(id) {
 // ── MEMBERSHIP & PRICING (real data from the practitioner membership brochure) ──
 const TIER_DATA = {
   community: {
-    label: 'Community', commitment: 'No commitment', bookingWindow: 'Anytime, subject to availability',
+    label: 'Community', commitment: 'No commitment', bookingWindow: 'Book up to 7 days ahead',
     cancellation: '48 hours notice (half/full day) · 50% late cancel · 100% no-show', exitNotice: 'None',
-    benefits: ['Perfect for occasional clinic space', 'No minimum commitment', 'Hourly appointments available', 'Half-day bookings available', 'Full-day bookings available'],
-    rates: { 'Full Day': ['£95', '£80'], 'Half Day': ['£47.50', '£40'] },
+    benefits: ['No minimum commitment', 'Flexible booking options', 'Access to premium clinic facilities', 'Opportunity to connect with other practitioners', 'Access to practitioner platform and messaging'],
+    rates: { '1 Hour': ['£20', '£17'], '2 Hours': ['£35', '£30'], 'Half Day (50%)': ['£47.50', '£40.00'], '1 Day/Week': ['£95', '£80'], '2 Days/Week': ['£190', '£160'], '3 Days/Week': ['£285', '£240'] },
   },
   flex: {
-    label: 'Flex', commitment: '1 month commitment', bookingWindow: 'Up to 30 days ahead',
+    label: 'Flex', commitment: '1 month commitment', bookingWindow: 'Book up to 30 days ahead',
     cancellation: '7 days notice · 50% late cancel', exitNotice: '30 days written notice',
-    benefits: ['Ideal for practitioners building their practice', 'Member room pricing', 'Fixed weekly clinics available', 'Directory listing', 'Networking events'],
-    rates: { 'Full Day': ['£90', '£75'], 'Half Day': ['£45', '£37.50'], 'Hourly': ['£18', '£15'] },
+    benefits: ['Reduced commitment period', 'Member pricing', 'Practitioner directory listing', 'Opportunities for networking and collaboration', 'Access to practitioner platform and messaging'],
+    rates: { '1 Hour': ['£18', '£15'], '2 Hours': ['£32', '£27'], 'Half Day (50%)': ['£45.00', '£37.50'], '1 Day/Week': ['£90', '£75'], '2 Days/Week': ['£180', '£150'], '3 Days/Week': ['£270', '£225'] },
   },
   core: {
-    label: 'Core', commitment: '3 months commitment', bookingWindow: 'Fixed recurring slot, up to 30 days ahead',
-    cancellation: '2 weeks notice on recurring session · missed sessions chargeable', exitNotice: '14 days written notice (after minimum term)',
-    benefits: ['For a regular clinic presence', 'Guaranteed recurring clinic sessions', 'Preferential room rates', 'Newsletter inclusion', 'Priority booking'],
-    rates: { 'Full Day': ['£85', '£70'], 'Half Day': ['£42.50', '£35'], 'Hourly': ['£17', '£14'] },
+    label: 'Core', commitment: '3 months commitment', bookingWindow: 'Fixed recurring slot, agreed 3-month term',
+    cancellation: '2 weeks notice on recurring session · missed sessions chargeable', exitNotice: '1 month written notice',
+    benefits: ['Preferential member pricing', 'Regular pre-booked clinic sessions', 'Monthly social media promotion', 'Inclusion in practitioner directory', 'Access to practitioner community'],
+    rates: { '1 Hour': ['£17', '£14'], '2 Hours': ['£29', '£26'], 'Half Day (50%)': ['£42.50', '£35.00'], '1 Day/Week': ['£85', '£70'], '2 Days/Week': ['£170', '£140'], '3 Days/Week': ['£255', '£210'] },
   },
   resident: {
-    label: 'Resident', commitment: '6 months commitment', bookingWindow: 'Fixed recurring slot, up to 30 days ahead',
-    cancellation: '1 month notice on recurring session · missed sessions chargeable', exitNotice: '30 days written notice (after minimum term)',
-    benefits: ['For a long-term regular presence', 'First priority across all scheduling', 'Guaranteed recurring sessions', 'Dedicated practitioner webpage', 'Priority referrals & spotlight'],
-    rates: { 'Full Day': ['£80', '£65'], 'Half Day': ['£40', '£32.50'], 'Hourly': ['£15', '£12'] },
+    label: 'Resident', commitment: '6 months commitment', bookingWindow: 'Fixed recurring slot, agreed 6-month term',
+    cancellation: '1 month notice on recurring session · missed sessions chargeable', exitNotice: '2 months written notice',
+    benefits: ['Guaranteed recurring clinic sessions', 'First priority across all scheduling', 'Dedicated practitioner webpage', 'Fortnightly social media promotion', 'Priority referral opportunities'],
+    rates: { '1 Hour': ['£15', '£12'], '2 Hours': ['£30', '£24'], 'Half Day (50%)': ['£40.00', '£32.50'], '1 Day/Week': ['£80', '£65'], '2 Days/Week': ['£160', '£130'], '3 Days/Week': ['£240', '£195'] },
   },
 };
 
@@ -3612,7 +3612,7 @@ function renderMembershipPricing() {
       </div>
       <div style="font-size:12px;color:var(--r-warm-gray);margin-bottom:10px;">Commitment: ${esc(t.commitment)}</div>
       <table style="width:100%;table-layout:fixed;font-size:12px;margin-bottom:12px;">
-        <thead><tr><th style="text-align:left;padding:3px 0;width:34%;">Booking</th><th style="text-align:right;white-space:normal;width:33%;">Clinical/<wbr>Wellbeing</th><th style="text-align:right;white-space:normal;width:33%;">Small Therapy</th></tr></thead>
+        <thead><tr><th style="text-align:left;padding:3px 0;width:34%;">Booking</th><th style="text-align:right;white-space:normal;width:33%;">Clinical/<wbr>Wellness</th><th style="text-align:right;white-space:normal;width:33%;">Consultation</th></tr></thead>
         <tbody>${Object.entries(t.rates).map(([label, [a, b]]) => `<tr><td style="padding:3px 0;color:var(--r-warm-gray);">${esc(label)}</td><td style="text-align:right;">${esc(a)}</td><td style="text-align:right;">${esc(b)}</td></tr>`).join('')}</tbody>
       </table>
       <ul style="margin:0;padding-left:18px;font-size:12.5px;color:var(--r-warm-gray);line-height:1.7;">
