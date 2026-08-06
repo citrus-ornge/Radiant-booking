@@ -1,0 +1,79 @@
+const { getSupabase } = require('../_lib/supabase');
+const { requireAuth } = require('../_lib/auth');
+const { logAudit } = require('../_lib/audit');
+
+// POST /api/onboarding/room-terms { response: 'accept' | 'reject' }
+// The step between documents and onboarding actually being done for
+// Core/Resident practitioners: they've been offered a specific recurring
+// slot (day/time/room) and must explicitly accept or reject it — signing
+// the general membership documents doesn't imply agreeing to that specific
+// slot. Accepting finishes onboarding (payment setup is prompted
+// separately, on the resulting dashboard/profile — this endpoint doesn't
+// trigger GoCardless itself). Rejecting notifies Staff & Admin and leaves
+// onboarding at 'booking_pending' so a revised offer can go through the
+// same flow again.
+module.exports = async (req, res) => {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  let member;
+  try {
+    const auth = await requireAuth(req);
+    member = auth.member;
+    if (!member) return res.status(404).json({ error: 'No member record linked to this account' });
+  } catch (e) {
+    return res.status(e.status || 401).json({ error: e.message });
+  }
+
+  const { response } = req.body || {};
+  if (!['accept', 'reject'].includes(response)) {
+    return res.status(400).json({ error: "response must be 'accept' or 'reject'" });
+  }
+  if (!['core', 'resident'].includes(member.plan_tier) || !member.reserved_day_of_week) {
+    return res.status(400).json({ error: 'No room offer is awaiting your response.' });
+  }
+
+  const supabase = getSupabase();
+  const memberName = `${member.first_name || ''} ${member.last_name || ''}`.trim() || member.email;
+  const slotDesc = `${member.reserved_day_of_week}, ${member.reserved_time_start || ''}–${member.reserved_time_end || ''}`;
+
+  if (response === 'accept') {
+    const { data: updated, error } = await supabase
+      .from('members')
+      .update({ room_terms_accepted_at: new Date().toISOString(), room_terms_rejected_at: null, onboarding_status: 'completed' })
+      .eq('id', member.id)
+      .select('*')
+      .single();
+    if (error) return res.status(500).json({ error: error.message });
+
+    await logAudit({
+      actorId: member.id, actorName: memberName, action: 'onboarding.room_terms_accepted',
+      entityType: 'member', entityId: member.id, details: { slot: slotDesc },
+    });
+
+    return res.status(200).json({ member: updated });
+  }
+
+  // Reject: notify every admin/owner so someone actually sees it (not just
+  // one, in case they're unavailable), leave onboarding_status as
+  // 'booking_pending' so accepting a revised offer later re-enters the same step.
+  const { data: updated, error } = await supabase
+    .from('members')
+    .update({ room_terms_rejected_at: new Date().toISOString() })
+    .eq('id', member.id)
+    .select('*')
+    .single();
+  if (error) return res.status(500).json({ error: error.message });
+
+  const { data: admins } = await supabase.from('members').select('id').eq('user_type', 'administrator').eq('status', 'active');
+  const notifyBody = `${memberName} has declined their offered recurring slot (${slotDesc}). Please review and offer a revised day/time/room.`;
+  for (const admin of admins || []) {
+    await supabase.from('messages').insert({ sender_id: member.id, recipient_id: admin.id, body: notifyBody });
+  }
+
+  await logAudit({
+    actorId: member.id, actorName: memberName, action: 'onboarding.room_terms_rejected',
+    entityType: 'member', entityId: member.id, details: { slot: slotDesc },
+  });
+
+  return res.status(200).json({ member: updated });
+};

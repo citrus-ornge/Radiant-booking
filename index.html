@@ -1049,6 +1049,17 @@ textarea.form-input { resize: vertical; }
       <div id="onboarding-doc-container"></div>
     </div>
 
+    <!-- Step: Accept/reject offered recurring slot (Core/Resident only) -->
+    <div id="onboarding-step-room-terms" class="onboarding-step" style="display:none;">
+      <div class="page-title" style="font-size:20px;">Your Room Offer</div>
+      <p class="page-sub" style="margin:8px 0 24px;">Staff & Admin have offered you a recurring weekly slot as part of your membership. Please review and confirm.</p>
+      <div id="onboarding-room-offer-details" style="background:var(--r-surface2);border-radius:10px;padding:20px 22px;margin-bottom:24px;font-size:14px;"></div>
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-outline" id="onboarding-reject-btn" onclick="respondToRoomOffer('reject')">Decline this slot</button>
+        <button class="btn btn-primary" id="onboarding-accept-btn" onclick="respondToRoomOffer('accept')" style="flex:1;">Accept & Continue →</button>
+      </div>
+    </div>
+
     <!-- Step: Done -->
     <div id="onboarding-step-done" class="onboarding-step" style="display:none;text-align:center;padding:40px 0;">
       <div style="width:56px;height:56px;border-radius:50%;background:var(--r-green-light);color:var(--r-green);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;">
@@ -1998,8 +2009,15 @@ textarea.form-input { resize: vertical; }
           <option value="not_started">Not started</option>
           <option value="profile_pending">Profile pending</option>
           <option value="documents_pending">Documents pending</option>
+          <option value="booking_pending">Booking pending (awaiting room offer response)</option>
           <option value="completed">Completed</option>
         </select>
+        <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">
+          <span style="font-size:11.5px;color:var(--r-warm-gray);align-self:center;">Reset for re-testing:</span>
+          <button type="button" class="btn btn-outline btn-sm" onclick="resetOnboardingForTesting('not_started')">Full restart</button>
+          <button type="button" class="btn btn-outline btn-sm" onclick="resetOnboardingForTesting('documents_pending')">Re-sign documents</button>
+          <button type="button" class="btn btn-outline btn-sm" onclick="resetOnboardingForTesting('booking_pending')">Re-open room offer</button>
+        </div>
       </div>
       <div class="form-row"><label class="form-label">Phone</label><input class="form-input" id="mm-phone"></div>
       <div class="form-row"><label class="form-label">Qualifications</label><textarea class="form-input" id="mm-qualifications" rows="2"></textarea></div>
@@ -3737,7 +3755,12 @@ async function bootstrapSession(session) {
   document.getElementById('login-screen').style.display = 'none';
 
   const needsOnboarding = ['practitioner', 'member', 'administrator'].includes(meData.member.user_type)
-    && meData.member.onboarding_status !== 'completed';
+    && meData.member.onboarding_status !== 'completed'
+    // A rejected room offer leaves onboarding_status at 'booking_pending' on
+    // purpose (so a revised offer re-enters this same step later), but it
+    // shouldn't trap the member out of the app in the meantime — only an
+    // offer that's still genuinely unanswered should block entry.
+    && !(meData.member.onboarding_status === 'booking_pending' && meData.member.room_terms_rejected_at);
 
   if (needsOnboarding) {
     startOnboarding();
@@ -3784,10 +3807,10 @@ function renderOnboardingProgress(activeStep) {
 function startOnboarding() {
   document.getElementById('app-shell').style.display = 'none';
   document.getElementById('onboarding-screen').style.display = 'block';
-  document.getElementById('onboarding-step-profile').style.display = 'block';
+  document.getElementById('onboarding-step-profile').style.display = 'none';
   document.getElementById('onboarding-step-documents').style.display = 'none';
+  document.getElementById('onboarding-step-room-terms').style.display = 'none';
   document.getElementById('onboarding-step-done').style.display = 'none';
-  renderOnboardingProgress(0);
 
   const m = state.currentMember;
   const subtitleMap = { practitioner: 'Practitioner Onboarding', administrator: 'Staff & Admin Onboarding', member: 'Welcome — Let\'s Get You Set Up' };
@@ -3802,10 +3825,18 @@ function startOnboarding() {
   document.getElementById('ob-indemnity-number').value = m.indemnity_number || '';
   document.getElementById('ob-indemnity-expiry').value = m.indemnity_expiry || '';
 
-  // Skip straight to documents if profile basics are already filled in
-  if (m.first_name && m.last_name) {
+  // Route straight to whichever step actually still needs doing, rather
+  // than always restarting from profile/documents.
+  if (m.onboarding_status === 'booking_pending') {
+    renderOnboardingProgress(2);
+    showOnboardingRoomTerms();
+  } else if (m.first_name && m.last_name) {
     document.getElementById('onboarding-step-profile').style.display = 'none';
+    renderOnboardingProgress(1);
     loadOnboardingDocuments();
+  } else {
+    document.getElementById('onboarding-step-profile').style.display = 'block';
+    renderOnboardingProgress(0);
   }
 }
 
@@ -3914,12 +3945,65 @@ async function signCurrentOnboardingDoc(documentId) {
     const result = await api(`/documents`, { method: 'POST', body: JSON.stringify({ document_id: documentId, signature_name: signatureName }) });
     onboarding.docIndex++;
     if (onboarding.docIndex >= onboarding.docs.length) {
-      showOnboardingDone();
+      if (result.onboarding_status === 'booking_pending') {
+        await showOnboardingRoomTerms();
+      } else {
+        showOnboardingDone();
+      }
     } else {
       renderCurrentOnboardingDoc();
     }
   } catch (e) {
     showToast('⚠ ' + e.message);
+  }
+}
+
+async function showOnboardingRoomTerms() {
+  document.getElementById('onboarding-step-documents').style.display = 'none';
+  document.getElementById('onboarding-step-room-terms').style.display = 'block';
+  renderOnboardingProgress(2);
+
+  // Refresh currentMember from /me so we have the actual offered slot,
+  // not a possibly-stale cached copy.
+  try {
+    const meData = await api('/me');
+    state.currentMember = meData.member;
+  } catch (e) { /* fall through with whatever we already have */ }
+
+  const m = state.currentMember;
+  const detailsEl = document.getElementById('onboarding-room-offer-details');
+  const room = m && m.reserved_room_id ? state.rooms.find(r => r.id === m.reserved_room_id) : null;
+  const tierLabelText = m && m.plan_tier === 'resident' ? 'Resident' : 'Core';
+  detailsEl.innerHTML = `
+    <div style="font-size:15px;font-weight:600;margin-bottom:10px;">${esc(m.reserved_day_of_week || '')}, ${esc(m.reserved_time_start || '')}–${esc(m.reserved_time_end || '')}</div>
+    <div style="color:var(--r-warm-gray);margin-bottom:4px;">Room: ${esc(room ? room.name : 'To be confirmed')}</div>
+    <div style="color:var(--r-warm-gray);">This slot is held for you every week as part of your ${esc(tierLabelText)} membership.</div>
+  `;
+}
+
+async function respondToRoomOffer(response) {
+  const acceptBtn = document.getElementById('onboarding-accept-btn');
+  const rejectBtn = document.getElementById('onboarding-reject-btn');
+  acceptBtn.disabled = true;
+  rejectBtn.disabled = true;
+  try {
+    const result = await api('/onboarding/room-terms', { method: 'POST', body: JSON.stringify({ response }) });
+    state.currentMember = result.member;
+    if (response === 'accept') {
+      document.getElementById('onboarding-step-room-terms').style.display = 'none';
+      showOnboardingDone();
+    } else {
+      showToast('✓ Staff & Admin have been notified — they\'ll follow up with a revised offer');
+      document.getElementById('onboarding-step-room-terms').style.display = 'none';
+      document.getElementById('onboarding-step-done').style.display = 'block';
+      document.getElementById('onboarding-reserved-slot-info').style.display = 'block';
+      document.getElementById('onboarding-reserved-slot-info').innerHTML = `<strong>Slot declined</strong><br><span style="color:var(--r-warm-gray);">Staff & Admin have been notified and will offer a revised day, time, or room. You can start booking ad-hoc sessions in the meantime.</span>`;
+      renderOnboardingProgress(2);
+    }
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+    acceptBtn.disabled = false;
+    rejectBtn.disabled = false;
   }
 }
 
@@ -5199,6 +5283,21 @@ async function payNowFromModal() {
     showToast('⚠ ' + e.message);
     btn.disabled = false;
     btn.textContent = 'Pay now (instant)';
+  }
+}
+
+async function resetOnboardingForTesting(stage) {
+  const memberId = document.getElementById('mm-id').value;
+  if (!memberId) return;
+  const labels = { not_started: 'a full restart', documents_pending: 're-signing documents', booking_pending: 're-opening the room offer' };
+  if (!confirm(`Reset this member to ${labels[stage]}? ${stage !== 'booking_pending' ? 'Their signed documents will be deleted.' : ''}`)) return;
+  try {
+    await api('/onboarding/reset', { method: 'POST', body: JSON.stringify({ member_id: memberId, stage }) });
+    showToast('✓ Onboarding reset');
+    document.getElementById('mm-onboarding-status').value = stage;
+    await loadAppData();
+  } catch (e) {
+    showToast('⚠ ' + e.message);
   }
 }
 

@@ -86,8 +86,13 @@ module.exports = async (req, res) => {
 
       const allSigned = requiredDocs.every(d => allSigs.some(s => s.document_id === d.id && s.version_signed === d.version));
       let onboarding_status = member.onboarding_status;
-      if (allSigned && member.onboarding_status !== 'completed') {
-        onboarding_status = 'completed';
+      if (allSigned && !['booking_pending', 'completed'].includes(member.onboarding_status)) {
+        // Core/Resident members who've been offered a recurring slot still
+        // need to explicitly accept it before onboarding is actually done —
+        // documents alone don't confirm the room. Everyone else (no slot
+        // offered) goes straight to completed, same as before.
+        const hasOfferedSlot = ['core', 'resident'].includes(member.plan_tier) && member.reserved_day_of_week && !member.room_terms_accepted_at;
+        onboarding_status = hasOfferedSlot ? 'booking_pending' : 'completed';
         await supabase.from('members').update({ onboarding_status }).eq('id', member.id);
       }
 
