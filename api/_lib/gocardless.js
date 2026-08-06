@@ -1,5 +1,4 @@
-const gocardless = require('gocardless-nodejs');
-const { Environments } = require('gocardless-nodejs/constants');
+const { GoCardlessClient, Environments } = require('gocardless-nodejs');
 const crypto = require('crypto');
 
 // Server-side only — never import this file from anything that ships to
@@ -17,7 +16,7 @@ function getGoCardlessClient() {
     throw new Error('Missing GC_ACCESS_TOKEN env var');
   }
   const env = process.env.GC_ENVIRONMENT === 'live' ? Environments.Live : Environments.Sandbox;
-  return gocardless(token, env);
+  return new GoCardlessClient(token, env);
 }
 
 // Membership tier monthly prices, in pence. Kept here (server-side) as the
@@ -61,13 +60,15 @@ async function getOrCreateCustomer(supabase, client, member) {
   return customer.id;
 }
 
-module.exports = { getGoCardlessClient, PLAN_TIER_MONTHLY_PENCE, readRawBody, createOneOffPayment, createMembershipSubscription, getOrCreateCustomer };
-
+// Creates a one-off Direct Debit payment against an existing active mandate
 // (e.g. for a chargeable extra session). idempotencyKey should be stable per
 // logical charge (we use the booking id) so a retried request never double-charges.
+// NOTE: GoCardless's API takes amount as a STRING, not a number — this was
+// previously sent as a raw number, which the SDK's TypeScript types reject
+// (amount: string on PaymentCreateRequest) - explicitly stringify it.
 async function createOneOffPayment(client, { mandateId, amountPence, description, idempotencyKey }) {
   return client.payments.create(
-    { amount: amountPence, currency: 'GBP', links: { mandate: mandateId }, description },
+    { amount: String(amountPence), currency: 'GBP', links: { mandate: mandateId }, description },
     idempotencyKey || crypto.randomUUID(),
   );
 }
@@ -78,7 +79,9 @@ async function createOneOffPayment(client, { mandateId, amountPence, description
 // would create two subscriptions and double-bill them.
 async function createMembershipSubscription(client, { mandateId, amountPence, name, idempotencyKey }) {
   return client.subscriptions.create(
-    { amount: amountPence, currency: 'GBP', name, interval_unit: 'monthly', links: { mandate: mandateId } },
+    { amount: String(amountPence), currency: 'GBP', name, interval_unit: 'monthly', links: { mandate: mandateId } },
     idempotencyKey || crypto.randomUUID(),
   );
 }
+
+module.exports = { getGoCardlessClient, PLAN_TIER_MONTHLY_PENCE, readRawBody, createOneOffPayment, createMembershipSubscription, getOrCreateCustomer };

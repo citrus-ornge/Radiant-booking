@@ -65,7 +65,7 @@ module.exports = async (req, res) => {
 
     const billingRequestParams = {
       payment_request: {
-        amount: booking.amount_pence,
+        amount: String(booking.amount_pence),
         currency: 'GBP',
         scheme: 'faster_payments',
         description: `${booking.room ? booking.room.name : 'Room'} booking — ${new Date(booking.start_time).toLocaleDateString('en-GB')}`,
