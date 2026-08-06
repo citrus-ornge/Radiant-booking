@@ -1632,6 +1632,7 @@ textarea.form-input { resize: vertical; }
           <div class="stat-card"><div class="stat-label">This Month</div><div class="stat-value" id="my-stat-month">–</div></div>
           <div class="stat-card"><div class="stat-label">Total Bookings</div><div class="stat-value" id="my-stat-total">–</div></div>
         </div>
+        <div id="my-payment-due-banner" style="display:none;margin-bottom:20px;"></div>
         <div id="my-recurring-slot-card" style="display:none;margin-bottom:20px;"></div>
         <div id="my-upgrade-banner" style="display:none;margin-bottom:20px;"></div>
         <div class="card">
@@ -2256,6 +2257,21 @@ textarea.form-input { resize: vertical; }
 </div>
 
 <!-- CALENDAR -->
+<div class="modal-overlay" id="payment-required-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div><div class="modal-title">Payment Required</div><div style="font-size:13px;color:var(--r-warm-gray);margin-top:3px;">This room can't be used until it's paid for</div></div>
+      <button class="close-btn" onclick="closeModal('payment-required-modal')">✕</button>
+    </div>
+    <div class="modal-body" id="payment-required-body"></div>
+    <input type="hidden" id="payment-required-booking-id">
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('payment-required-modal'); showClientView('my-bookings');">I'll pay later</button>
+      <button class="btn btn-primary" id="payment-required-pay-btn" onclick="payNowFromModal()">Pay now (instant)</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="cal-modal">
   <div class="modal">
     <div class="modal-header">
@@ -3009,6 +3025,29 @@ function renderMyBookings() {
   }
 
   const mine = state.bookings.filter(b => b.member && b.member.id === state.currentMember.id);
+
+  // Persistent reminder for any unpaid booking — not just a one-time popup —
+  // since a room booking with payment due can't actually be used yet.
+  const dueBannerEl = document.getElementById('my-payment-due-banner');
+  if (dueBannerEl) {
+    const unpaid = mine.filter(b => b.payment_status === 'pending' && !b.gocardless_payment_id && b.status !== 'cancelled');
+    if (unpaid.length > 0) {
+      const totalPence = unpaid.reduce((sum, b) => sum + (b.amount_pence || 0), 0);
+      dueBannerEl.style.display = 'block';
+      dueBannerEl.innerHTML = `
+        <div class="card" style="border-color:var(--r-red, #b3452c);background:var(--r-red-light, #fdf1ee);">
+          <div style="padding:16px 22px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;">
+            <div>
+              <div style="font-size:13.5px;font-weight:600;">⚠ Payment required — room${unpaid.length > 1 ? 's' : ''} can't be used until paid</div>
+              <div style="font-size:12px;color:var(--r-warm-gray);margin-top:2px;">${unpaid.length} booking${unpaid.length > 1 ? 's' : ''} awaiting payment${totalPence ? `, £${(totalPence / 100).toFixed(2)} total` : ''}. Pay instantly below, or set up Direct Debit on your profile for future bookings.</div>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="payNowForBooking('${unpaid[0].id}', this)">Pay now</button>
+          </div>
+        </div>`;
+    } else {
+      dueBannerEl.style.display = 'none';
+    }
+  }
   const now = new Date();
   const upcoming = mine.filter(b => b.status !== 'cancelled' && new Date(b.start_time) >= now).sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
   const thisMonth = mine.filter(b => {
@@ -5071,6 +5110,7 @@ async function confirmClientBooking() {
   let succeeded = 0, failed = 0, paymentPending = 0, chargeAttempted = 0;
   const errors = [];
   let firstBooking = null;
+  let unpaidBooking = null; // first booking still needing payment, no mandate charge attempted
 
   for (const date of dates) {
     const start = new Date(`${date}T${selectedClientTime}:00`);
@@ -5088,8 +5128,12 @@ async function confirmClientBooking() {
       });
       succeeded++;
       if (result.booking && result.booking.payment_status === 'pending') {
-        paymentPending += result.booking.gocardless_payment_id ? 0 : 1;
-        chargeAttempted += result.booking.gocardless_payment_id ? 1 : 0;
+        if (result.booking.gocardless_payment_id) {
+          chargeAttempted++;
+        } else {
+          paymentPending++;
+          if (!unpaidBooking) unpaidBooking = result.booking;
+        }
       }
       if (!firstBooking) firstBooking = { roomName: room ? room.name : 'Room', start: start.toISOString(), end: end.toISOString(), notes };
     } catch (e) {
@@ -5101,22 +5145,61 @@ async function confirmClientBooking() {
   await loadAppData();
   lastBookingForCal = firstBooking;
 
+  // A room booking that needs payment and has no Direct Debit mandate to
+  // charge automatically must be paid before the room can actually be used.
+  // Rather than leave that as a small note the member might miss, block
+  // here with an explicit choice: pay this one instantly, or set up Direct
+  // Debit (which takes a bank authorisation and isn't instant — so Instant
+  // Bank Pay is what actually lets them use the room today).
+  if (unpaidBooking) {
+    showPaymentRequiredModal(unpaidBooking, paymentPending - 1);
+    btn.disabled = false;
+    btn.textContent = 'Confirm Booking';
+    return;
+  }
+
   let msg;
   if (dates.length === 1) {
     msg = failed ? `⚠ ${errors[0]}` : '✓ Booking confirmed';
     if (succeeded && chargeAttempted) msg += ' — Direct Debit payment initiated';
-    else if (succeeded && paymentPending) msg += ' — payment required (you\'ll be contacted to pay, or set up Direct Debit on your profile)';
   } else {
     msg = `✓ ${succeeded}/${dates.length} bookings confirmed`;
     if (failed) msg += `, ${failed} failed`;
     if (chargeAttempted) msg += `, Direct Debit initiated for ${chargeAttempted}`;
-    if (paymentPending) msg += ` — payment required for ${paymentPending} (you'll be contacted to pay, or set up Direct Debit on your profile)`;
   }
   showToast(msg);
   if (succeeded > 0) openModal('cal-modal');
   showClientView('my-bookings');
   btn.disabled = false;
   btn.textContent = 'Confirm Booking';
+}
+
+// Blocking payment-required modal shown right after booking, when payment
+// is owed and no Direct Debit mandate exists to charge it automatically.
+function showPaymentRequiredModal(booking, otherUnpaidCount) {
+  const amount = booking.amount_pence != null ? `£${(booking.amount_pence / 100).toFixed(2)}` : 'an amount to be confirmed';
+  const roomName = booking.room ? booking.room.name : 'this room';
+  document.getElementById('payment-required-body').innerHTML = `
+    <p style="margin:0 0 14px;font-size:14px;">Your booking for <strong>${esc(roomName)}</strong> is confirmed, but this room can't be used until payment is made — <strong>${amount}</strong> is due${otherUnpaidCount > 0 ? ` (plus ${otherUnpaidCount} more booking${otherUnpaidCount > 1 ? 's' : ''} awaiting payment)` : ''}.</p>
+    <p style="margin:0 0 4px;font-size:13px;color:var(--r-warm-gray);">Pay instantly via your banking app (usually seconds, funds same/next business day), or set up Direct Debit for future bookings to be charged automatically — but Direct Debit itself takes a bank authorisation step and won't cover this booking today.</p>
+  `;
+  document.getElementById('payment-required-booking-id').value = booking.id;
+  openModal('payment-required-modal');
+}
+
+async function payNowFromModal() {
+  const bookingId = document.getElementById('payment-required-booking-id').value;
+  const btn = document.getElementById('payment-required-pay-btn');
+  btn.disabled = true;
+  btn.textContent = 'Starting…';
+  try {
+    const result = await api('/billing/pay-now', { method: 'POST', body: JSON.stringify({ booking_id: bookingId }) });
+    window.location.href = result.authorisation_url;
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+    btn.disabled = false;
+    btn.textContent = 'Pay now (instant)';
+  }
 }
 
 function toggleInviteOwnerRow(prefix) {
