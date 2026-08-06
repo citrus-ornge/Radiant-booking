@@ -1623,6 +1623,8 @@ textarea.form-input { resize: vertical; }
           <div class="stat-card"><div class="stat-label">This Month</div><div class="stat-value" id="my-stat-month">–</div></div>
           <div class="stat-card"><div class="stat-label">Total Bookings</div><div class="stat-value" id="my-stat-total">–</div></div>
         </div>
+        <div id="my-recurring-slot-card" style="display:none;margin-bottom:20px;"></div>
+        <div id="my-upgrade-banner" style="display:none;margin-bottom:20px;"></div>
         <div class="card">
           <div class="card-header"><div class="card-title">Upcoming Sessions</div></div>
           <div id="my-bookings-list">
@@ -1710,15 +1712,14 @@ textarea.form-input { resize: vertical; }
               <div class="form-row"><label class="form-label">Qualifications</label><textarea class="form-input" id="profile-qualifications" rows="2"></textarea></div>
               <div class="form-row" id="profile-tier-row" style="display:none;">
                 <label class="form-label">Room Membership Tier</label>
-                <select class="form-input" id="profile-plan-tier">
-                  <option value="">— Not set —</option>
-                  <option value="community">Community</option>
-                  <option value="flex">Flex</option>
-                  <option value="core">Core</option>
-                  <option value="resident">Resident</option>
-                </select>
+                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                  <span class="badge badge-gold" id="profile-tier-badge" style="font-size:12.5px;">—</span>
+                  <span style="font-size:11.5px;color:var(--r-warm-gray);">Set by Staff &amp; Admin</span>
+                  <button class="btn btn-outline btn-sm" id="profile-request-upgrade-btn" onclick="requestUpgradeFromProfile()" style="margin-left:auto;">Request upgrade</button>
+                </div>
               </div>
               <div class="form-row" id="profile-reserved-slot-row" style="display:none;background:var(--r-surface2);border-radius:8px;padding:12px 14px;"></div>
+              <div class="form-row" id="profile-member-since-row" style="display:none;font-size:12.5px;color:var(--r-warm-gray);"></div>
               <div class="form-row" id="profile-community-tier-row" style="display:none;">
                 <label class="form-label">Community Membership</label>
                 <select class="form-input" id="profile-directory-tier">
@@ -2671,6 +2672,29 @@ function typeBadge(userType, isOwner) {
   return `<span class="badge ${isOwner ? 'badge-gold' : (map[userType] || 'badge-gray')}">${esc(roleLabel(userType, isOwner))}</span>`;
 }
 
+// Friendly membership-tier label for a member: plan_tier for practitioners
+// (Community/Flex/Core/Resident), directory_tier for members (Access/Enhanced).
+// Returns null when there's no tier to show (e.g. admins, guests).
+function tierLabel(m) {
+  if (!m) return null;
+  if (m.user_type === 'practitioner') {
+    return m.plan_tier ? (TIER_DATA[m.plan_tier] ? TIER_DATA[m.plan_tier].label : m.plan_tier) : null;
+  }
+  if (m.user_type === 'member') {
+    return m.directory_tier === 'enhanced' ? 'Enhanced' : 'Access';
+  }
+  return null;
+}
+
+// Next tier up in the Community → Flex → Core → Resident ladder, or null if
+// already at the top (or not a practitioner).
+const TIER_ORDER = ['community', 'flex', 'core', 'resident'];
+function nextTierUp(planTier) {
+  const idx = TIER_ORDER.indexOf(planTier);
+  if (idx === -1 || idx === TIER_ORDER.length - 1) return null;
+  return TIER_ORDER[idx + 1];
+}
+
 let bookingsTableFilter = 'all';
 
 function filterBookingsTab(status, el) {
@@ -2904,6 +2928,57 @@ function renderMyBookings() {
   const listEl = document.getElementById('my-bookings-list');
   if (!listEl || !state.currentMember) return;
 
+  const m = state.currentMember;
+
+  // Recurring slot card — Core/Resident practitioners have a fixed weekly
+  // slot that lives on the member record, not as a row in `bookings`, so it
+  // needs its own display separate from the upcoming-sessions list below.
+  const slotCardEl = document.getElementById('my-recurring-slot-card');
+  if (slotCardEl) {
+    if (m.user_type === 'practitioner' && ['core', 'resident'].includes(m.plan_tier)) {
+      const room = state.rooms.find(r => r.id === m.reserved_room_id);
+      slotCardEl.style.display = 'block';
+      slotCardEl.innerHTML = m.reserved_day_of_week ? `
+        <div class="card" style="border-color:var(--r-gold);">
+          <div style="padding:16px 22px;display:flex;align-items:center;gap:14px;">
+            <div style="font-size:22px;">📅</div>
+            <div style="flex:1;">
+              <div style="font-size:13.5px;font-weight:500;">Your recurring slot: every ${esc(m.reserved_day_of_week)}</div>
+              <div style="font-size:12px;color:var(--r-warm-gray);margin-top:2px;">${esc(m.reserved_time_start || '')}–${esc(m.reserved_time_end || '')} · ${esc(room ? room.name : 'Room to be confirmed')} · held weekly as part of your ${esc(TIER_DATA[m.plan_tier].label)} membership</div>
+            </div>
+          </div>
+        </div>` : `
+        <div class="card" style="border-color:var(--r-gold);">
+          <div style="padding:16px 22px;font-size:13px;color:var(--r-warm-gray);">Your ${esc(TIER_DATA[m.plan_tier].label)} membership includes a fixed recurring weekly slot — Staff &amp; Admin will confirm the day, time and room with you shortly.</div>
+        </div>`;
+    } else {
+      slotCardEl.style.display = 'none';
+    }
+  }
+
+  // Upgrade prompt — nudge Community/Flex practitioners toward the next tier.
+  const upgradeEl = document.getElementById('my-upgrade-banner');
+  if (upgradeEl) {
+    const next = m.user_type === 'practitioner' ? nextTierUp(m.plan_tier || 'community') : null;
+    if (next) {
+      const nextLabel = TIER_DATA[next].label;
+      upgradeEl.style.display = 'block';
+      upgradeEl.innerHTML = `
+        <div class="card" style="padding:16px 22px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:13.5px;font-weight:500;">Get more from your membership</div>
+            <div style="font-size:12px;color:var(--r-warm-gray);margin-top:2px;">Upgrade to ${esc(nextLabel)} for a longer booking window${['core', 'resident'].includes(next) ? ' and a guaranteed recurring slot' : ''}, plus better rates.</div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-outline btn-sm" onclick="showClientView('membership-pricing')">Compare tiers</button>
+            <button class="btn btn-primary btn-sm" onclick="requestTierUpgrade('${next}')">Request upgrade</button>
+          </div>
+        </div>`;
+    } else {
+      upgradeEl.style.display = 'none';
+    }
+  }
+
   const mine = state.bookings.filter(b => b.member && b.member.id === state.currentMember.id);
   const now = new Date();
   const upcoming = mine.filter(b => b.status !== 'cancelled' && new Date(b.start_time) >= now).sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
@@ -2936,6 +3011,32 @@ function renderMyBookings() {
       </div>
     </div>`;
   }).join('');
+}
+
+// Members can no longer set their own plan_tier directly (it controls
+// billing and entitlements) — instead this sends a message to an admin
+// (preferring the account owner) asking to move to the given tier, and
+// staff action the actual change from the Members table.
+async function requestTierUpgrade(targetTier) {
+  const admin = state.members.find(x => x.is_owner) || state.members.find(x => x.user_type === 'administrator');
+  if (!admin) { showToast('⚠ No admin found to send the request to — please contact Staff & Admin directly.'); return; }
+  const m = state.currentMember;
+  const currentLabel = TIER_DATA[m.plan_tier] ? TIER_DATA[m.plan_tier].label : 'no current tier';
+  const targetLabel = TIER_DATA[targetTier] ? TIER_DATA[targetTier].label : targetTier;
+  const body = `Hi — I'd like to request an upgrade from ${currentLabel} to ${targetLabel} membership. Could you let me know the next steps?`;
+  try {
+    await api('/messages', { method: 'POST', body: JSON.stringify({ recipient_id: admin.id, body }) });
+    showToast(`✓ Upgrade request sent to ${esc(admin.first_name || 'Staff & Admin')}`);
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  }
+}
+
+function requestUpgradeFromProfile() {
+  const m = state.currentMember;
+  const next = m && nextTierUp(m.plan_tier || 'community');
+  if (!next) return;
+  requestTierUpgrade(next);
 }
 
 function initialsFor(m) {
@@ -3760,7 +3861,10 @@ function setupClientView(type) {
   const m = state.currentMember;
   const displayName = m ? `${m.first_name || ''} ${m.last_name || ''}`.trim() || m.email : '';
   document.getElementById('client-welcome-name').textContent = displayName;
-  document.getElementById('client-welcome-role').textContent = roleLabel(type, m && m.is_owner) + ' Account';
+  const welcomeTier = m ? tierLabel(m) : null;
+  document.getElementById('client-welcome-role').textContent = welcomeTier
+    ? `${welcomeTier} ${roleLabel(type, m && m.is_owner)}`
+    : roleLabel(type, m && m.is_owner) + ' Account';
 
   showClientView('my-bookings');
 }
@@ -4596,7 +4700,23 @@ function renderProfilePage() {
   const isMember = m.user_type === 'member';
 
   document.getElementById('profile-tier-row').style.display = isPractitioner ? 'block' : 'none';
-  if (isPractitioner) document.getElementById('profile-plan-tier').value = m.plan_tier || '';
+  if (isPractitioner) {
+    const badge = document.getElementById('profile-tier-badge');
+    badge.textContent = m.plan_tier && TIER_DATA[m.plan_tier] ? TIER_DATA[m.plan_tier].label : 'Not set';
+    const next = nextTierUp(m.plan_tier || 'community');
+    const upgradeBtn = document.getElementById('profile-request-upgrade-btn');
+    upgradeBtn.style.display = next ? 'inline-flex' : 'none';
+    upgradeBtn.textContent = next ? `Request upgrade to ${TIER_DATA[next].label}` : '';
+  }
+
+  const memberSinceRow = document.getElementById('profile-member-since-row');
+  if (m.plan_tier_started_at || m.created_at) {
+    const d = new Date(m.plan_tier_started_at || m.created_at);
+    memberSinceRow.style.display = 'block';
+    memberSinceRow.textContent = `Member since ${d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`;
+  } else {
+    memberSinceRow.style.display = 'none';
+  }
 
   const reservedRow = document.getElementById('profile-reserved-slot-row');
   if (isPractitioner && ['core', 'resident'].includes(m.plan_tier) && m.reserved_day_of_week) {
@@ -4646,9 +4766,9 @@ async function saveProfile() {
   const isPractitioner = m.user_type === 'practitioner';
   const isMember = m.user_type === 'member';
 
-  if (isPractitioner) {
-    updates.plan_tier = document.getElementById('profile-plan-tier').value || null;
-  }
+  // Note: plan_tier is intentionally not editable here — it's admin-only
+  // (see profile-tier-row) since it controls billing. Use "Request upgrade"
+  // instead, which messages Staff & Admin.
   if (isMember) {
     updates.directory_tier = document.getElementById('profile-directory-tier').value || 'access';
   }
@@ -4656,7 +4776,7 @@ async function saveProfile() {
     updates.bio = document.getElementById('profile-bio').value.trim();
     updates.website_url = document.getElementById('profile-website').value.trim();
   }
-  const isEnhancedOrResident = (isMember && updates.directory_tier === 'enhanced') || (isPractitioner && updates.plan_tier === 'resident');
+  const isEnhancedOrResident = (isMember && updates.directory_tier === 'enhanced') || (isPractitioner && m.plan_tier === 'resident');
   if (isEnhancedOrResident) {
     updates.logo_url = document.getElementById('profile-logo').value.trim();
     updates.social_links = {

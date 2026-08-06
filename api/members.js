@@ -12,9 +12,14 @@ const ADMIN_EDITABLE_FIELDS = [
 
 const SELF_EDITABLE_FIELDS = [
   'first_name', 'last_name', 'phone', 'qualifications', 'specialties',
-  'indemnity_number', 'indemnity_expiry', 'plan_tier',
+  'indemnity_number', 'indemnity_expiry',
   'bio', 'website_url', 'logo_url', 'social_links', 'notifications_last_seen_at',
 ];
+// plan_tier is deliberately admin-only (see ADMIN_EDITABLE_FIELDS below) — it
+// directly controls billing amount and booking entitlements, so it must never
+// be self-editable. Members request tier changes via the "Request upgrade"
+// flow on their profile, which sends a message to Staff & Admin instead of
+// writing to plan_tier directly.
 
 module.exports = async (req, res) => {
   const supabase = getSupabase();
