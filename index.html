@@ -1761,6 +1761,7 @@ textarea.form-input { resize: vertical; }
                   </div>
                   <button class="btn btn-outline btn-sm" id="profile-billing-btn" onclick="setupDirectDebit()">Set up Direct Debit</button>
                 </div>
+                <div id="profile-billing-stuck-note" style="display:none;font-size:11.5px;color:var(--r-warm-gray);margin-top:8px;">Taking longer than expected? <a href="#" onclick="showClientView('messages'); return false;" style="color:inherit;text-decoration:underline;">Message Staff & Admin</a> rather than starting again — a second attempt would create a separate Direct Debit alongside this one.</div>
               </div>
               <div class="form-row" id="profile-community-tier-row" style="display:none;">
                 <label class="form-label">Community Membership</label>
@@ -5023,11 +5024,17 @@ function renderProfilePage() {
       expired: '<span style="color:var(--r-red);">⚠ Expired</span> — please set up Direct Debit again.',
     };
     statusEl.innerHTML = statusLabels[m.mandate_status] || 'Not set up yet.';
-    btnEl.textContent = m.mandate_status === 'active'
-      ? 'Update bank details'
-      : ['pending_customer_approval', 'pending_submission', 'submitted'].includes(m.mandate_status)
-        ? 'Restart setup'
-        : 'Set up Direct Debit';
+    const inProgress = ['pending_customer_approval', 'pending_submission', 'submitted'].includes(m.mandate_status);
+    // Deliberately no restart button while genuinely in progress: GoCardless
+    // has no way to know a re-attempt should replace the earlier one, so
+    // clicking through again would create a SECOND, separate mandate rather
+    // than fixing the first — leaving two live mandates with no clear way
+    // to know which one bookings should actually charge against. Only offer
+    // a fresh attempt once there's truly nothing in flight (never started,
+    // or it definitively failed/cancelled/expired).
+    btnEl.style.display = inProgress ? 'none' : 'inline-flex';
+    btnEl.textContent = m.mandate_status === 'active' ? 'Update bank details' : 'Set up Direct Debit';
+    document.getElementById('profile-billing-stuck-note').style.display = inProgress ? 'block' : 'none';
   } else {
     billingRow.style.display = 'none';
   }
