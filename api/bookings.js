@@ -103,9 +103,9 @@ module.exports = async (req, res) => {
       || (['core', 'resident'].includes(tierMember.plan_tier) && !includedInMembership);
 
     if (needsCharge) {
-      const { data: room } = await supabase.from('rooms').select('pricing_category').eq('id', room_id).maybeSingle();
+      const { data: pricingRoom } = await supabase.from('rooms').select('pricing_category').eq('id', room_id).maybeSingle();
       const durationMins = Math.round((new Date(end_time) - new Date(start_time)) / 60000);
-      amountPence = calculateSessionChargeInPence(tierMember.plan_tier, durationMins, room && room.pricing_category);
+      amountPence = calculateSessionChargeInPence(tierMember.plan_tier, durationMins, pricingRoom && pricingRoom.pricing_category);
       finalPaymentStatus = amountPence == null ? 'pending_manual' : 'pending';
     }
 
@@ -188,7 +188,7 @@ module.exports = async (req, res) => {
         const payment = await createOneOffPayment(client, {
           mandateId: tierMember.gocardless_mandate_id,
           amountPence,
-          description: `${room.name} booking — ${new Date(start_time).toLocaleDateString('en-GB')}`,
+          description: `${booking.room ? booking.room.name : 'Room'} booking — ${new Date(start_time).toLocaleDateString('en-GB')}`,
           idempotencyKey: booking.id,
         });
         await supabase.from('bookings').update({ gocardless_payment_id: payment.id }).eq('id', booking.id);
