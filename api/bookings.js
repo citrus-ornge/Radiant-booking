@@ -23,7 +23,7 @@ module.exports = async (req, res) => {
     const { data, error } = await supabase
       .from('bookings')
       .select(`
-        id, start_time, end_time, status, notes, created_at, is_topup, payment_status, amount_pence, parent_booking_id,
+        id, start_time, end_time, status, notes, created_at, is_topup, payment_status, amount_pence, gocardless_payment_id, parent_booking_id,
         room:rooms ( id, name, emoji, floor ),
         member:members ( id, first_name, last_name, email, user_type, is_owner )
       `)

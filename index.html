@@ -3017,16 +3017,36 @@ function renderMyBookings() {
     const day = d.toLocaleDateString('en-GB', { day: 'numeric' });
     const mon = d.toLocaleDateString('en-GB', { month: 'short' });
     const time = fmtDateTime(b.start_time).split(' · ')[1] || '';
+    const needsPayment = b.payment_status === 'pending' && !b.gocardless_payment_id;
     return `
     <div class="booking-item">
       <div class="date-box"><div class="date-day">${day}</div><div class="date-mon">${mon}</div></div>
-      <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">${esc(b.room ? b.room.name : '—')}</div><div style="font-size:12px;color:var(--r-warm-gray);">${time} · ${esc(b.room ? b.room.floor || '' : '')}</div></div>
+      <div style="flex:1;">
+        <div style="font-size:13.5px;font-weight:500;">${esc(b.room ? b.room.name : '—')}</div>
+        <div style="font-size:12px;color:var(--r-warm-gray);">${time} · ${esc(b.room ? b.room.floor || '' : '')}</div>
+        ${needsPayment ? `<div style="font-size:12px;color:var(--r-gold);margin-top:3px;">£${(b.amount_pence / 100).toFixed(2)} payment due</div>` : ''}
+      </div>
       <div style="display:flex;gap:8px;">
+        ${needsPayment ? `<button class="btn btn-primary btn-sm" onclick="payNowForBooking('${b.id}', this)">Pay now</button>` : ''}
         <button class="btn btn-outline btn-sm" onclick="openCalModalFor('${esc(b.room ? b.room.name : 'Room')}','${b.start_time}','${b.end_time}')">Add to Cal</button>
         <button class="btn btn-danger btn-sm" onclick="cancelBooking('${b.id}')">Cancel</button>
       </div>
     </div>`;
   }).join('');
+}
+
+async function payNowForBooking(bookingId, btn) {
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Starting…';
+  try {
+    const result = await api('/billing/pay-now', { method: 'POST', body: JSON.stringify({ booking_id: bookingId }) });
+    window.location.href = result.authorisation_url;
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
 }
 
 // Members can no longer set their own plan_tier directly (it controls

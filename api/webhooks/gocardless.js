@@ -69,6 +69,32 @@ module.exports = async (req, res) => {
 async function handleEvent(supabase, event) {
   const { resource_type, action, links = {} } = event;
 
+  // Instant Bank Pay: once the Billing Request is fulfilled, the payment it
+  // created is in links.payment_request_payment. Link it to the booking we
+  // stashed the billing_request id against — the actual paid/failed status
+  // still comes from the 'payments' handling below once GoCardless confirms it.
+  if (resource_type === 'billing_requests' && action === 'fulfilled' && links.payment_request_payment) {
+    const { data: booking, error } = await supabase
+      .from('bookings')
+      .update({ gocardless_payment_id: links.payment_request_payment })
+      .eq('gocardless_billing_request_id', links.billing_request)
+      .select('id')
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (booking) {
+      await logAudit({
+        actorId: null,
+        actorName: 'GoCardless webhook',
+        action: 'billing.instant_pay_fulfilled',
+        entityType: 'booking',
+        entityId: booking.id,
+        details: { event_id: event.id, payment_id: links.payment_request_payment },
+      });
+    }
+    // Don't return — a billing_requests event can't also be a mandates/payments
+    // event, so falling through just hits the no-op default below.
+  }
+
   if (resource_type === 'mandates') {
     // active | cancelled | failed | expired | ... — see GoCardless mandate
     // event actions. We only special-case the ones that change what a

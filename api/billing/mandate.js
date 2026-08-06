@@ -1,7 +1,7 @@
 const { getSupabase } = require('../_lib/supabase');
 const { requireAuth } = require('../_lib/auth');
 const { logAudit } = require('../_lib/audit');
-const { getGoCardlessClient } = require('../_lib/gocardless');
+const { getGoCardlessClient, getOrCreateCustomer } = require('../_lib/gocardless');
 
 // POST /api/billing/mandate
 // Starts (or restarts) Direct Debit setup for the calling member: creates a
@@ -38,22 +38,7 @@ module.exports = async (req, res) => {
   }
 
   try {
-    let customerId = member.gocardless_customer_id;
-
-    if (!customerId) {
-      const customer = await client.customers.create({
-        email: member.email,
-        given_name: member.first_name || undefined,
-        family_name: member.last_name || undefined,
-        country_code: 'GB',
-      });
-      customerId = customer.id;
-      const { error: updateErr } = await supabase
-        .from('members')
-        .update({ gocardless_customer_id: customerId })
-        .eq('id', member.id);
-      if (updateErr) throw new Error(`Saved GoCardless customer but failed to store it: ${updateErr.message}`);
-    }
+    const customerId = await getOrCreateCustomer(supabase, client, member);
 
     const billingRequest = await client.billingRequests.create({
       mandate_request: { scheme: 'bacs' },

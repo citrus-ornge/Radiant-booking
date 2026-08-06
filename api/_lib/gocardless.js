@@ -45,7 +45,23 @@ function readRawBody(req) {
   });
 }
 
-module.exports = { getGoCardlessClient, PLAN_TIER_MONTHLY_PENCE, readRawBody, createOneOffPayment, createMembershipSubscription };
+// Returns the member's GoCardless customer id, creating one (and persisting
+// it) if they don't have one yet. Shared by mandate setup and Instant Bank
+// Pay, both of which need a customer to attach the billing request to.
+async function getOrCreateCustomer(supabase, client, member) {
+  if (member.gocardless_customer_id) return member.gocardless_customer_id;
+  const customer = await client.customers.create({
+    email: member.email,
+    given_name: member.first_name || undefined,
+    family_name: member.last_name || undefined,
+    country_code: 'GB',
+  });
+  const { error } = await supabase.from('members').update({ gocardless_customer_id: customer.id }).eq('id', member.id);
+  if (error) throw new Error(`Saved GoCardless customer but failed to store it: ${error.message}`);
+  return customer.id;
+}
+
+module.exports = { getGoCardlessClient, PLAN_TIER_MONTHLY_PENCE, readRawBody, createOneOffPayment, createMembershipSubscription, getOrCreateCustomer };
 
 // (e.g. for a chargeable extra session). idempotencyKey should be stable per
 // logical charge (we use the booking id) so a retried request never double-charges.
