@@ -2352,8 +2352,9 @@ async function loadAppData(isRetry) {
     api('/rooms'), api('/members'), api('/bookings'),
     isAdmin ? api('/invites') : Promise.resolve({ invites: state.invites }),
     isAdmin ? api('/staff/leave') : Promise.resolve({ leave: [] }),
+    api('/me'),
   ]);
-  const [roomsR, membersR, bookingsR, invitesR, leaveR] = results;
+  const [roomsR, membersR, bookingsR, invitesR, leaveR, meR] = results;
   const failures = [];
 
   if (roomsR.status === 'fulfilled') state.rooms = roomsR.value.rooms || [];
@@ -2370,12 +2371,15 @@ async function loadAppData(isRetry) {
   if (invitesR.status === 'fulfilled') state.invites = invitesR.value.invites || [];
   else if (isAdmin) failures.push('invites');
 
-  // Refresh currentMember from the freshly-loaded members list (keeps it in sync
-  // with any admin edits) while keeping the real auth-derived id as source of truth
-  if (state.currentMember) {
-    const refreshed = state.members.find(m => m.id === state.currentMember.id);
-    if (refreshed) state.currentMember = refreshed;
-  }
+  // Refresh currentMember from /api/me — a full, self-only record (all
+  // columns) — never from the shared /members list, which for non-admins
+  // deliberately returns only a minimal public-safe field set (no email,
+  // phone, plan_tier, reserved slot, etc. — those would leak other members'
+  // private data if broadcast to everyone). Using that reduced list to
+  // "refresh" the logged-in user's OWN record used to silently wipe their
+  // own tier/contact/recurring-slot info on every data refresh.
+  if (meR.status === 'fulfilled' && meR.value.member) state.currentMember = meR.value.member;
+  else if (meR.status === 'rejected') failures.push('profile');
 
   populateBookingModalSelects();
   renderBookingsTable();
