@@ -3092,15 +3092,24 @@ function renderMyBookings() {
     const alreadyShowingPaymentBanner = dueBannerEl && dueBannerEl.style.display === 'block';
     if (needsDD && !alreadyShowingPaymentBanner) {
       const isReservedTier = ['core', 'resident'].includes(m.plan_tier);
+      // In progress (submitted to the bank, awaiting activation — this can
+      // genuinely take about a business day) reads very differently from
+      // never started — don't tell someone who's already done it that
+      // nothing's set up.
+      const inProgress = ['pending_customer_approval', 'pending_submission', 'submitted'].includes(m.mandate_status);
+      const headline = inProgress ? '⏳ Direct Debit being processed' : '⚠ Direct Debit not set up';
+      const body = inProgress
+        ? `Submitted and waiting on your bank — usually active within about 1 business day.${isReservedTier ? ' Your recurring slot is provisionally held in the meantime.' : ''}`
+        : (isReservedTier ? 'Your recurring slot is provisionally held, but not confirmed on our side until this is done.' : 'Needed before your session charges can be collected automatically.');
       ddBannerEl.style.display = 'block';
       ddBannerEl.innerHTML = `
         <div class="card" style="border-color:var(--r-gold);background:var(--r-gold-light,#f7ecd8);">
           <div style="padding:16px 22px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;">
             <div>
-              <div style="font-size:13.5px;font-weight:600;">⚠ Direct Debit not set up${isReservedTier ? ' — your slot isn\'t fully confirmed yet' : ''}</div>
-              <div style="font-size:12px;color:var(--r-warm-gray);margin-top:2px;">${isReservedTier ? 'Your recurring slot is provisionally held, but not confirmed on our side until this is done.' : 'Needed before your session charges can be collected automatically.'}</div>
+              <div style="font-size:13.5px;font-weight:600;">${headline}${isReservedTier && !inProgress ? ' — your slot isn\'t fully confirmed yet' : ''}</div>
+              <div style="font-size:12px;color:var(--r-warm-gray);margin-top:2px;">${body}</div>
             </div>
-            <button class="btn btn-primary btn-sm" onclick="showClientView('profile')">Set up now</button>
+            ${inProgress ? '' : '<button class="btn btn-primary btn-sm" onclick="showClientView(\'profile\')">Set up now</button>'}
           </div>
         </div>`;
     } else {
@@ -4078,6 +4087,10 @@ function showOnboardingDone() {
   const m = state.currentMember;
   const infoEl = document.getElementById('onboarding-reserved-slot-info');
   const ddOutstanding = m && ['flex', 'core', 'resident'].includes(m.plan_tier) && m.mandate_status !== 'active';
+  const ddInProgress = m && ['pending_customer_approval', 'pending_submission', 'submitted'].includes(m.mandate_status);
+  const ddNote = ddInProgress
+    ? 'Direct Debit submitted and being processed by your bank — usually active within about 1 business day.'
+    : 'Direct Debit still needs setting up. You can do this any time from My Profile.';
 
   if (m && m.user_type === 'practitioner' && ['core', 'resident'].includes(m.plan_tier)) {
     infoEl.style.display = 'block';
@@ -4085,11 +4098,11 @@ function showOnboardingDone() {
       ? `<strong>Your reserved session</strong><br>${esc(m.reserved_day_of_week)}, ${esc(m.reserved_time_start || '')}–${esc(m.reserved_time_end || '')}<br><span style="color:var(--r-warm-gray);">This is held for you every week as part of your ${esc(m.plan_tier === 'resident' ? 'Resident' : 'Core')} membership.</span>`
       : `<strong>Your reserved session</strong><br><span style="color:var(--r-warm-gray);">As a ${esc(m.plan_tier === 'resident' ? 'Resident' : 'Core')} member, you'll have a fixed recurring room slot. Staff & Admin will confirm the day, time and room with you shortly.</span>`;
     infoEl.innerHTML = ddOutstanding
-      ? slotHtml + `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--r-border);color:var(--r-gold-dark,#8a6a1f);"><strong>⚠ Provisionally held, not yet fully confirmed</strong> — Direct Debit still needs setting up. You can do this any time from My Profile.</div>`
+      ? slotHtml + `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--r-border);color:var(--r-gold-dark,#8a6a1f);"><strong>${ddInProgress ? '⏳ Provisionally held, being processed' : '⚠ Provisionally held, not yet fully confirmed'}</strong> — ${ddNote}</div>`
       : slotHtml;
   } else if (ddOutstanding) {
     infoEl.style.display = 'block';
-    infoEl.innerHTML = `<span style="color:var(--r-gold-dark,#8a6a1f);"><strong>⚠ Direct Debit not yet set up</strong> — you can do this any time from My Profile. It's needed before charges for your sessions can be collected.</span>`;
+    infoEl.innerHTML = `<span style="color:var(--r-gold-dark,#8a6a1f);"><strong>${ddInProgress ? '⏳ Direct Debit being processed' : '⚠ Direct Debit not yet set up'}</strong> — ${ddNote}</span>`;
   } else {
     infoEl.style.display = 'none';
   }
@@ -5002,13 +5015,19 @@ function renderProfilePage() {
     const btnEl = document.getElementById('profile-billing-btn');
     const statusLabels = {
       active: '<span style="color:var(--r-green, #4a7c59);">✓ Active</span> — your Direct Debit is set up.',
-      pending: 'Setup started — check your email or bank app to finish authorising.',
+      pending_customer_approval: 'Setup started — waiting on your bank authorisation.',
+      pending_submission: 'Being processed by your bank — usually active within about 1 business day.',
+      submitted: 'Submitted to your bank — usually active within about 1 business day.',
       failed: '<span style="color:var(--r-red);">⚠ Setup failed</span> — please try again.',
       cancelled: 'Cancelled. Set up Direct Debit again to enable billing.',
       expired: '<span style="color:var(--r-red);">⚠ Expired</span> — please set up Direct Debit again.',
     };
     statusEl.innerHTML = statusLabels[m.mandate_status] || 'Not set up yet.';
-    btnEl.textContent = m.mandate_status === 'active' ? 'Update bank details' : 'Set up Direct Debit';
+    btnEl.textContent = m.mandate_status === 'active'
+      ? 'Update bank details'
+      : ['pending_customer_approval', 'pending_submission', 'submitted'].includes(m.mandate_status)
+        ? 'Restart setup'
+        : 'Set up Direct Debit';
   } else {
     billingRow.style.display = 'none';
   }

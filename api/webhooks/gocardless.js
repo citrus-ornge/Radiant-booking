@@ -104,10 +104,24 @@ async function handleEvent(supabase, event) {
   }
 
   if (resource_type === 'mandates') {
-    // active | cancelled | failed | expired | ... — see GoCardless mandate
-    // event actions. We only special-case the ones that change what a
-    // member can do; anything else (e.g. 'transferred') is logged, not acted on.
-    const statusMap = { active: 'active', cancelled: 'cancelled', failed: 'failed', expired: 'expired' };
+    // Maps GoCardless's mandate event actions to the exact vocabulary the
+    // members.mandate_status CHECK constraint allows (which mirrors
+    // GoCardless's own mandate.status field). Reflecting the intermediate
+    // states (not just active/cancelled/failed/expired) matters here so the
+    // UI can show something more honest than 'Not set up yet' while a
+    // mandate is genuinely in progress — BACS submissions take ~1 business
+    // day even in sandbox, so members will sit in one of these states for a
+    // real stretch of time, not just a few seconds.
+    const statusMap = {
+      created: 'pending_customer_approval',
+      customer_approval_granted: 'pending_submission',
+      customer_approval_skipped: 'pending_submission',
+      submitted: 'submitted',
+      active: 'active',
+      cancelled: 'cancelled',
+      failed: 'failed',
+      expired: 'expired',
+    };
     const mandateStatus = statusMap[action];
     if (!mandateStatus || !links.customer) return;
 

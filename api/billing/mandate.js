@@ -71,10 +71,16 @@ module.exports = async (req, res) => {
       },
     });
 
-    await supabase
+    // 'pending_submission' matches GoCardless's own mandate.status vocabulary
+    // (also what the members.mandate_status CHECK constraint actually allows —
+    // a generic 'pending' was silently rejected by that constraint before,
+    // and since this write's error was never checked, it failed with no
+    // indication anywhere. Always check errors on writes that matter.)
+    const { error: statusErr } = await supabase
       .from('members')
-      .update({ mandate_status: 'pending' })
+      .update({ mandate_status: 'pending_submission' })
       .eq('id', member.id);
+    if (statusErr) console.error(`Failed to set mandate_status=pending_submission for member ${member.id}:`, statusErr.message);
 
     await logAudit({
       actorId: member.id,
