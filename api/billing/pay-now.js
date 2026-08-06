@@ -89,7 +89,12 @@ module.exports = async (req, res) => {
       links: { billing_request: billingRequest.id },
       redirect_uri: `${origin}/#my-bookings?payment=complete`,
       exit_uri: `${origin}/#my-bookings?payment=cancelled`,
-      lock_customer_details: true,
+      // See mandate.js for why this is prefilled_customer, not lock_customer_details.
+      prefilled_customer: {
+        given_name: member.first_name || undefined,
+        family_name: member.last_name || undefined,
+        email: member.email || undefined,
+      },
     });
 
     await supabase.from('bookings').update({ gocardless_billing_request_id: billingRequest.id }).eq('id', booking.id);

@@ -59,8 +59,16 @@ module.exports = async (req, res) => {
       links: { billing_request: billingRequest.id },
       redirect_uri: `${origin}/#profile?billing=complete`,
       exit_uri: `${origin}/#profile?billing=cancelled`,
-      // We already have their name/email — skip re-asking for it in the flow.
-      lock_customer_details: true,
+      // Prefill what we already have (name/email) rather than lock_customer_details:
+      // locking assumes their FULL details (including a billing address, which we
+      // don't collect anywhere in onboarding) are already complete enough to skip
+      // that step entirely — GoCardless rejects the lock when they're not. Prefilling
+      // still saves them re-typing their name/email without requiring that.
+      prefilled_customer: {
+        given_name: member.first_name || undefined,
+        family_name: member.last_name || undefined,
+        email: member.email || undefined,
+      },
     });
 
     await supabase
