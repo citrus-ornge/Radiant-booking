@@ -1720,6 +1720,15 @@ textarea.form-input { resize: vertical; }
               </div>
               <div class="form-row" id="profile-reserved-slot-row" style="display:none;background:var(--r-surface2);border-radius:8px;padding:12px 14px;"></div>
               <div class="form-row" id="profile-member-since-row" style="display:none;font-size:12.5px;color:var(--r-warm-gray);"></div>
+              <div class="form-row" id="profile-billing-row" style="display:none;background:var(--r-surface2);border-radius:8px;padding:12px 14px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+                  <div>
+                    <div style="font-size:13px;font-weight:500;">Direct Debit</div>
+                    <div style="font-size:12px;color:var(--r-warm-gray);margin-top:2px;" id="profile-billing-status">—</div>
+                  </div>
+                  <button class="btn btn-outline btn-sm" id="profile-billing-btn" onclick="setupDirectDebit()">Set up Direct Debit</button>
+                </div>
+              </div>
               <div class="form-row" id="profile-community-tier-row" style="display:none;">
                 <label class="form-label">Community Membership</label>
                 <select class="form-input" id="profile-directory-tier">
@@ -3037,6 +3046,23 @@ function requestUpgradeFromProfile() {
   const next = m && nextTierUp(m.plan_tier || 'community');
   if (!next) return;
   requestTierUpgrade(next);
+}
+
+async function setupDirectDebit() {
+  const btn = document.getElementById('profile-billing-btn');
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Starting…';
+  try {
+    const result = await api('/billing/mandate', { method: 'POST' });
+    // Full-page redirect to GoCardless's hosted flow — not opened in a new
+    // tab, since the flow itself redirects back to us (redirect_uri) when done.
+    window.location.href = result.authorisation_url;
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
 }
 
 function initialsFor(m) {
@@ -4725,6 +4751,24 @@ function renderProfilePage() {
     reservedRow.innerHTML = `<strong>Your reserved session:</strong> ${esc(m.reserved_day_of_week)}, ${esc(m.reserved_time_start || '')}–${esc(m.reserved_time_end || '')} in ${esc(room ? room.name : 'a room to be confirmed')}. Contact Staff & Admin to change this.`;
   } else {
     reservedRow.style.display = 'none';
+  }
+
+  const billingRow = document.getElementById('profile-billing-row');
+  if (isPractitioner) {
+    billingRow.style.display = 'block';
+    const statusEl = document.getElementById('profile-billing-status');
+    const btnEl = document.getElementById('profile-billing-btn');
+    const statusLabels = {
+      active: '<span style="color:var(--r-green, #4a7c59);">✓ Active</span> — your Direct Debit is set up.',
+      pending: 'Setup started — check your email or bank app to finish authorising.',
+      failed: '<span style="color:var(--r-red);">⚠ Setup failed</span> — please try again.',
+      cancelled: 'Cancelled. Set up Direct Debit again to enable billing.',
+      expired: '<span style="color:var(--r-red);">⚠ Expired</span> — please set up Direct Debit again.',
+    };
+    statusEl.innerHTML = statusLabels[m.mandate_status] || 'Not set up yet.';
+    btnEl.textContent = m.mandate_status === 'active' ? 'Update bank details' : 'Set up Direct Debit';
+  } else {
+    billingRow.style.display = 'none';
   }
 
   document.getElementById('profile-community-tier-row').style.display = isMember ? 'block' : 'none';

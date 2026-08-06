@@ -30,4 +30,18 @@ const PLAN_TIER_MONTHLY_PENCE = {
   resident: 44900,
 };
 
-module.exports = { getGoCardlessClient, PLAN_TIER_MONTHLY_PENCE };
+// Reads the raw, unparsed request body as a string. Needed for webhook
+// signature verification, which must hash the exact bytes GoCardless sent —
+// re-serializing a parsed req.body with JSON.stringify can produce different
+// bytes (key order, spacing) and silently break verification. Callers must
+// disable Vercel's default body parsing for the route (see webhooks/gocardless.js).
+function readRawBody(req) {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    req.on('data', (chunk) => { data += chunk; });
+    req.on('end', () => resolve(data));
+    req.on('error', reject);
+  });
+}
+
+module.exports = { getGoCardlessClient, PLAN_TIER_MONTHLY_PENCE, readRawBody };
