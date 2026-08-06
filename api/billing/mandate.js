@@ -84,8 +84,10 @@ module.exports = async (req, res) => {
     // alone — e.g. "scheme is not supported" vs a generic failure. Surfaced
     // temporarily in the response while we're still confirming this works
     // end-to-end; server log access has been unreliable this session.
-    const detail = (e.errors && e.errors.length) ? e.errors.map(x => x.message || x.reason).join('; ') : e.message;
-    console.error('GoCardless mandate setup failed:', detail);
+    const detail = (e.errors && e.errors.length)
+      ? e.errors.map(x => [x.field, x.message || x.reason].filter(Boolean).join(': ')).join('; ')
+      : e.message;
+    console.error('GoCardless mandate setup failed:', detail, JSON.stringify(e.errors || null));
     return res.status(502).json({ error: `Could not start Direct Debit setup (${detail}). Please try again or contact Staff & Admin.` });
   }
 };
