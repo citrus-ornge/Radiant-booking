@@ -1060,6 +1060,17 @@ textarea.form-input { resize: vertical; }
       </div>
     </div>
 
+    <!-- Step: Direct Debit prompt (shown right after accepting a room offer) -->
+    <div id="onboarding-step-dd-prompt" class="onboarding-step" style="display:none;text-align:center;padding:20px 0;">
+      <div style="width:56px;height:56px;border-radius:50%;background:var(--r-gold-light,#f7ecd8);color:var(--r-gold);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:26px;">💳</div>
+      <div class="page-title" style="font-size:20px;">One Last Step — Set Up Direct Debit</div>
+      <p class="page-sub" style="margin:8px 0 24px;max-width:440px;margin-left:auto;margin-right:auto;">Your slot is provisionally held, but it isn't fully confirmed on our side until Direct Debit is set up — this covers your membership fee and any extra sessions automatically.</p>
+      <div style="max-width:420px;margin:0 auto;display:flex;flex-direction:column;gap:10px;">
+        <button class="btn btn-primary" id="onboarding-dd-setup-btn" onclick="setupDirectDebitFromOnboarding()" style="justify-content:center;padding:12px;">Set up Direct Debit now</button>
+        <button class="btn btn-outline" onclick="skipDirectDebitFromOnboarding()" style="justify-content:center;">Skip for now — remind me later</button>
+      </div>
+    </div>
+
     <!-- Step: Done -->
     <div id="onboarding-step-done" class="onboarding-step" style="display:none;text-align:center;padding:40px 0;">
       <div style="width:56px;height:56px;border-radius:50%;background:var(--r-green-light);color:var(--r-green);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;">
@@ -1644,6 +1655,7 @@ textarea.form-input { resize: vertical; }
           <div class="stat-card"><div class="stat-label">Total Bookings</div><div class="stat-value" id="my-stat-total">–</div></div>
         </div>
         <div id="my-payment-due-banner" style="display:none;margin-bottom:20px;"></div>
+        <div id="my-dd-required-banner" style="display:none;margin-bottom:20px;"></div>
         <div id="my-recurring-slot-card" style="display:none;margin-bottom:20px;"></div>
         <div id="my-upgrade-banner" style="display:none;margin-bottom:20px;"></div>
         <div class="card">
@@ -3066,6 +3078,35 @@ function renderMyBookings() {
       dueBannerEl.style.display = 'none';
     }
   }
+
+  // Standing reminder for a member whose recurring slot/tier needs Direct
+  // Debit but doesn't have an active mandate — separate from the per-booking
+  // payment banner above, since this is about the ongoing membership status,
+  // not one specific charge. Only shown once there's no unpaid-booking
+  // banner already up, so we're not stacking two red banners about the same
+  // underlying issue.
+  const ddBannerEl = document.getElementById('my-dd-required-banner');
+  if (ddBannerEl) {
+    const m = state.currentMember;
+    const needsDD = m.user_type === 'practitioner' && ['flex', 'core', 'resident'].includes(m.plan_tier) && m.mandate_status !== 'active';
+    const alreadyShowingPaymentBanner = dueBannerEl && dueBannerEl.style.display === 'block';
+    if (needsDD && !alreadyShowingPaymentBanner) {
+      const isReservedTier = ['core', 'resident'].includes(m.plan_tier);
+      ddBannerEl.style.display = 'block';
+      ddBannerEl.innerHTML = `
+        <div class="card" style="border-color:var(--r-gold);background:var(--r-gold-light,#f7ecd8);">
+          <div style="padding:16px 22px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;">
+            <div>
+              <div style="font-size:13.5px;font-weight:600;">⚠ Direct Debit not set up${isReservedTier ? ' — your slot isn\'t fully confirmed yet' : ''}</div>
+              <div style="font-size:12px;color:var(--r-warm-gray);margin-top:2px;">${isReservedTier ? 'Your recurring slot is provisionally held, but not confirmed on our side until this is done.' : 'Needed before your session charges can be collected automatically.'}</div>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="showClientView('profile')">Set up now</button>
+          </div>
+        </div>`;
+    } else {
+      ddBannerEl.style.display = 'none';
+    }
+  }
   const now = new Date();
   const upcoming = mine.filter(b => b.status !== 'cancelled' && new Date(b.start_time) >= now).sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
   const thisMonth = mine.filter(b => {
@@ -3991,7 +4032,8 @@ async function respondToRoomOffer(response) {
     state.currentMember = result.member;
     if (response === 'accept') {
       document.getElementById('onboarding-step-room-terms').style.display = 'none';
-      showOnboardingDone();
+      document.getElementById('onboarding-step-dd-prompt').style.display = 'block';
+      renderOnboardingProgress(2);
     } else {
       showToast('✓ Staff & Admin have been notified — they\'ll follow up with a revised offer');
       document.getElementById('onboarding-step-room-terms').style.display = 'none';
@@ -4007,21 +4049,47 @@ async function respondToRoomOffer(response) {
   }
 }
 
+async function setupDirectDebitFromOnboarding() {
+  const btn = document.getElementById('onboarding-dd-setup-btn');
+  btn.disabled = true;
+  btn.textContent = 'Starting…';
+  try {
+    const result = await api('/billing/mandate', { method: 'POST' });
+    window.location.href = result.authorisation_url;
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+    btn.disabled = false;
+    btn.textContent = 'Set up Direct Debit now';
+  }
+}
+
+function skipDirectDebitFromOnboarding() {
+  document.getElementById('onboarding-step-dd-prompt').style.display = 'none';
+  showOnboardingDone();
+}
+
 function showOnboardingDone() {
   document.getElementById('onboarding-step-documents').style.display = 'none';
+  document.getElementById('onboarding-step-dd-prompt').style.display = 'none';
   document.getElementById('onboarding-step-done').style.display = 'block';
   renderOnboardingProgress(2);
   if (state.currentMember) state.currentMember.onboarding_status = 'completed';
 
   const m = state.currentMember;
   const infoEl = document.getElementById('onboarding-reserved-slot-info');
+  const ddOutstanding = m && ['flex', 'core', 'resident'].includes(m.plan_tier) && m.mandate_status !== 'active';
+
   if (m && m.user_type === 'practitioner' && ['core', 'resident'].includes(m.plan_tier)) {
     infoEl.style.display = 'block';
-    if (m.reserved_day_of_week) {
-      infoEl.innerHTML = `<strong>Your reserved session</strong><br>${esc(m.reserved_day_of_week)}, ${esc(m.reserved_time_start || '')}–${esc(m.reserved_time_end || '')}<br><span style="color:var(--r-warm-gray);">This is held for you every week as part of your ${esc(m.plan_tier === 'resident' ? 'Resident' : 'Core')} membership.</span>`;
-    } else {
-      infoEl.innerHTML = `<strong>Your reserved session</strong><br><span style="color:var(--r-warm-gray);">As a ${esc(m.plan_tier === 'resident' ? 'Resident' : 'Core')} member, you'll have a fixed recurring room slot. Staff & Admin will confirm the day, time and room with you shortly.</span>`;
-    }
+    const slotHtml = m.reserved_day_of_week
+      ? `<strong>Your reserved session</strong><br>${esc(m.reserved_day_of_week)}, ${esc(m.reserved_time_start || '')}–${esc(m.reserved_time_end || '')}<br><span style="color:var(--r-warm-gray);">This is held for you every week as part of your ${esc(m.plan_tier === 'resident' ? 'Resident' : 'Core')} membership.</span>`
+      : `<strong>Your reserved session</strong><br><span style="color:var(--r-warm-gray);">As a ${esc(m.plan_tier === 'resident' ? 'Resident' : 'Core')} member, you'll have a fixed recurring room slot. Staff & Admin will confirm the day, time and room with you shortly.</span>`;
+    infoEl.innerHTML = ddOutstanding
+      ? slotHtml + `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--r-border);color:var(--r-gold-dark,#8a6a1f);"><strong>⚠ Provisionally held, not yet fully confirmed</strong> — Direct Debit still needs setting up. You can do this any time from My Profile.</div>`
+      : slotHtml;
+  } else if (ddOutstanding) {
+    infoEl.style.display = 'block';
+    infoEl.innerHTML = `<span style="color:var(--r-gold-dark,#8a6a1f);"><strong>⚠ Direct Debit not yet set up</strong> — you can do this any time from My Profile. It's needed before charges for your sessions can be collected.</span>`;
   } else {
     infoEl.style.display = 'none';
   }
