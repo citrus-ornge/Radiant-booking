@@ -2230,6 +2230,13 @@ textarea.form-input { resize: vertical; }
           <option value="admin_only">Admin only</option>
         </select>
       </div>
+      <div class="form-row"><label class="form-label">Pricing category <span style="font-weight:400;color:var(--r-warm-gray);font-size:12px;">(for billing — matches the brochure rate columns)</span></label>
+        <select class="form-input" id="ar-pricing-category">
+          <option value="">— Not set (bookings will need manual invoicing) —</option>
+          <option value="clinical_wellness">Clinical / Wellness</option>
+          <option value="consultation">Consultation</option>
+        </select>
+      </div>
       <div class="form-row"><label class="form-label">Notes</label><textarea class="form-input" id="ar-notes" rows="2" placeholder="Equipment, access codes, etc."></textarea></div>
     </div>
     <div class="modal-footer">
@@ -3277,6 +3284,9 @@ function buildNotificationEvents() {
     }
     if (b.payment_status === 'pending') {
       events.push({ ts: b.created_at, title: `💳 Payment needed${b.is_topup ? ' (top-up)' : ''}`, sub: `${b.member.first_name} ${b.member.last_name} · ${b.room.name} · ${fmtDateTime(b.start_time)}`, dotColor: 'var(--r-gold)' });
+    }
+    if (b.payment_status === 'pending_manual') {
+      events.push({ ts: b.created_at, title: `⚠ Needs manual invoice`, sub: `${b.member.first_name} ${b.member.last_name} · ${b.room.name} · no rate set for this room/duration yet`, dotColor: 'var(--r-red)' });
     }
   });
   state.invites.forEach(i => {
@@ -4950,7 +4960,7 @@ async function confirmAdminBooking() {
   btn.textContent = dates.length > 1 ? `Booking ${dates.length} days…` : 'Booking…';
 
   const room = state.rooms.find(r => r.id === roomId);
-  let succeeded = 0, failed = 0, paymentPending = 0;
+  let succeeded = 0, failed = 0, paymentPending = 0, chargeAttempted = 0;
   const errors = [];
   let firstBooking = null;
 
@@ -4970,7 +4980,10 @@ async function confirmAdminBooking() {
         }),
       });
       succeeded++;
-      if (result.booking && result.booking.payment_status === 'pending') paymentPending++;
+      if (result.booking && result.booking.payment_status === 'pending') {
+        paymentPending += result.booking.gocardless_payment_id ? 0 : 1;
+        chargeAttempted += result.booking.gocardless_payment_id ? 1 : 0;
+      }
       if (!firstBooking) firstBooking = { roomName: room ? room.name : 'Room', start: start.toISOString(), end: end.toISOString(), notes };
     } catch (e) {
       failed++;
@@ -4985,10 +4998,12 @@ async function confirmAdminBooking() {
   let msg;
   if (dates.length === 1) {
     msg = failed ? `⚠ ${errors[0]}` : '✓ Booking confirmed';
-    if (succeeded && paymentPending) msg += ' — payment required (collect manually for now)';
+    if (succeeded && chargeAttempted) msg += ' — Direct Debit payment initiated';
+    else if (succeeded && paymentPending) msg += ' — payment required (collect manually for now)';
   } else {
     msg = `✓ ${succeeded}/${dates.length} bookings confirmed`;
     if (failed) msg += `, ${failed} failed`;
+    if (chargeAttempted) msg += `, Direct Debit initiated for ${chargeAttempted}`;
     if (paymentPending) msg += ` — payment required for ${paymentPending} (collect manually for now)`;
   }
   showToast(msg);
@@ -5012,7 +5027,7 @@ async function confirmClientBooking() {
   btn.textContent = dates.length > 1 ? `Booking ${dates.length} days…` : 'Booking…';
 
   const room = state.rooms.find(r => r.id === selectedClientRoomId);
-  let succeeded = 0, failed = 0, paymentPending = 0;
+  let succeeded = 0, failed = 0, paymentPending = 0, chargeAttempted = 0;
   const errors = [];
   let firstBooking = null;
 
@@ -5031,7 +5046,10 @@ async function confirmClientBooking() {
         }),
       });
       succeeded++;
-      if (result.booking && result.booking.payment_status === 'pending') paymentPending++;
+      if (result.booking && result.booking.payment_status === 'pending') {
+        paymentPending += result.booking.gocardless_payment_id ? 0 : 1;
+        chargeAttempted += result.booking.gocardless_payment_id ? 1 : 0;
+      }
       if (!firstBooking) firstBooking = { roomName: room ? room.name : 'Room', start: start.toISOString(), end: end.toISOString(), notes };
     } catch (e) {
       failed++;
@@ -5045,11 +5063,13 @@ async function confirmClientBooking() {
   let msg;
   if (dates.length === 1) {
     msg = failed ? `⚠ ${errors[0]}` : '✓ Booking confirmed';
-    if (succeeded && paymentPending) msg += ' — payment required (you\'ll be contacted to pay)';
+    if (succeeded && chargeAttempted) msg += ' — Direct Debit payment initiated';
+    else if (succeeded && paymentPending) msg += ' — payment required (you\'ll be contacted to pay, or set up Direct Debit on your profile)';
   } else {
     msg = `✓ ${succeeded}/${dates.length} bookings confirmed`;
     if (failed) msg += `, ${failed} failed`;
-    if (paymentPending) msg += ` — payment required for ${paymentPending} (you'll be contacted to pay)`;
+    if (chargeAttempted) msg += `, Direct Debit initiated for ${chargeAttempted}`;
+    if (paymentPending) msg += ` — payment required for ${paymentPending} (you'll be contacted to pay, or set up Direct Debit on your profile)`;
   }
   showToast(msg);
   if (succeeded > 0) openModal('cal-modal');
@@ -5170,6 +5190,7 @@ async function addRoom() {
   const capacity = parseInt(document.getElementById('ar-capacity').value, 10);
   const floor = document.getElementById('ar-floor').value.trim();
   const accessible_to = document.getElementById('ar-access').value;
+  const pricing_category = document.getElementById('ar-pricing-category').value || null;
   const notes = document.getElementById('ar-notes').value.trim();
 
   if (!name || !capacity) { showToast('⚠ Please enter a room name and capacity'); return; }
@@ -5177,12 +5198,13 @@ async function addRoom() {
   const btn = document.getElementById('ar-submit-btn');
   btn.disabled = true;
   try {
-    await api('/rooms', { method: 'POST', body: JSON.stringify({ name, capacity, floor, accessible_to, notes }) });
+    await api('/rooms', { method: 'POST', body: JSON.stringify({ name, capacity, floor, accessible_to, pricing_category, notes }) });
     closeModal('add-room-modal');
     showToast('✓ Room added successfully!');
     document.getElementById('ar-name').value = '';
     document.getElementById('ar-capacity').value = '';
     document.getElementById('ar-floor').value = '';
+    document.getElementById('ar-pricing-category').value = '';
     document.getElementById('ar-notes').value = '';
     await loadAppData();
   } catch (e) {

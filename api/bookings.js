@@ -4,6 +4,8 @@ const { isNotificationEnabled } = require('./_lib/notificationSettings');
 const { createCalendarEvent } = require('./_lib/google');
 const { requireAuth } = require('./_lib/auth');
 const { checkRateLimit } = require('./_lib/rateLimit');
+const { calculateSessionChargeInPence, isIncludedInMembershipFee } = require('./_lib/pricing');
+const { getGoCardlessClient, createOneOffPayment } = require('./_lib/gocardless');
 
 module.exports = async (req, res) => {
   const supabase = getSupabase();
@@ -21,7 +23,7 @@ module.exports = async (req, res) => {
     const { data, error } = await supabase
       .from('bookings')
       .select(`
-        id, start_time, end_time, status, notes, created_at, is_topup, payment_status, parent_booking_id,
+        id, start_time, end_time, status, notes, created_at, is_topup, payment_status, amount_pence, parent_booking_id,
         room:rooms ( id, name, emoji, floor ),
         member:members ( id, first_name, last_name, email, user_type, is_owner )
       `)
@@ -46,9 +48,7 @@ module.exports = async (req, res) => {
 
     // Top-up rule: a 1-hour booking can never stand alone — it must be
     // attached to an existing (non-cancelled) booking belonging to the same
-    // member. Any top-up requires additional payment (payment provider is
-    // not yet wired in — flagged as 'pending' for staff to collect manually
-    // until that's built).
+    // member. Top-ups are always a chargeable session (see pricing below).
     const durationMinutes = (new Date(end_time) - new Date(start_time)) / 60000;
     const isOneHour = durationMinutes === 60;
     let is_topup = false;
@@ -79,17 +79,35 @@ module.exports = async (req, res) => {
     if (member_id !== requester.id) {
       const { data: otherMember, error: otherErr } = await supabase
         .from('members')
-        .select('plan_tier, reserved_day_of_week, reserved_time_start, reserved_time_end, reserved_room_id')
+        .select('id, plan_tier, reserved_day_of_week, reserved_time_start, reserved_time_end, reserved_room_id, gocardless_mandate_id, mandate_status')
         .eq('id', member_id)
         .maybeSingle();
       if (otherErr) return res.status(500).json({ error: otherErr.message });
       tierMember = otherMember || {};
     }
 
-    // Flex members are charged at the time of booking rather than on a
-    // monthly invoice, so every Flex booking (not just top-ups) needs
-    // payment collected.
-    const finalPaymentStatus = (is_topup || tierMember.plan_tier === 'flex') ? 'pending' : 'not_required';
+    // Pricing: figure out what (if anything) this booking should be charged.
+    // - Community: not charged through the app (existing behaviour, unchanged).
+    // - Core/Resident: free if it's their included recurring slot for this
+    //   week; otherwise priced as an extra session like Flex would be.
+    // - Flex, and any top-up regardless of tier: always a chargeable session.
+    // calculateSessionChargeInPence returns null when the brochure doesn't
+    // define a rate for this duration/room-category combo (see pricing.js) —
+    // that's routed to 'pending_manual' rather than guessed or charged £0.
+    let finalPaymentStatus = 'not_required';
+    let amountPence = null;
+
+    const includedInMembership = await isIncludedInMembershipFee(supabase, tierMember, { room_id, start_time });
+
+    const needsCharge = is_topup || tierMember.plan_tier === 'flex'
+      || (['core', 'resident'].includes(tierMember.plan_tier) && !includedInMembership);
+
+    if (needsCharge) {
+      const { data: room } = await supabase.from('rooms').select('pricing_category').eq('id', room_id).maybeSingle();
+      const durationMins = Math.round((new Date(end_time) - new Date(start_time)) / 60000);
+      amountPence = calculateSessionChargeInPence(tierMember.plan_tier, durationMins, room && room.pricing_category);
+      finalPaymentStatus = amountPence == null ? 'pending_manual' : 'pending';
+    }
 
     const bookingStart = new Date(start_time);
     const now = new Date();
@@ -149,14 +167,36 @@ module.exports = async (req, res) => {
 
     const { data: booking, error } = await supabase
       .from('bookings')
-      .insert({ room_id, member_id, start_time, end_time, notes, status: 'confirmed', parent_booking_id: parent_booking_id || null, is_topup, payment_status: finalPaymentStatus })
+      .insert({ room_id, member_id, start_time, end_time, notes, status: 'confirmed', parent_booking_id: parent_booking_id || null, is_topup, payment_status: finalPaymentStatus, amount_pence: amountPence })
       .select(`
-        id, start_time, end_time, status, notes, is_topup, payment_status, parent_booking_id,
+        id, start_time, end_time, status, notes, is_topup, payment_status, amount_pence, parent_booking_id,
         room:rooms ( id, name, emoji, floor ),
         member:members ( id, first_name, last_name, email, user_type, google_calendar_connected, google_refresh_token )
       `)
       .single();
     if (error) return res.status(500).json({ error: error.message });
+
+    // If this booking needs charging and the member has a usable mandate,
+    // attempt the Direct Debit payment now. Payment stays 'pending' either
+    // way — GoCardless payments aren't instant, the webhook flips this to
+    // 'paid' (or 'failed') once GoCardless actually reports the outcome.
+    // A failure here (no mandate yet, GoCardless error, etc.) is logged but
+    // never blocks the booking itself — staff can always collect manually.
+    if (finalPaymentStatus === 'pending' && tierMember.mandate_status === 'active' && tierMember.gocardless_mandate_id) {
+      try {
+        const client = getGoCardlessClient();
+        const payment = await createOneOffPayment(client, {
+          mandateId: tierMember.gocardless_mandate_id,
+          amountPence,
+          description: `${room.name} booking — ${new Date(start_time).toLocaleDateString('en-GB')}`,
+          idempotencyKey: booking.id,
+        });
+        await supabase.from('bookings').update({ gocardless_payment_id: payment.id }).eq('id', booking.id);
+        booking.gocardless_payment_id = payment.id;
+      } catch (e) {
+        console.error(`GoCardless payment creation failed for booking ${booking.id}:`, e.message);
+      }
+    }
 
     const member = booking.member;
     const room = booking.room;

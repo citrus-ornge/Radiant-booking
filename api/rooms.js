@@ -23,7 +23,7 @@ module.exports = async (req, res) => {
       return res.status(e.status || 401).json({ error: e.message });
     }
 
-    const { name, capacity, floor, accessible_to, notes, min_duration_minutes, max_duration_minutes, blackout_dates } = req.body || {};
+    const { name, capacity, floor, accessible_to, notes, min_duration_minutes, max_duration_minutes, blackout_dates, pricing_category } = req.body || {};
     if (!name || !capacity) return res.status(400).json({ error: 'name and capacity are required' });
 
     const { data, error } = await supabase
@@ -33,6 +33,7 @@ module.exports = async (req, res) => {
         min_duration_minutes: min_duration_minutes || null,
         max_duration_minutes: max_duration_minutes || null,
         blackout_dates: blackout_dates || [],
+        pricing_category: pricing_category || null,
       })
       .select()
       .single();
@@ -60,7 +61,7 @@ module.exports = async (req, res) => {
 
     const { id, ...fields } = req.body || {};
     if (!id) return res.status(400).json({ error: 'id is required' });
-    const allowed = ['name', 'capacity', 'floor', 'accessible_to', 'notes', 'min_duration_minutes', 'max_duration_minutes', 'blackout_dates'];
+    const allowed = ['name', 'capacity', 'floor', 'accessible_to', 'notes', 'min_duration_minutes', 'max_duration_minutes', 'blackout_dates', 'pricing_category'];
     const updates = {};
     for (const key of allowed) {
       if (Object.prototype.hasOwnProperty.call(fields, key)) updates[key] = fields[key];

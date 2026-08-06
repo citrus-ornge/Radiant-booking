@@ -1,5 +1,6 @@
 const gocardless = require('gocardless-nodejs');
 const { Environments } = require('gocardless-nodejs/constants');
+const crypto = require('crypto');
 
 // Server-side only — never import this file from anything that ships to
 // the browser. Mirrors the getSupabase() pattern: lazily build the client
@@ -44,4 +45,24 @@ function readRawBody(req) {
   });
 }
 
-module.exports = { getGoCardlessClient, PLAN_TIER_MONTHLY_PENCE, readRawBody };
+module.exports = { getGoCardlessClient, PLAN_TIER_MONTHLY_PENCE, readRawBody, createOneOffPayment, createMembershipSubscription };
+
+// (e.g. for a chargeable extra session). idempotencyKey should be stable per
+// logical charge (we use the booking id) so a retried request never double-charges.
+async function createOneOffPayment(client, { mandateId, amountPence, description, idempotencyKey }) {
+  return client.payments.create(
+    { amount: amountPence, currency: 'GBP', links: { mandate: mandateId }, description },
+    idempotencyKey || crypto.randomUUID(),
+  );
+}
+
+// Creates the flat recurring monthly membership charge for Core/Resident
+// tiers, against an active mandate. Call this once per member (guarded by
+// checking members.gocardless_subscription_id first) — calling it twice
+// would create two subscriptions and double-bill them.
+async function createMembershipSubscription(client, { mandateId, amountPence, name, idempotencyKey }) {
+  return client.subscriptions.create(
+    { amount: amountPence, currency: 'GBP', name, interval_unit: 'monthly', links: { mandate: mandateId } },
+    idempotencyKey || crypto.randomUUID(),
+  );
+}

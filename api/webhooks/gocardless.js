@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 const { getSupabase } = require('../_lib/supabase');
 const { logAudit } = require('../_lib/audit');
-const { readRawBody } = require('../_lib/gocardless');
+const { readRawBody, getGoCardlessClient, createMembershipSubscription, PLAN_TIER_MONTHLY_PENCE } = require('../_lib/gocardless');
 
 // Vercel parses JSON bodies by default, which would give us a re-serialized
 // copy rather than the exact bytes GoCardless signed — verification needs the
@@ -84,7 +84,7 @@ async function handleEvent(supabase, event) {
       .from('members')
       .update(updates)
       .eq('gocardless_customer_id', links.customer)
-      .select('id, first_name, last_name')
+      .select('id, first_name, last_name, plan_tier, gocardless_subscription_id, gocardless_mandate_id')
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!member) {
@@ -100,14 +100,65 @@ async function handleEvent(supabase, event) {
       entityId: member.id,
       details: { event_id: event.id },
     });
+
+    // Core/Resident have a flat monthly membership fee on top of any
+    // per-session charges (confirmed by Radiant) — set up the recurring
+    // subscription the moment their mandate goes active, but only once
+    // (guarded by gocardless_subscription_id) so this never double-bills on
+    // a retried or duplicate webhook delivery.
+    // NOTE: PLAN_TIER_MONTHLY_PENCE amounts are still placeholders pending
+    // confirmation against the brochure (see api/_lib/gocardless.js) — do
+    // not go live on real payment collection until those are confirmed.
+    const monthlyPence = PLAN_TIER_MONTHLY_PENCE[member.plan_tier];
+    if (mandateStatus === 'active' && monthlyPence && !member.gocardless_subscription_id) {
+      try {
+        const client = getGoCardlessClient();
+        const subscription = await createMembershipSubscription(client, {
+          mandateId: member.gocardless_mandate_id || links.mandate,
+          amountPence: monthlyPence,
+          name: `Radiant ${member.plan_tier === 'resident' ? 'Resident' : 'Core'} Membership`,
+          idempotencyKey: `subscription:${member.id}`,
+        });
+        await supabase.from('members').update({ gocardless_subscription_id: subscription.id }).eq('id', member.id);
+        await logAudit({
+          actorId: null,
+          actorName: 'GoCardless webhook',
+          action: 'billing.subscription_created',
+          entityType: 'member',
+          entityId: member.id,
+          details: { subscription_id: subscription.id, amount_pence: monthlyPence },
+        });
+      } catch (e) {
+        console.error(`Failed to create membership subscription for member ${member.id}:`, e.message);
+      }
+    }
     return;
   }
 
-  // Payment-status updates are intentionally not wired up yet — bookings
-  // don't currently carry a gocardless_payment_id to join against, and the
-  // per-session pricing (vs a flat monthly subscription) needs a decision on
-  // how/when payments are actually created before this can update the right
-  // row. TODO once that's designed: handle resource_type === 'payments'
-  // (confirmed/failed/cancelled) and update the matching booking's
-  // payment_status.
+  // Payment-status updates: match back to the booking via
+  // bookings.gocardless_payment_id and reflect the outcome.
+  if (resource_type === 'payments' && links.payment) {
+    const statusMap = { confirmed: 'paid', failed: 'failed', cancelled: 'failed', charged_back: 'failed' };
+    const paymentStatus = statusMap[action];
+    if (!paymentStatus) return; // other actions (submitted, paid_out, etc.) don't change our status
+
+    const { data: booking, error } = await supabase
+      .from('bookings')
+      .update({ payment_status: paymentStatus })
+      .eq('gocardless_payment_id', links.payment)
+      .select('id, member_id')
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!booking) return; // e.g. a subscription-generated payment, not a per-booking one — nothing to update
+
+    await logAudit({
+      actorId: null,
+      actorName: 'GoCardless webhook',
+      action: `billing.payment_${paymentStatus}`,
+      entityType: 'booking',
+      entityId: booking.id,
+      details: { event_id: event.id },
+    });
+    return;
+  }
 }
