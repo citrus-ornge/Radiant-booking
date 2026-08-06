@@ -1,7 +1,9 @@
 const { getSupabase } = require('../_lib/supabase');
 const { requireAuth } = require('../_lib/auth');
 const { logAudit } = require('../_lib/audit');
-const { getGoCardlessClient, getOrCreateCustomer } = require('../_lib/gocardless');
+// _lib/gocardless is required lazily inside the handler — see mandate.js
+// for why (a load failure there shouldn't take this whole function down
+// before it even reaches the GoCardless-specific code).
 
 // POST /api/billing/pay-now { booking_id }
 // Collects payment for a single booking immediately via Instant Bank Pay
@@ -53,10 +55,13 @@ module.exports = async (req, res) => {
     return res.status(400).json({ error: 'A payment has already been started for this booking.' });
   }
 
-  let client;
+  let client, getOrCreateCustomer;
   try {
-    client = getGoCardlessClient();
+    const gc = require('../_lib/gocardless');
+    getOrCreateCustomer = gc.getOrCreateCustomer;
+    client = gc.getGoCardlessClient();
   } catch (e) {
+    console.error('Failed to load/init GoCardless client:', e.message);
     return res.status(503).json({ error: 'Payments are not configured yet. Please contact Staff & Admin.' });
   }
 

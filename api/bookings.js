@@ -5,7 +5,12 @@ const { createCalendarEvent } = require('./_lib/google');
 const { requireAuth } = require('./_lib/auth');
 const { checkRateLimit } = require('./_lib/rateLimit');
 const { calculateSessionChargeInPence, isIncludedInMembershipFee } = require('./_lib/pricing');
-const { getGoCardlessClient, createOneOffPayment } = require('./_lib/gocardless');
+// _lib/gocardless is deliberately NOT required at the top of this file.
+// It's only needed for the one payment-attempt branch inside POST, and
+// requiring it lazily there means a problem in that library (or how it
+// bundles) can only ever break that one attempt-payment step — not every
+// GET/POST this whole file handles, including plain booking reads that have
+// nothing to do with payments.
 
 module.exports = async (req, res) => {
   const supabase = getSupabase();
@@ -184,6 +189,7 @@ module.exports = async (req, res) => {
     // never blocks the booking itself — staff can always collect manually.
     if (finalPaymentStatus === 'pending' && tierMember.mandate_status === 'active' && tierMember.gocardless_mandate_id) {
       try {
+        const { getGoCardlessClient, createOneOffPayment } = require('./_lib/gocardless');
         const client = getGoCardlessClient();
         const payment = await createOneOffPayment(client, {
           mandateId: tierMember.gocardless_mandate_id,

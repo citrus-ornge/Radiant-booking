@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 const { getSupabase } = require('../_lib/supabase');
 const { logAudit } = require('../_lib/audit');
-const { readRawBody, getGoCardlessClient, createMembershipSubscription, PLAN_TIER_MONTHLY_PENCE } = require('../_lib/gocardless');
+// _lib/gocardless required lazily inside the handler — see mandate.js.
 
 // Vercel parses JSON bodies by default, which would give us a re-serialized
 // copy rather than the exact bytes GoCardless signed — verification needs the
@@ -20,6 +20,14 @@ module.exports.config = { api: { bodyParser: false } };
 // add via a queue/cron if that's needed later, don't block the webhook on it).
 module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  let readRawBody;
+  try {
+    ({ readRawBody } = require('../_lib/gocardless'));
+  } catch (e) {
+    console.error('Failed to load _lib/gocardless in webhook handler:', e.message);
+    return res.status(503).end();
+  }
 
   const secret = process.env.GC_WEBHOOK_SECRET;
   if (!secret) {
@@ -135,6 +143,7 @@ async function handleEvent(supabase, event) {
     // NOTE: PLAN_TIER_MONTHLY_PENCE amounts are still placeholders pending
     // confirmation against the brochure (see api/_lib/gocardless.js) — do
     // not go live on real payment collection until those are confirmed.
+    const { getGoCardlessClient, createMembershipSubscription, PLAN_TIER_MONTHLY_PENCE } = require('../_lib/gocardless');
     const monthlyPence = PLAN_TIER_MONTHLY_PENCE[member.plan_tier];
     if (mandateStatus === 'active' && monthlyPence && !member.gocardless_subscription_id) {
       try {

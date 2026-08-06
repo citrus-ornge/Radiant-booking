@@ -1,7 +1,11 @@
 const { getSupabase } = require('../_lib/supabase');
 const { requireAuth } = require('../_lib/auth');
 const { logAudit } = require('../_lib/audit');
-const { getGoCardlessClient, getOrCreateCustomer } = require('../_lib/gocardless');
+// _lib/gocardless is required lazily inside the handler (not at module load
+// time) — if there's ever a problem loading that library or its native
+// gocardless-nodejs dependency, this returns a clean 503 instead of the
+// whole function failing to load for every request, including ones that
+// hit this file before even reaching the GoCardless-specific code.
 
 // POST /api/billing/mandate
 // Starts (or restarts) Direct Debit setup for the calling member: creates a
@@ -29,11 +33,13 @@ module.exports = async (req, res) => {
   }
 
   const supabase = getSupabase();
-  let client;
+  let client, getOrCreateCustomer;
   try {
-    client = getGoCardlessClient();
+    const gc = require('../_lib/gocardless');
+    getOrCreateCustomer = gc.getOrCreateCustomer;
+    client = gc.getGoCardlessClient();
   } catch (e) {
-    // Missing env vars — treat as a config error, not the member's fault.
+    console.error('Failed to load/init GoCardless client:', e.message);
     return res.status(503).json({ error: 'Payments are not configured yet. Please contact Staff & Admin.' });
   }
 
