@@ -45,6 +45,9 @@ body {
   overflow: hidden;
 }
 
+@keyframes refresh-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+#refresh-icon.spinning { display: inline-block; animation: refresh-spin 0.6s linear infinite; }
+
 .app { display: flex; height: 100vh; height: 100dvh; }
 
 /* ── SIDEBAR ── */
@@ -1213,6 +1216,7 @@ textarea.form-input { resize: vertical; }
       </button>
       <div class="topbar-title" id="topbar-title">Dashboard</div>
       <div class="topbar-spacer"></div>
+      <button class="btn btn-outline btn-sm" id="refresh-btn" onclick="refreshCurrentView()" aria-label="Refresh"><span id="refresh-icon" style="display:inline-flex;">↻</span></button>
       <button class="btn btn-outline btn-sm" onclick="openModal('notif-modal');markNotificationsSeen()"><span style="width:14px;height:14px;display:inline-flex;margin-right:5px;vertical-align:-2px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="100%" height="100%"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg></span>Alerts<span class="notif-dot" id="alerts-btn-dot" style="display:none;margin-left:6px;"></span></button>
       <button class="btn btn-primary btn-sm btn-glow" id="topbar-cta" onclick="openModal('new-booking-modal')">+ New Booking</button>
     </div>
@@ -2398,6 +2402,36 @@ async function api(path, options = {}) {
   try { data = await res.json(); } catch (e) { /* e.g. 204 No Content */ }
   if (!res.ok) throw new Error((data && data.error) || `Request failed (${res.status})`);
   return data;
+}
+
+// Manual refresh — the app's layout uses a fixed sidebar with the content
+// area scrolling independently (body itself never scrolls), which is why
+// Android's native pull-to-refresh gesture doesn't work here. This button
+// is the deliberate replacement: refetches everything and re-renders
+// whatever view is currently showing, rather than requiring a full page
+// reload (which would also work, but loses scroll position/in-progress state).
+async function refreshCurrentView() {
+  const btn = document.getElementById('refresh-btn');
+  const icon = document.getElementById('refresh-icon');
+  btn.disabled = true;
+  icon.classList.add('spinning');
+  try {
+    await loadAppData();
+    const viewName = (location.hash || '').replace('#', '') || (currentRole === 'admin' ? 'dashboard' : 'my-bookings');
+    if (currentRole === 'admin') {
+      showView(viewName, true);
+      if (viewName === 'dashboard') renderDashboardStats();
+    } else {
+      showClientView(viewName, true);
+      if (viewName === 'my-bookings') renderMyBookings();
+    }
+    showToast('✓ Refreshed');
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  } finally {
+    btn.disabled = false;
+    icon.classList.remove('spinning');
+  }
 }
 
 async function loadAppData(isRetry) {
