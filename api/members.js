@@ -14,6 +14,7 @@ const SELF_EDITABLE_FIELDS = [
   'first_name', 'last_name', 'phone', 'qualifications', 'specialties',
   'indemnity_number', 'indemnity_expiry',
   'bio', 'website_url', 'logo_url', 'social_links', 'notifications_last_seen_at',
+  'dd_prompt_shown_count', 'dd_prompt_dismissed_at',
 ];
 // plan_tier is deliberately admin-only (see ADMIN_EDITABLE_FIELDS below) — it
 // directly controls billing amount and booking entitlements, so it must never

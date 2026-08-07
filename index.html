@@ -1069,7 +1069,7 @@ textarea.form-input { resize: vertical; }
       <div class="page-title" style="font-size:20px;">One Last Step — Set Up Direct Debit</div>
       <p class="page-sub" style="margin:8px 0 24px;max-width:440px;margin-left:auto;margin-right:auto;">Your slot is provisionally held, but it isn't fully confirmed on our side until Direct Debit is set up — this covers your membership fee and any extra sessions automatically.</p>
       <div style="max-width:420px;margin:0 auto;display:flex;flex-direction:column;gap:10px;">
-        <button class="btn btn-primary" id="onboarding-dd-setup-btn" onclick="setupDirectDebitFromOnboarding()" style="justify-content:center;padding:12px;">Set up Direct Debit now</button>
+        <button class="btn btn-primary" id="onboarding-dd-setup-btn" onclick="setupDirectDebitFromOnboarding('onboarding-dd-setup-btn')" style="justify-content:center;padding:12px;">Set up Direct Debit now</button>
         <button class="btn btn-outline" onclick="skipDirectDebitFromOnboarding()" style="justify-content:center;">Skip for now — remind me later</button>
       </div>
     </div>
@@ -1083,6 +1083,25 @@ textarea.form-input { resize: vertical; }
       <p class="page-sub" style="margin:8px 0 24px;">Your profile is complete and all required documents are signed.</p>
       <div id="onboarding-reserved-slot-info" style="display:none;background:var(--r-surface2);border-radius:10px;padding:16px 20px;text-align:left;max-width:420px;margin:0 auto 24px;font-size:13.5px;"></div>
       <button class="btn btn-primary" onclick="finishOnboarding()">Enter Radiant Booking →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Direct Debit login gate — shown on subsequent logins (not part of
+     onboarding, no progress dots) to a returning member who hasn't
+     finished setting up Direct Debit yet. Capped at a few attempts (see
+     checkDDGateOnLogin) so it never becomes permanently naggy — once
+     they've seen it that many times, or started the setup process at all,
+     it stops and the persistent banner on My Bookings is the ongoing
+     reminder instead. -->
+<div id="dd-gate-screen" style="display:none;position:fixed;inset:0;z-index:210;background:var(--r-cream);overflow-y:auto;">
+  <div style="max-width:560px;margin:0 auto;padding:60px 24px;text-align:center;">
+    <div style="width:56px;height:56px;border-radius:50%;background:var(--r-gold-light,#f7ecd8);color:var(--r-gold);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:26px;">💳</div>
+    <div class="page-title" style="font-size:20px;">Your Slot Isn't Fully Confirmed Yet</div>
+    <p class="page-sub" style="margin:8px 0 24px;">Direct Debit still needs setting up — this covers your membership fee and any extra sessions automatically. It only takes a minute.</p>
+    <div style="max-width:420px;margin:0 auto;display:flex;flex-direction:column;gap:10px;">
+      <button class="btn btn-primary" id="dd-gate-setup-btn" onclick="setupDirectDebitFromOnboarding('dd-gate-setup-btn')" style="justify-content:center;padding:12px;">Set up Direct Debit now</button>
+      <button class="btn btn-outline" onclick="dismissDDGate()" style="justify-content:center;">Not now</button>
     </div>
   </div>
 </div>
@@ -3943,9 +3962,42 @@ async function bootstrapSession(session) {
 
   if (needsOnboarding) {
     startOnboarding();
+  } else if (checkDDGateOnLogin(meData.member)) {
+    showDDGate();
   } else {
     enterAppShell();
   }
+}
+
+// Whether to show the full-screen Direct Debit gate instead of going
+// straight into the app. Only for members who genuinely need Direct Debit
+// (Flex/Core/Resident) and have never even started the process — the
+// moment mandate_status is anything other than null (even just 'pending_
+// customer_approval'), they've engaged with it at least once, and
+// re-interrupting login with a full-screen prompt stops being helpful; the
+// persistent banner on My Bookings covers it from there. Capped at 3
+// attempts total so someone who keeps saying "Not now" (or just closes the
+// app without deciding — mobile browsers don't reliably distinguish the
+// two) eventually stops being gated on login and only sees the banner.
+function checkDDGateOnLogin(m) {
+  if (m.user_type !== 'practitioner' || !['flex', 'core', 'resident'].includes(m.plan_tier)) return false;
+  if (m.mandate_status) return false; // already started (or further) — stop gating
+  return (m.dd_prompt_shown_count || 0) < 3;
+}
+
+function showDDGate() {
+  document.getElementById('dd-gate-screen').style.display = 'block';
+}
+
+async function dismissDDGate() {
+  const m = state.currentMember;
+  const newCount = (m.dd_prompt_shown_count || 0) + 1;
+  try {
+    const result = await api('/members', { method: 'PATCH', body: JSON.stringify({ id: m.id, dd_prompt_shown_count: newCount, dd_prompt_dismissed_at: new Date().toISOString() }) });
+    state.currentMember = result.member;
+  } catch (e) { /* don't block entry over this failing to save */ }
+  document.getElementById('dd-gate-screen').style.display = 'none';
+  enterAppShell();
 }
 
 function enterAppShell() {
@@ -4187,8 +4239,9 @@ async function respondToRoomOffer(response) {
   }
 }
 
-async function setupDirectDebitFromOnboarding() {
-  const btn = document.getElementById('onboarding-dd-setup-btn');
+async function setupDirectDebitFromOnboarding(btnId) {
+  const btn = document.getElementById(btnId || 'onboarding-dd-setup-btn');
+  const originalText = btn.textContent;
   btn.disabled = true;
   btn.textContent = 'Starting…';
   try {
@@ -4197,7 +4250,7 @@ async function setupDirectDebitFromOnboarding() {
   } catch (e) {
     showToast('⚠ ' + e.message);
     btn.disabled = false;
-    btn.textContent = 'Set up Direct Debit now';
+    btn.textContent = originalText;
   }
 }
 
