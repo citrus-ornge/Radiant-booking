@@ -66,6 +66,13 @@ module.exports = async (req, res) => {
   res.status(200).json({ received: true });
 
   for (const event of events) {
+    // Temporary: log every event's shape in full. We've hit two real bugs
+    // already this session where the actual field names/values GoCardless
+    // sends didn't match assumptions from documentation, and Vercel logs
+    // don't capture request bodies by default — this is the only way to
+    // see the real payload without guessing again. Remove once the
+    // fulfilled/payment matching is confirmed working end-to-end.
+    console.log(`GC webhook event: ${event.resource_type}.${event.action}`, JSON.stringify(event.links || {}));
     try {
       await handleEvent(supabase, event);
     } catch (e) {
