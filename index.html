@@ -2032,6 +2032,11 @@ textarea.form-input { resize: vertical; }
           <button type="button" class="btn btn-outline btn-sm" onclick="resetOnboardingForTesting('booking_pending')">Re-open room offer</button>
         </div>
       </div>
+      <div class="form-row" id="mm-billing-row" style="display:none;background:var(--r-surface2);border-radius:8px;padding:12px 14px;">
+        <label class="form-label">Billing</label>
+        <div id="mm-billing-status" style="font-size:12.5px;color:var(--r-warm-gray);margin-bottom:8px;">—</div>
+        <button type="button" class="btn btn-outline btn-sm" id="mm-create-subscription-btn" onclick="createSubscriptionForMember()">Create subscription now</button>
+      </div>
       <div class="form-row"><label class="form-label">Phone</label><input class="form-input" id="mm-phone"></div>
       <div class="form-row"><label class="form-label">Qualifications</label><textarea class="form-input" id="mm-qualifications" rows="2"></textarea></div>
       <div class="form-row">
@@ -2843,6 +2848,24 @@ function openManageMember(id) {
   toggleMmReservedSlot();
 
   document.getElementById('mm-onboarding-row').style.display = (isPractitioner || m.user_type === 'administrator') ? 'block' : 'none';
+
+  const billingRowEl = document.getElementById('mm-billing-row');
+  const showBilling = isPractitioner && ['core', 'resident'].includes(m.plan_tier);
+  billingRowEl.style.display = showBilling ? 'block' : 'none';
+  if (showBilling) {
+    const statusEl = document.getElementById('mm-billing-status');
+    const btnEl = document.getElementById('mm-create-subscription-btn');
+    if (m.gocardless_subscription_id) {
+      statusEl.innerHTML = `<span style="color:var(--r-green,#4a7c59);">✓ Subscription set up</span> (${esc(m.gocardless_subscription_id)})`;
+      btnEl.style.display = 'none';
+    } else if (m.mandate_status === 'active') {
+      statusEl.innerHTML = `<span style="color:var(--r-red);">⚠ Mandate active but no subscription</span> — the monthly fee isn't being collected.`;
+      btnEl.style.display = 'inline-flex';
+    } else {
+      statusEl.textContent = 'Direct Debit not active yet — subscription will be created automatically once it is.';
+      btnEl.style.display = 'none';
+    }
+  }
   document.getElementById('mm-is-owner').checked = !!m.is_owner;
   toggleInviteOwnerRow('mm');
 
@@ -5377,6 +5400,24 @@ async function payNowFromModal() {
     showToast('⚠ ' + e.message);
     btn.disabled = false;
     btn.textContent = 'Pay now (instant)';
+  }
+}
+
+async function createSubscriptionForMember() {
+  const memberId = document.getElementById('mm-id').value;
+  if (!memberId) return;
+  const btn = document.getElementById('mm-create-subscription-btn');
+  btn.disabled = true;
+  btn.textContent = 'Creating…';
+  try {
+    await api('/billing/create-subscription', { method: 'POST', body: JSON.stringify({ member_id: memberId }) });
+    showToast('✓ Subscription created');
+    await loadAppData();
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Create subscription now';
   }
 }
 

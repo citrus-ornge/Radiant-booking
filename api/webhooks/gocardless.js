@@ -158,34 +158,37 @@ async function handleEvent(supabase, event) {
 
     // Core/Resident have a flat monthly membership fee on top of any
     // per-session charges (confirmed by Radiant) — set up the recurring
-    // subscription the moment their mandate goes active, but only once
-    // (guarded by gocardless_subscription_id) so this never double-bills on
-    // a retried or duplicate webhook delivery.
+    // subscription the moment their mandate goes active. ensureMembership
+    // Subscription is idempotent and shared with the manual admin recovery
+    // action and the daily safety-net cron, so a failure here isn't the
+    // only chance to get this right.
     // NOTE: PLAN_TIER_MONTHLY_PENCE amounts are still placeholders pending
     // confirmation against the brochure (see api/_lib/gocardless.js) — do
     // not go live on real payment collection until those are confirmed.
-    const { getGoCardlessClient, createMembershipSubscription, PLAN_TIER_MONTHLY_PENCE } = require('../_lib/gocardless');
-    const monthlyPence = PLAN_TIER_MONTHLY_PENCE[member.plan_tier];
-    if (mandateStatus === 'active' && monthlyPence && !member.gocardless_subscription_id) {
-      try {
-        const client = getGoCardlessClient();
-        const subscription = await createMembershipSubscription(client, {
-          mandateId: member.gocardless_mandate_id || links.mandate,
-          amountPence: monthlyPence,
-          name: `Radiant ${member.plan_tier === 'resident' ? 'Resident' : 'Core'} Membership`,
-          idempotencyKey: `subscription:${member.id}`,
-        });
-        await supabase.from('members').update({ gocardless_subscription_id: subscription.id }).eq('id', member.id);
+    if (mandateStatus === 'active') {
+      const { ensureMembershipSubscription } = require('../_lib/gocardless');
+      const result = await ensureMembershipSubscription(supabase, member);
+      if (result.created) {
         await logAudit({
-          actorId: null,
-          actorName: 'GoCardless webhook',
-          action: 'billing.subscription_created',
-          entityType: 'member',
-          entityId: member.id,
-          details: { subscription_id: subscription.id, amount_pence: monthlyPence },
+          actorId: null, actorName: 'GoCardless webhook', action: 'billing.subscription_created',
+          entityType: 'member', entityId: member.id, details: { subscription_id: result.subscriptionId },
         });
-      } catch (e) {
-        console.error(`Failed to create membership subscription for member ${member.id}:`, e.message);
+      } else if (result.failed) {
+        // Not just console.error — this is money that would otherwise never
+        // get collected with nobody the wiser. Log it AND tell an admin directly.
+        console.error(`Failed to create membership subscription for member ${member.id}:`, result.error);
+        await logAudit({
+          actorId: null, actorName: 'GoCardless webhook', action: 'billing.subscription_creation_failed',
+          entityType: 'member', entityId: member.id, details: { error: result.error },
+        });
+        const memberName = `${member.first_name || ''} ${member.last_name || ''}`.trim() || member.id;
+        const { data: admins } = await supabase.from('members').select('id').eq('user_type', 'administrator').eq('status', 'active');
+        for (const admin of admins || []) {
+          await supabase.from('messages').insert({
+            sender_id: member.id, recipient_id: admin.id,
+            body: `⚠ Failed to set up ${memberName}'s monthly membership subscription after their Direct Debit went active (${result.error}). Their recurring slot fee won't be collected until this is fixed — use 'Create subscription now' in Manage Member, or check the GoCardless dashboard directly.`,
+          });
+        }
       }
     }
     return;

@@ -84,4 +84,34 @@ async function createMembershipSubscription(client, { mandateId, amountPence, na
   );
 }
 
-module.exports = { getGoCardlessClient, PLAN_TIER_MONTHLY_PENCE, readRawBody, createOneOffPayment, createMembershipSubscription, getOrCreateCustomer };
+// Idempotent: sets up a member's flat monthly membership subscription if
+// they're eligible (Core/Resident, active mandate) and don't already have
+// one. Shared by the webhook (fires automatically the moment a mandate goes
+// active), the admin-triggered manual recovery endpoint, and the daily
+// safety-net cron — so there's more than one path to actually getting this
+// set up, and a single place to fix if the logic needs to change.
+// Returns { skipped: true, reason } | { created: true, subscriptionId } | { failed: true, error }.
+async function ensureMembershipSubscription(supabase, member) {
+  const monthlyPence = PLAN_TIER_MONTHLY_PENCE[member.plan_tier];
+  if (!monthlyPence) return { skipped: true, reason: 'not_eligible_tier' };
+  if (member.mandate_status !== 'active' || !member.gocardless_mandate_id) return { skipped: true, reason: 'no_active_mandate' };
+  if (member.gocardless_subscription_id) return { skipped: true, reason: 'already_has_subscription' };
+
+  try {
+    const client = getGoCardlessClient();
+    const subscription = await createMembershipSubscription(client, {
+      mandateId: member.gocardless_mandate_id,
+      amountPence: monthlyPence,
+      name: `Radiant ${member.plan_tier === 'resident' ? 'Resident' : 'Core'} Membership`,
+      idempotencyKey: `subscription:${member.id}`,
+    });
+    const { error } = await supabase.from('members').update({ gocardless_subscription_id: subscription.id }).eq('id', member.id);
+    if (error) return { failed: true, error: `Subscription ${subscription.id} created at GoCardless but failed to save locally: ${error.message}` };
+    return { created: true, subscriptionId: subscription.id };
+  } catch (e) {
+    const detail = (e.errors && e.errors.length) ? e.errors.map(x => [x.field, x.message || x.reason].filter(Boolean).join(': ')).join('; ') : e.message;
+    return { failed: true, error: detail };
+  }
+}
+
+module.exports = { getGoCardlessClient, PLAN_TIER_MONTHLY_PENCE, readRawBody, createOneOffPayment, createMembershipSubscription, getOrCreateCustomer, ensureMembershipSubscription };

@@ -6,7 +6,8 @@
   ],
   "crons": [
     { "path": "/api/cron/reminders", "schedule": "0 * * * *" },
-    { "path": "/api/cron/exit-reminders", "schedule": "0 6 * * *" }
+    { "path": "/api/cron/exit-reminders", "schedule": "0 6 * * *" },
+    { "path": "/api/cron/check-subscriptions", "schedule": "0 7 * * *" }
   ],
   "headers": [
     {
