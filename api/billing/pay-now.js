@@ -12,10 +12,17 @@ const { logAudit } = require('../_lib/audit');
 // to authorise; funds typically arrive same day (if authorised before 11am)
 // or the next business day.
 //
-// If the member doesn't have an active mandate yet, this also bundles a
-// mandate_request into the same Billing Request ("dual flow") — one
-// authorisation both pays for this booking instantly AND sets up Direct
-// Debit for future bookings, so they don't have to do two separate things.
+// Deliberately does NOT bundle a mandate_request into the same Billing
+// Request, even though a member with no active mandate could use one.
+// Confirmed against a real GoCardless sandbox event: when a mandate is
+// created alongside an Instant Bank Pay payment this way, GoCardless ties
+// it to the faster_payments scheme the payment actually used (regardless
+// of the bacs scheme we requested) and marks it 'consumed' — single-use,
+// cannot be reused for future payments — the moment that first payment is
+// created. So this "dual flow" never actually sets up ongoing Direct
+// Debit; it silently creates a dead mandate. Direct Debit setup stays a
+// fully separate action (see mandate.js) so it always uses a genuine,
+// reusable bacs mandate.
 module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -77,10 +84,6 @@ module.exports = async (req, res) => {
       },
       links: { customer: customerId },
     };
-    // Dual flow: bundle mandate setup in if they don't have a usable one yet.
-    if (member.mandate_status !== 'active') {
-      billingRequestParams.mandate_request = { scheme: 'bacs' };
-    }
 
     const billingRequest = await client.billingRequests.create(billingRequestParams);
 
