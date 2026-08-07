@@ -1799,6 +1799,7 @@ textarea.form-input { resize: vertical; }
               </div>
               <div class="form-row" id="profile-website-row" style="display:none;">
                 <label class="form-label">Website / Booking Link</label>
+                <div style="font-size:11.5px;color:var(--r-warm-gray);margin-bottom:4px;">Your own external booking page (e.g. your personal Calendly or website) — shown on your public directory profile so clients can book with you directly.</div>
                 <input class="form-input" id="profile-website" placeholder="https://…">
               </div>
               <div id="profile-enhanced-fields" style="display:none;">
@@ -1806,6 +1807,9 @@ textarea.form-input { resize: vertical; }
                 <div class="form-two">
                   <div class="form-row"><label class="form-label">Instagram</label><input class="form-input" id="profile-social-instagram" placeholder="https://instagram.com/…"></div>
                   <div class="form-row"><label class="form-label">Facebook</label><input class="form-input" id="profile-social-facebook" placeholder="https://facebook.com/…"></div>
+                </div>
+                <div style="text-align:right;margin-top:-4px;margin-bottom:12px;">
+                  <a href="#" onclick="clearAllSocialLinks(); return false;" style="font-size:11.5px;color:var(--r-warm-gray);text-decoration:underline;">Clear logo &amp; social links</a>
                 </div>
               </div>
               <button class="btn btn-primary btn-sm" onclick="saveProfile()">Save Changes</button>
@@ -4431,7 +4435,7 @@ async function loadDirectory() {
     }
     grid.innerHTML = members.map(m => {
       const name = `${m.first_name || ''} ${m.last_name || ''}`.trim() || 'Member';
-      const isEnhanced = m.user_type === 'practitioner' ? m.plan_tier === 'resident' : m.directory_tier === 'enhanced';
+      const isEnhanced = m.user_type === 'practitioner' ? ['core','resident'].includes(m.plan_tier) : m.directory_tier === 'enhanced';
       const tierBadge = m.user_type === 'practitioner' ? esc(roleLabel('practitioner')) : (isEnhanced ? 'Enhanced Member' : 'Access Member');
       const bioPreview = (m.bio || m.qualifications || '').slice(0, 90) + ((m.bio || m.qualifications || '').length > 90 ? '…' : '');
       return `
@@ -4453,7 +4457,7 @@ async function showMemberProfile(id) {
     const m = (res.members || []).find(x => x.id === id);
     if (!m) { showToast('⚠ Profile not found'); return; }
     const name = `${m.first_name || ''} ${m.last_name || ''}`.trim() || 'Member';
-    const isEnhanced = m.user_type === 'practitioner' ? m.plan_tier === 'resident' : m.directory_tier === 'enhanced';
+    const isEnhanced = m.user_type === 'practitioner' ? ['core','resident'].includes(m.plan_tier) : m.directory_tier === 'enhanced';
     document.getElementById('mp-title').textContent = name;
 
     const socials = m.social_links || {};
@@ -4466,7 +4470,7 @@ async function showMemberProfile(id) {
       <span class="badge ${isEnhanced ? 'badge-gold' : 'badge-blue'}" style="margin-bottom:10px;">${m.user_type === 'practitioner' ? esc(roleLabel('practitioner')) : (isEnhanced ? 'Enhanced Member' : 'Access Member')}</span>
       ${m.qualifications ? `<p style="font-size:12.5px;color:var(--r-warm-gray);margin-top:6px;">${esc(m.qualifications)}</p>` : ''}
       <p style="font-size:13.5px;line-height:1.6;margin-top:10px;">${esc(m.bio) || 'No bio added yet.'}</p>
-      ${m.website_url ? `<p style="margin-top:12px;"><a href="${esc(m.website_url)}" target="_blank" rel="noopener" style="color:var(--r-gold-dark);font-size:13px;">${esc(m.website_url)}</a></p>` : ''}
+      ${isEnhanced && m.website_url ? `<p style="margin-top:12px;"><a href="${esc(m.website_url)}" target="_blank" rel="noopener" style="color:var(--r-gold-dark);font-size:13px;">${esc(m.website_url)}</a></p>` : ''}
       ${isEnhanced && socialLinks ? `<div style="margin-top:12px;">${socialLinks}</div>` : ''}
     `;
     const canMessage = !(state.currentMember.user_type === 'member' && state.currentMember.directory_tier !== 'enhanced' && m.user_type === 'member');
@@ -5231,7 +5235,7 @@ function renderProfilePage() {
     document.getElementById('profile-website').value = m.website_url || '';
   }
 
-  const isEnhancedOrResident = (isMember && m.directory_tier === 'enhanced') || (isPractitioner && m.plan_tier === 'resident');
+  const isEnhancedOrResident = (isMember && m.directory_tier === 'enhanced') || (isPractitioner && ['core', 'resident'].includes(m.plan_tier));
   document.getElementById('profile-enhanced-fields').style.display = isEnhancedOrResident ? 'block' : 'none';
   if (isEnhancedOrResident) {
     document.getElementById('profile-logo').value = m.logo_url || '';
@@ -5246,6 +5250,13 @@ function renderProfilePage() {
       ? '<span class="badge badge-green">Connected</span><button class="btn btn-ghost btn-sm" style="margin-left:8px;color:var(--r-red);" onclick="disconnectGoogleCalendar()">Disconnect</button>'
       : '<button class="btn btn-outline btn-sm" onclick="connectGoogleCalendar()">Connect</button>';
   }
+}
+
+function clearAllSocialLinks() {
+  document.getElementById('profile-logo').value = '';
+  document.getElementById('profile-social-instagram').value = '';
+  document.getElementById('profile-social-facebook').value = '';
+  showToast('Cleared — click Save Changes to confirm');
 }
 
 async function saveProfile() {
@@ -5270,7 +5281,7 @@ async function saveProfile() {
     updates.bio = document.getElementById('profile-bio').value.trim();
     updates.website_url = document.getElementById('profile-website').value.trim();
   }
-  const isEnhancedOrResident = (isMember && updates.directory_tier === 'enhanced') || (isPractitioner && m.plan_tier === 'resident');
+  const isEnhancedOrResident = (isMember && updates.directory_tier === 'enhanced') || (isPractitioner && ['core', 'resident'].includes(m.plan_tier));
   if (isEnhancedOrResident) {
     updates.logo_url = document.getElementById('profile-logo').value.trim();
     updates.social_links = {
