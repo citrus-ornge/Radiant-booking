@@ -78,6 +78,25 @@ module.exports = async (req, res) => {
 
   await supabase.from('invites').update({ status: 'accepted' }).eq('id', invite.id);
 
+  // The invite carries at most one day/time/room (reserved_day_of_week
+  // etc., set at invite time) — this is what actually makes the recurring
+  // slot work now (member_recurring_slots supports more than one, but an
+  // invite can only pre-set the first; an admin can add more afterward via
+  // Manage Member). Guarded against duplicating if this invite is somehow
+  // accepted twice for an existing member who already has slots.
+  if (invite.reserved_day_of_week && invite.reserved_time_start && invite.reserved_time_end) {
+    const { data: alreadyHasSlots } = await supabase.from('member_recurring_slots').select('id').eq('member_id', member.id).limit(1);
+    if (!alreadyHasSlots || alreadyHasSlots.length === 0) {
+      await supabase.from('member_recurring_slots').insert({
+        member_id: member.id,
+        day_of_week: invite.reserved_day_of_week,
+        time_start: invite.reserved_time_start,
+        time_end: invite.reserved_time_end,
+        room_id: invite.reserved_room_id || null,
+      });
+    }
+  }
+
   let welcome_email_sent = false;
   try {
     await sendWelcomeEmail({

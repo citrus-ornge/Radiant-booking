@@ -2002,7 +2002,8 @@ textarea.form-input { resize: vertical; }
         </select>
       </div>
       <div class="form-row" id="mm-reserved-slot-row" style="display:none;background:var(--r-surface2);border-radius:8px;padding:12px;">
-        <label class="form-label" style="margin-bottom:8px;">Reserved Session (Core/Resident)</label>
+        <label class="form-label" style="margin-bottom:8px;">Reserved Session(s) (Core/Resident) <span style="font-weight:400;color:var(--r-warm-gray);font-size:11.5px;">— a member can have more than one, e.g. full day Monday + half day Friday</span></label>
+        <div id="mm-existing-slots" style="margin-bottom:10px;"></div>
         <div class="form-two">
           <select class="form-input" id="mm-reserved-day">
             <option value="">Day…</option>
@@ -2015,6 +2016,7 @@ textarea.form-input { resize: vertical; }
           <input type="time" class="form-input" id="mm-reserved-start" placeholder="Start">
           <input type="time" class="form-input" id="mm-reserved-end" placeholder="End">
         </div>
+        <button type="button" class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="addRecurringSlot()">+ Add this slot</button>
       </div>
       <div class="form-row" id="mm-onboarding-row">
         <label class="form-label">Onboarding Status</label>
@@ -2569,15 +2571,24 @@ function bookingWindowRuleForMember(m) {
     return { allow: d => d >= today && d <= max, multi: true, note: 'Flex: book up to 30 days ahead — select multiple days to book them together' };
   }
   if (['core', 'resident'].includes(m.plan_tier)) {
-    if (!m.reserved_day_of_week) {
+    // A member can have more than one recurring slot (e.g. full day Monday +
+    // half day Friday) — m.recurring_slots is attached by /api/me for the
+    // current user. Admin booking on behalf of someone else via
+    // bookingWindowRuleFor() below won't have this populated yet (the
+    // general /members list doesn't include it) — falls back to "no agreed
+    // day" rather than silently allowing any day, which is the safer
+    // failure mode until that's wired up too.
+    const slots = m.recurring_slots || [];
+    if (slots.length === 0) {
       return { allow: () => false, multi: false, note: `⚠ No agreed recurring day set yet for your ${m.plan_tier === 'core' ? 'Core' : 'Resident'} membership — contact Staff & Admin.` };
     }
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const dayIdx = dayNames.indexOf(m.reserved_day_of_week);
+    const agreedDayIdxs = new Set(slots.map(s => dayNames.indexOf(s.day_of_week)));
+    const agreedDayNames = [...new Set(slots.map(s => s.day_of_week))];
     return {
-      allow: d => d >= today && d.getDay() === dayIdx,
+      allow: d => d >= today && agreedDayIdxs.has(d.getDay()),
       multi: false,
-      note: `${m.plan_tier === 'core' ? 'Core' : 'Resident'}: locked to every ${m.reserved_day_of_week}`,
+      note: `${m.plan_tier === 'core' ? 'Core' : 'Resident'}: locked to ${agreedDayNames.length > 1 ? 'your agreed days' : 'every'} ${agreedDayNames.join(', ')}`,
     };
   }
   return { allow: d => d >= today, multi: false, note: '' };
@@ -2776,6 +2787,17 @@ function nextTierUp(planTier) {
   return TIER_ORDER[idx + 1];
 }
 
+// A Core/Resident member can have more than one recurring slot per week
+// (e.g. full day Monday + half day Friday) — shared formatting so every
+// place that shows them (My Bookings, Profile, onboarding) stays consistent.
+function fmtSlotTime(t) { return t ? t.slice(0, 5) : ''; }
+function slotOneLineHtml(s) {
+  return `${esc(s.day_of_week)}, ${esc(fmtSlotTime(s.time_start))}–${esc(fmtSlotTime(s.time_end))}${s.room ? ' · ' + esc(s.room.name) : ''}`;
+}
+function slotsListHtml(slots) {
+  return slots.map(s => `<div style="padding:3px 0;">${slotOneLineHtml(s)}</div>`).join('');
+}
+
 let bookingsTableFilter = 'all';
 
 function filterBookingsTab(status, el) {
@@ -2841,11 +2863,12 @@ function openManageMember(id) {
 
   const roomSel = document.getElementById('mm-reserved-room');
   roomSel.innerHTML = '<option value="">Room…</option>' + state.rooms.map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join('');
-  document.getElementById('mm-reserved-day').value = m.reserved_day_of_week || '';
-  roomSel.value = m.reserved_room_id || '';
-  document.getElementById('mm-reserved-start').value = m.reserved_time_start ? m.reserved_time_start.slice(0, 5) : '';
-  document.getElementById('mm-reserved-end').value = m.reserved_time_end ? m.reserved_time_end.slice(0, 5) : '';
+  document.getElementById('mm-reserved-day').value = '';
+  roomSel.value = '';
+  document.getElementById('mm-reserved-start').value = '';
+  document.getElementById('mm-reserved-end').value = '';
   toggleMmReservedSlot();
+  loadRecurringSlotsForModal(m.id);
 
   document.getElementById('mm-onboarding-row').style.display = (isPractitioner || m.user_type === 'administrator') ? 'block' : 'none';
 
@@ -2927,6 +2950,55 @@ function toggleMmReservedSlot() {
   document.getElementById('mm-reserved-slot-row').style.display = ['core', 'resident'].includes(tier) ? 'block' : 'none';
 }
 
+async function loadRecurringSlotsForModal(memberId) {
+  const container = document.getElementById('mm-existing-slots');
+  container.innerHTML = '<div style="font-size:12px;color:var(--r-warm-gray);">Loading…</div>';
+  try {
+    const result = await api(`/recurring-slots?member_id=${memberId}`);
+    const slots = result.slots || [];
+    container.innerHTML = slots.length === 0
+      ? '<div style="font-size:12px;color:var(--r-warm-gray);">No slots set yet — add one below.</div>'
+      : slots.map(s => `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--r-border);font-size:13px;">
+          <span>${esc(s.day_of_week)}, ${esc(fmtSlotTime(s.time_start))}–${esc(fmtSlotTime(s.time_end))}${s.room ? ' · ' + esc(s.room.name) : ''}</span>
+          <button type="button" class="btn btn-danger btn-sm" onclick="deleteRecurringSlot('${s.id}', '${memberId}')">Remove</button>
+        </div>`).join('');
+  } catch (e) {
+    container.innerHTML = `<div style="font-size:12px;color:var(--r-red);">⚠ ${esc(e.message)}</div>`;
+  }
+}
+
+async function addRecurringSlot() {
+  const memberId = document.getElementById('mm-id').value;
+  const day_of_week = document.getElementById('mm-reserved-day').value;
+  const room_id = document.getElementById('mm-reserved-room').value || null;
+  const time_start = document.getElementById('mm-reserved-start').value;
+  const time_end = document.getElementById('mm-reserved-end').value;
+  if (!day_of_week || !time_start || !time_end) { showToast('⚠ Pick a day, start time and end time'); return; }
+  try {
+    await api('/recurring-slots', { method: 'POST', body: JSON.stringify({ member_id: memberId, day_of_week, time_start, time_end, room_id }) });
+    document.getElementById('mm-reserved-day').value = '';
+    document.getElementById('mm-reserved-room').value = '';
+    document.getElementById('mm-reserved-start').value = '';
+    document.getElementById('mm-reserved-end').value = '';
+    await loadRecurringSlotsForModal(memberId);
+    showToast('✓ Slot added');
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  }
+}
+
+async function deleteRecurringSlot(slotId, memberId) {
+  if (!confirm('Remove this recurring slot?')) return;
+  try {
+    await api(`/recurring-slots?id=${slotId}`, { method: 'DELETE' });
+    await loadRecurringSlotsForModal(memberId);
+    showToast('✓ Slot removed');
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  }
+}
+
 async function saveManagedMember() {
   const id = document.getElementById('mm-id').value;
   const userType = document.getElementById('mm-user-type').value;
@@ -2945,12 +3017,11 @@ async function saveManagedMember() {
   if (userType === 'member') {
     updates.directory_tier = document.getElementById('mm-directory-tier').value || 'access';
   }
-  if (['core', 'resident'].includes(planTier)) {
-    updates.reserved_day_of_week = document.getElementById('mm-reserved-day').value || null;
-    updates.reserved_room_id = document.getElementById('mm-reserved-room').value || null;
-    updates.reserved_time_start = document.getElementById('mm-reserved-start').value || null;
-    updates.reserved_time_end = document.getElementById('mm-reserved-end').value || null;
-  }
+  // Recurring slots (reserved_day_of_week etc.) are no longer part of this
+  // save — they're managed independently via addRecurringSlot/
+  // deleteRecurringSlot, which hit their own endpoint immediately. That
+  // avoids ambiguity between "the slot list shown" and "what a bulk Save
+  // would overwrite" now that a member can have more than one slot.
   try {
     await api('/members', { method: 'PATCH', body: JSON.stringify({ id, ...updates }) });
     closeModal('manage-member-modal');
@@ -3035,20 +3106,20 @@ function renderMyBookings() {
   const slotCardEl = document.getElementById('my-recurring-slot-card');
   if (slotCardEl) {
     if (m.user_type === 'practitioner' && ['core', 'resident'].includes(m.plan_tier)) {
-      const room = state.rooms.find(r => r.id === m.reserved_room_id);
+      const slots = m.recurring_slots || [];
       slotCardEl.style.display = 'block';
-      slotCardEl.innerHTML = m.reserved_day_of_week ? `
+      slotCardEl.innerHTML = slots.length > 0 ? `
         <div class="card" style="border-color:var(--r-gold);">
-          <div style="padding:16px 22px;display:flex;align-items:center;gap:14px;">
+          <div style="padding:16px 22px;display:flex;align-items:flex-start;gap:14px;">
             <div style="font-size:22px;">📅</div>
             <div style="flex:1;">
-              <div style="font-size:13.5px;font-weight:500;">Your recurring slot: every ${esc(m.reserved_day_of_week)}</div>
-              <div style="font-size:12px;color:var(--r-warm-gray);margin-top:2px;">${esc(m.reserved_time_start || '')}–${esc(m.reserved_time_end || '')} · ${esc(room ? room.name : 'Room to be confirmed')} · held weekly as part of your ${esc(TIER_DATA[m.plan_tier].label)} membership</div>
+              <div style="font-size:13.5px;font-weight:500;">Your recurring slot${slots.length > 1 ? 's' : ''}</div>
+              <div style="font-size:12px;color:var(--r-warm-gray);margin-top:2px;">${slotsListHtml(slots)}held weekly as part of your ${esc(TIER_DATA[m.plan_tier].label)} membership</div>
             </div>
           </div>
         </div>` : `
         <div class="card" style="border-color:var(--r-gold);">
-          <div style="padding:16px 22px;font-size:13px;color:var(--r-warm-gray);">Your ${esc(TIER_DATA[m.plan_tier].label)} membership includes a fixed recurring weekly slot — Staff &amp; Admin will confirm the day, time and room with you shortly.</div>
+          <div style="padding:16px 22px;font-size:13px;color:var(--r-warm-gray);">Your ${esc(TIER_DATA[m.plan_tier].label)} membership includes fixed recurring weekly slot(s) — Staff &amp; Admin will confirm the day(s), time(s) and room(s) with you shortly.</div>
         </div>`;
     } else {
       slotCardEl.style.display = 'none';
@@ -3463,11 +3534,11 @@ function buildNotificationEvents() {
   (state.pendingLeaveRequests || []).forEach(l => {
     events.push({ ts: l.created_at, title: `⏳ Holiday approval needed: ${l.staff_name}`, sub: `${fmtDateTime(l.leave_date).split(' · ')[0]} · tap to review in Staff Area`, dotColor: 'var(--r-gold)' });
   });
-  (state.members || []).forEach(m => {
-    if (['core', 'resident'].includes(m.plan_tier) && m.reserved_day_of_week && m.plan_tier_started_at) {
-      events.push({ ts: m.plan_tier_started_at, title: `Recurring slot agreed: ${m.first_name} ${m.last_name}`, sub: `${m.plan_tier === 'core' ? 'Core' : 'Resident'} · every ${m.reserved_day_of_week}`, dim: true });
-    }
-  });
+  // Note: a "recurring slot agreed" activity item used to live here, reading
+  // members.reserved_day_of_week. Removed — that column is no longer
+  // written to (recurring slots are now member_recurring_slots, which can
+  // hold more than one per member), so this would have silently gone stale
+  // for anyone whose slots were set up after the migration.
   events.sort((a, b) => new Date(b.ts) - new Date(a.ts));
   return events;
 }
@@ -4046,12 +4117,12 @@ async function showOnboardingRoomTerms() {
 
   const m = state.currentMember;
   const detailsEl = document.getElementById('onboarding-room-offer-details');
-  const room = m && m.reserved_room_id ? state.rooms.find(r => r.id === m.reserved_room_id) : null;
+  const slots = m.recurring_slots || [];
   const tierLabelText = m && m.plan_tier === 'resident' ? 'Resident' : 'Core';
   detailsEl.innerHTML = `
-    <div style="font-size:15px;font-weight:600;margin-bottom:10px;">${esc(m.reserved_day_of_week || '')}, ${esc(m.reserved_time_start || '')}–${esc(m.reserved_time_end || '')}</div>
-    <div style="color:var(--r-warm-gray);margin-bottom:4px;">Room: ${esc(room ? room.name : 'To be confirmed')}</div>
-    <div style="color:var(--r-warm-gray);">This slot is held for you every week as part of your ${esc(tierLabelText)} membership.</div>
+    <div style="font-size:15px;font-weight:600;margin-bottom:10px;">${slots.map(s => `${esc(s.day_of_week)}, ${esc(fmtSlotTime(s.time_start))}–${esc(fmtSlotTime(s.time_end))}`).join('<br>')}</div>
+    <div style="color:var(--r-warm-gray);margin-bottom:4px;">${slots.map(s => `Room: ${esc(s.room ? s.room.name : 'To be confirmed')}`).join('<br>')}</div>
+    <div style="color:var(--r-warm-gray);">${slots.length > 1 ? 'These slots are' : 'This slot is'} held for you every week as part of your ${esc(tierLabelText)} membership.</div>
   `;
 }
 
@@ -4118,9 +4189,10 @@ function showOnboardingDone() {
 
   if (m && m.user_type === 'practitioner' && ['core', 'resident'].includes(m.plan_tier)) {
     infoEl.style.display = 'block';
-    const slotHtml = m.reserved_day_of_week
-      ? `<strong>Your reserved session</strong><br>${esc(m.reserved_day_of_week)}, ${esc(m.reserved_time_start || '')}–${esc(m.reserved_time_end || '')}<br><span style="color:var(--r-warm-gray);">This is held for you every week as part of your ${esc(m.plan_tier === 'resident' ? 'Resident' : 'Core')} membership.</span>`
-      : `<strong>Your reserved session</strong><br><span style="color:var(--r-warm-gray);">As a ${esc(m.plan_tier === 'resident' ? 'Resident' : 'Core')} member, you'll have a fixed recurring room slot. Staff & Admin will confirm the day, time and room with you shortly.</span>`;
+    const slots = m.recurring_slots || [];
+    const slotHtml = slots.length > 0
+      ? `<strong>Your reserved session${slots.length > 1 ? 's' : ''}</strong><br>${slots.map(s => slotOneLineHtml(s)).join('<br>')}<br><span style="color:var(--r-warm-gray);">Held for you every week as part of your ${esc(m.plan_tier === 'resident' ? 'Resident' : 'Core')} membership.</span>`
+      : `<strong>Your reserved session</strong><br><span style="color:var(--r-warm-gray);">As a ${esc(m.plan_tier === 'resident' ? 'Resident' : 'Core')} member, you'll have fixed recurring room slot(s). Staff & Admin will confirm the day(s), time(s) and room(s) with you shortly.</span>`;
     infoEl.innerHTML = ddOutstanding
       ? slotHtml + `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--r-border);color:var(--r-gold-dark,#8a6a1f);"><strong>${ddInProgress ? '⏳ Provisionally held, being processed' : '⚠ Provisionally held, not yet fully confirmed'}</strong> — ${ddNote}</div>`
       : slotHtml;
@@ -5024,10 +5096,10 @@ function renderProfilePage() {
   }
 
   const reservedRow = document.getElementById('profile-reserved-slot-row');
-  if (isPractitioner && ['core', 'resident'].includes(m.plan_tier) && m.reserved_day_of_week) {
-    const room = state.rooms.find(r => r.id === m.reserved_room_id);
+  const mySlots = m.recurring_slots || [];
+  if (isPractitioner && ['core', 'resident'].includes(m.plan_tier) && mySlots.length > 0) {
     reservedRow.style.display = 'block';
-    reservedRow.innerHTML = `<strong>Your reserved session:</strong> ${esc(m.reserved_day_of_week)}, ${esc(m.reserved_time_start || '')}–${esc(m.reserved_time_end || '')} in ${esc(room ? room.name : 'a room to be confirmed')}. Contact Staff & Admin to change this.`;
+    reservedRow.innerHTML = `<strong>Your reserved session${mySlots.length > 1 ? 's' : ''}:</strong><div style="margin-top:4px;">${slotsListHtml(mySlots)}</div><div style="margin-top:4px;">Contact Staff & Admin to change this.</div>`;
   } else {
     reservedRow.style.display = 'none';
   }

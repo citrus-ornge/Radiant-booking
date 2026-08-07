@@ -77,24 +77,36 @@ module.exports = async (req, res) => {
     // Tier-based booking window rules:
     // - Community: rolling 7-day window
     // - Flex: rolling 30-day window
-    // - Core / Resident: locked to their single agreed recurring day of the
-    //   week for the length of their membership term — they don't pick dates
-    //   themselves, they book their one fixed slot each week.
+    // - Core / Resident: locked to their agreed recurring day(s) of the
+    //   week for the length of their membership term — they don't pick
+    //   dates themselves, they book their fixed slot(s) each week. A member
+    //   can have more than one slot (e.g. full day Monday + half day Friday).
     let tierMember = requester;
     if (member_id !== requester.id) {
       const { data: otherMember, error: otherErr } = await supabase
         .from('members')
-        .select('id, plan_tier, reserved_day_of_week, reserved_time_start, reserved_time_end, reserved_room_id, gocardless_mandate_id, mandate_status')
+        .select('id, plan_tier, gocardless_mandate_id, mandate_status')
         .eq('id', member_id)
         .maybeSingle();
       if (otherErr) return res.status(500).json({ error: otherErr.message });
       tierMember = otherMember || {};
     }
 
+    let recurringSlots = [];
+    if (['core', 'resident'].includes(tierMember.plan_tier)) {
+      const { data: slots, error: slotsErr } = await supabase
+        .from('member_recurring_slots')
+        .select('day_of_week, time_start, time_end, room_id')
+        .eq('member_id', tierMember.id || member_id);
+      if (slotsErr) return res.status(500).json({ error: slotsErr.message });
+      recurringSlots = slots || [];
+    }
+
     // Pricing: figure out what (if anything) this booking should be charged.
     // - Community: not charged through the app (existing behaviour, unchanged).
-    // - Core/Resident: free if it's their included recurring slot for this
-    //   week; otherwise priced as an extra session like Flex would be.
+    // - Core/Resident: free if it matches one of their included recurring
+    //   slots for this week; otherwise priced as an extra session like Flex
+    //   would be.
     // - Flex, and any top-up regardless of tier: always a chargeable session.
     // calculateSessionChargeInPence returns null when the brochure doesn't
     // define a rate for this duration/room-category combo (see pricing.js) —
@@ -102,7 +114,7 @@ module.exports = async (req, res) => {
     let finalPaymentStatus = 'not_required';
     let amountPence = null;
 
-    const includedInMembership = await isIncludedInMembershipFee(supabase, tierMember, { room_id, start_time });
+    const includedInMembership = await isIncludedInMembershipFee(supabase, tierMember, recurringSlots, { room_id, start_time });
 
     const needsCharge = is_topup || tierMember.plan_tier === 'flex'
       || (['core', 'resident'].includes(tierMember.plan_tier) && !includedInMembership);
@@ -125,13 +137,14 @@ module.exports = async (req, res) => {
       }
     }
     if (tierMember.plan_tier && ['core', 'resident'].includes(tierMember.plan_tier)) {
-      if (!tierMember.reserved_day_of_week) {
+      if (recurringSlots.length === 0) {
         return res.status(400).json({ error: `This member's recurring day hasn't been agreed yet. An admin needs to set their reserved session before bookings can be made.` });
       }
       const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
       const bookingDay = dayNames[bookingStart.getDay()];
-      if (bookingDay !== tierMember.reserved_day_of_week) {
-        return res.status(400).json({ error: `${tierMember.plan_tier === 'core' ? 'Core' : 'Resident'} members are booked on their agreed recurring day only: ${tierMember.reserved_day_of_week}.` });
+      const agreedDays = [...new Set(recurringSlots.map(s => s.day_of_week))];
+      if (!agreedDays.includes(bookingDay)) {
+        return res.status(400).json({ error: `${tierMember.plan_tier === 'core' ? 'Core' : 'Resident'} members are booked on their agreed recurring day${agreedDays.length > 1 ? 's' : ''} only: ${agreedDays.join(', ')}.` });
       }
     }
 

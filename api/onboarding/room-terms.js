@@ -28,13 +28,20 @@ module.exports = async (req, res) => {
   if (!['accept', 'reject'].includes(response)) {
     return res.status(400).json({ error: "response must be 'accept' or 'reject'" });
   }
-  if (!['core', 'resident'].includes(member.plan_tier) || !member.reserved_day_of_week) {
+
+  const supabase = getSupabase();
+  const { data: slots, error: slotsErr } = await supabase
+    .from('member_recurring_slots')
+    .select('day_of_week, time_start, time_end, room:rooms(name)')
+    .eq('member_id', member.id)
+    .order('day_of_week');
+  if (slotsErr) return res.status(500).json({ error: slotsErr.message });
+  if (!['core', 'resident'].includes(member.plan_tier) || !slots || slots.length === 0) {
     return res.status(400).json({ error: 'No room offer is awaiting your response.' });
   }
 
-  const supabase = getSupabase();
   const memberName = `${member.first_name || ''} ${member.last_name || ''}`.trim() || member.email;
-  const slotDesc = `${member.reserved_day_of_week}, ${member.reserved_time_start || ''}–${member.reserved_time_end || ''}`;
+  const slotDesc = slots.map(s => `${s.day_of_week} ${s.time_start}–${s.time_end}${s.room ? ` (${s.room.name})` : ''}`).join('; ');
 
   if (response === 'accept') {
     const { data: updated, error } = await supabase
@@ -47,7 +54,7 @@ module.exports = async (req, res) => {
 
     await logAudit({
       actorId: member.id, actorName: memberName, action: 'onboarding.room_terms_accepted',
-      entityType: 'member', entityId: member.id, details: { slot: slotDesc },
+      entityType: 'member', entityId: member.id, details: { slots: slotDesc },
     });
 
     return res.status(200).json({ member: updated });
@@ -65,14 +72,14 @@ module.exports = async (req, res) => {
   if (error) return res.status(500).json({ error: error.message });
 
   const { data: admins } = await supabase.from('members').select('id').eq('user_type', 'administrator').eq('status', 'active');
-  const notifyBody = `${memberName} has declined their offered recurring slot (${slotDesc}). Please review and offer a revised day/time/room.`;
+  const notifyBody = `${memberName} has declined their offered recurring slot(s) (${slotDesc}). Please review and offer a revised day/time/room.`;
   for (const admin of admins || []) {
     await supabase.from('messages').insert({ sender_id: member.id, recipient_id: admin.id, body: notifyBody });
   }
 
   await logAudit({
     actorId: member.id, actorName: memberName, action: 'onboarding.room_terms_rejected',
-    entityType: 'member', entityId: member.id, details: { slot: slotDesc },
+    entityType: 'member', entityId: member.id, details: { slots: slotDesc },
   });
 
   return res.status(200).json({ member: updated });

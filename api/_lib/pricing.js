@@ -37,23 +37,24 @@ function calculateSessionChargeInPence(planTier, durationMinutes, pricingCategor
 module.exports = { calculateSessionChargeInPence, RATES_PENCE_BY_DURATION_MINUTES, isIncludedInMembershipFee };
 
 // Whether a Core/Resident booking is covered by their flat monthly fee
-// (their one included recurring slot) rather than being an extra chargeable
-// session. ASSUMPTION (flag for Radiant to confirm): "included" means the
-// *first* booking this calendar week that lands in their exact reserved
+// (one of their included recurring slots — they can have more than one,
+// e.g. a full day Monday plus a half day Friday) rather than being an extra
+// chargeable session. ASSUMPTION (flag for Radiant to confirm): "included"
+// means the *first* booking each week that lands in that exact slot's
 // room + day + time window; anything beyond that — a second booking that
-// week, a different room, or outside their reserved time window — is
-// charged per session like a Flex booking would be.
-async function isIncludedInMembershipFee(supabase, member, { room_id, start_time }) {
+// week in the same slot, a different room, or outside any agreed slot's
+// time window — is charged per session like a Flex booking would be.
+async function isIncludedInMembershipFee(supabase, member, slots, { room_id, start_time }) {
   if (!['core', 'resident'].includes(member.plan_tier)) return false;
-  if (!member.reserved_day_of_week || !member.reserved_room_id || !member.reserved_time_start || !member.reserved_time_end) return false;
-  if (room_id !== member.reserved_room_id) return false;
+  if (!slots || slots.length === 0) return false;
 
   const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const start = new Date(start_time);
-  if (dayNames[start.getDay()] !== member.reserved_day_of_week) return false;
+  const dayName = dayNames[start.getDay()];
+  const timeOfDay = start.toISOString().slice(11, 19); // HH:MM:SS (UTC — matches how time_start/time_end are stored)
 
-  const timeOfDay = start.toISOString().slice(11, 19); // HH:MM:SS (UTC — matches how reserved_time_* is stored)
-  if (timeOfDay < member.reserved_time_start || timeOfDay >= member.reserved_time_end) return false;
+  const matchingSlot = slots.find(s => s.room_id === room_id && s.day_of_week === dayName && timeOfDay >= s.time_start && timeOfDay < s.time_end);
+  if (!matchingSlot) return false;
 
   // Monday-start week boundary containing this booking.
   const weekStart = new Date(start);
@@ -65,16 +66,18 @@ async function isIncludedInMembershipFee(supabase, member, { room_id, start_time
 
   const { data: existing, error } = await supabase
     .from('bookings')
-    .select('id')
+    .select('id, start_time')
     .eq('member_id', member.id)
-    .eq('room_id', member.reserved_room_id)
+    .eq('room_id', matchingSlot.room_id)
     .eq('is_topup', false)
     .neq('status', 'cancelled')
     .gte('start_time', weekStart.toISOString())
     .lt('start_time', weekEnd.toISOString());
   if (error) throw new Error(error.message);
 
-  // If any booking already exists this week matching the reserved slot,
-  // this new one is an extra, chargeable session.
-  return !existing || existing.length === 0;
+  // Only count existing bookings that land on the SAME day-of-week as this
+  // slot — a member with slots in the same room on two different days
+  // shouldn't have Monday's booking count against Friday's eligibility.
+  const matchingExisting = (existing || []).filter(b => dayNames[new Date(b.start_time).getDay()] === matchingSlot.day_of_week);
+  return matchingExisting.length === 0;
 }
