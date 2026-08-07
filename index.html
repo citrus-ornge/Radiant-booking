@@ -2632,20 +2632,28 @@ function bookingWindowRuleForMember(m) {
     // half day Friday) — m.recurring_slots is attached by /api/me for the
     // current user. Admin booking on behalf of someone else via
     // bookingWindowRuleFor() below won't have this populated yet (the
-    // general /members list doesn't include it) — falls back to "no agreed
-    // day" rather than silently allowing any day, which is the safer
-    // failure mode until that's wired up too.
+    // general /members list doesn't include it).
+    //
+    // Their agreed day(s) are the free included slot, but they can also
+    // book any OTHER day as a chargeable ad-hoc extra — same as Flex, using
+    // the same 30-day window (an assumption: no explicit window was set for
+    // Core/Resident ad-hoc bookings specifically, worth confirming whether
+    // that should be longer given their higher tier). `included(d)` marks
+    // which allowed days are the free slot vs a paid extra, so the calendar
+    // can show the difference rather than making every bookable day look
+    // the same.
     const slots = m.recurring_slots || [];
-    if (slots.length === 0) {
-      return { allow: () => false, multi: false, note: `⚠ No agreed recurring day set yet for your ${m.plan_tier === 'core' ? 'Core' : 'Resident'} membership — contact Staff & Admin.` };
-    }
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const agreedDayIdxs = new Set(slots.map(s => dayNames.indexOf(s.day_of_week)));
     const agreedDayNames = [...new Set(slots.map(s => s.day_of_week))];
+    const max = new Date(today.getTime() + 30 * 24 * 3600e3);
     return {
-      allow: d => d >= today && agreedDayIdxs.has(d.getDay()),
+      allow: d => d >= today && d <= max,
+      included: d => agreedDayIdxs.has(d.getDay()),
       multi: false,
-      note: `${m.plan_tier === 'core' ? 'Core' : 'Resident'}: locked to ${agreedDayNames.length > 1 ? 'your agreed days' : 'every'} ${agreedDayNames.join(', ')}`,
+      note: agreedDayNames.length > 0
+        ? `${m.plan_tier === 'core' ? 'Core' : 'Resident'}: ${agreedDayNames.join(', ')} included free — any other day within 30 days is booked as a paid extra`
+        : `⚠ No agreed recurring day set yet — contact Staff & Admin. You can still book ad-hoc extra sessions up to 30 days ahead.`,
     };
   }
   return { allow: d => d >= today, multi: false, note: '' };
@@ -2765,22 +2773,29 @@ function renderClientBookingCalendar() {
     const d = new Date(year, month, day);
     const key = dateKey(d);
     const allowed = rule.allow(d);
+    const included = allowed && rule.included && rule.included(d);
     const selected = clientSelectedDates.includes(key);
     const style = selected
       ? 'background:var(--r-gold);color:#fff;border-radius:6px;cursor:pointer;padding:5px 0;font-weight:600;'
-      : allowed
-        ? 'cursor:pointer;border-radius:6px;padding:5px 0;'
-        : 'color:var(--r-warm-gray);opacity:0.35;padding:5px 0;';
-    cells += `<div style="${style}" ${allowed ? `onclick="pickClientBookingDate('${key}')"` : ''}>${day}</div>`;
+      : included
+        ? 'cursor:pointer;border-radius:6px;padding:4px 0;border:2px solid var(--r-gold);font-weight:600;'
+        : allowed
+          ? 'cursor:pointer;border-radius:6px;padding:5px 0;'
+          : 'color:var(--r-warm-gray);opacity:0.35;padding:5px 0;';
+    cells += `<div style="${style}" ${allowed ? `onclick="pickClientBookingDate('${key}')"` : ''} title="${included ? 'Included in your membership' : (allowed ? 'Paid extra session' : '')}">${day}</div>`;
   }
   grid.innerHTML = cells;
 
   document.getElementById('booking-date-input').value = clientSelectedDates[0] || '';
   const summary = document.getElementById('client-cal-selection-summary');
   if (summary) {
+    const selectedIsIncluded = clientSelectedDates.length === 1 && rule.included && (() => {
+      const [y, mo, da] = clientSelectedDates[0].split('-').map(Number);
+      return rule.included(new Date(y, mo - 1, da));
+    })();
     summary.textContent = clientSelectedDates.length > 1
       ? `${clientSelectedDates.length} days selected — one booking (and one payment) will be created per day`
-      : (clientSelectedDates.length === 1 ? `Selected: ${clientSelectedDates[0]}` : 'No date selected yet');
+      : (clientSelectedDates.length === 1 ? `Selected: ${clientSelectedDates[0]}${selectedIsIncluded ? ' (included in your membership)' : rule.included ? ' (paid extra session)' : ''}` : 'No date selected yet');
   }
   refreshClientTimeSlotAvailability();
 }

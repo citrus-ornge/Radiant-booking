@@ -128,23 +128,16 @@ module.exports = async (req, res) => {
 
     const bookingStart = new Date(start_time);
     const now = new Date();
-    const ROLLING_WINDOWS = { community: 7, flex: 30 };
+    // Core/Resident can also book ad-hoc extra days beyond their agreed
+    // slot(s) (see isIncludedInMembershipFee above — those get charged,
+    // this window rule doesn't distinguish, it just bounds how far ahead
+    // ANY booking of theirs can be), using the same 30-day window as Flex.
+    const ROLLING_WINDOWS = { community: 7, flex: 30, core: 30, resident: 30 };
     if (tierMember.plan_tier && ROLLING_WINDOWS[tierMember.plan_tier]) {
       const maxDays = ROLLING_WINDOWS[tierMember.plan_tier];
       const windowEnd = new Date(now.getTime() + maxDays * 24 * 60 * 60 * 1000);
       if (bookingStart > windowEnd) {
-        return res.status(400).json({ error: `${tierMember.plan_tier === 'community' ? 'Community' : 'Flex'} members can only book up to ${maxDays} days ahead.` });
-      }
-    }
-    if (tierMember.plan_tier && ['core', 'resident'].includes(tierMember.plan_tier)) {
-      if (recurringSlots.length === 0) {
-        return res.status(400).json({ error: `This member's recurring day hasn't been agreed yet. An admin needs to set their reserved session before bookings can be made.` });
-      }
-      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-      const bookingDay = dayNames[bookingStart.getDay()];
-      const agreedDays = [...new Set(recurringSlots.map(s => s.day_of_week))];
-      if (!agreedDays.includes(bookingDay)) {
-        return res.status(400).json({ error: `${tierMember.plan_tier === 'core' ? 'Core' : 'Resident'} members are booked on their agreed recurring day${agreedDays.length > 1 ? 's' : ''} only: ${agreedDays.join(', ')}.` });
+        return res.status(400).json({ error: `${{ community: 'Community', flex: 'Flex', core: 'Core', resident: 'Resident' }[tierMember.plan_tier]} members can only book up to ${maxDays} days ahead.` });
       }
     }
 
