@@ -192,20 +192,32 @@ async function handleEvent(supabase, event) {
   }
 
   // Payment-status updates: match back to the booking via
-  // bookings.gocardless_payment_id and reflect the outcome.
+  // bookings.gocardless_payment_id — OR, if that was never set (e.g. the
+  // billing_requests.fulfilled event that would normally set it never fired,
+  // or its handler failed), fall back to links.billing_request, which is
+  // present directly on every payment event created via Instant Bank Pay.
+  // Real bug found by inspecting an actual webhook delivery: payments.
+  // confirmed arrived and returned 200, but nothing matched because
+  // gocardless_payment_id was still null — this event shouldn't depend on
+  // an earlier one having already run successfully.
   if (resource_type === 'payments' && links.payment) {
     const statusMap = { confirmed: 'paid', failed: 'failed', cancelled: 'failed', charged_back: 'failed' };
     const paymentStatus = statusMap[action];
     if (!paymentStatus) return; // other actions (submitted, paid_out, etc.) don't change our status
 
-    const { data: booking, error } = await supabase
-      .from('bookings')
-      .update({ payment_status: paymentStatus })
-      .eq('gocardless_payment_id', links.payment)
-      .select('id, member_id')
-      .maybeSingle();
-    if (error) throw new Error(error.message);
+    let findQuery = supabase.from('bookings').select('id, member_id, gocardless_payment_id');
+    findQuery = links.billing_request
+      ? findQuery.or(`gocardless_payment_id.eq.${links.payment},gocardless_billing_request_id.eq.${links.billing_request}`)
+      : findQuery.eq('gocardless_payment_id', links.payment);
+    const { data: booking, error: findErr } = await findQuery.maybeSingle();
+    if (findErr) throw new Error(findErr.message);
     if (!booking) return; // e.g. a subscription-generated payment, not a per-booking one — nothing to update
+
+    const { error } = await supabase
+      .from('bookings')
+      .update({ payment_status: paymentStatus, gocardless_payment_id: links.payment })
+      .eq('id', booking.id);
+    if (error) throw new Error(error.message);
 
     await logAudit({
       actorId: null,
