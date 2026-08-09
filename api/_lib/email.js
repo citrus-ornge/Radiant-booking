@@ -10,7 +10,7 @@ function getResend() {
 // so real emails can go to any address, not just the account owner's own.
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'Radiant Booking <booking@booking.radiantfr.com>';
 
-async function sendBookingConfirmation({ to, memberName, roomName, start, end }) {
+async function sendBookingConfirmation({ to, memberName, roomName, start, end, icsContent }) {
   const resend = getResend();
   const dateStr = new Date(start).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
   const endStr = new Date(end).toLocaleString('en-GB', { timeStyle: 'short' });
@@ -25,6 +25,8 @@ Your booking is confirmed:
 ${roomName}
 ${dateStr} – ${endStr}
 
+A calendar invite is attached — most email apps will show an "Add to calendar" option.
+
 A couple of friendly reminders that help everyone using the space:
 - Please arrive on time so the room's ready for the person after you
 - Leave the room as you'd like to find it - tidy, restocked, and ready for the next booking
@@ -33,10 +35,15 @@ A couple of friendly reminders that help everyone using the space:
 Thanks for being part of what makes Radiant a great place to work. See you then!
 
 — Radiant Booking`,
+    attachments: icsContent ? [{
+      filename: 'invite.ics',
+      content: Buffer.from(icsContent).toString('base64'),
+      contentType: 'text/calendar; charset=utf-8; method=REQUEST',
+    }] : undefined,
   });
 }
 
-async function sendTeamBookingNotice({ memberName, roomName, start, end }) {
+async function sendTeamBookingNotice({ memberName, roomName, start, end, icsContent }) {
   const resend = getResend();
   const dateStr = new Date(start).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
   const endStr = new Date(end).toLocaleString('en-GB', { timeStyle: 'short' });
@@ -50,17 +57,27 @@ ${memberName} — ${roomName}
 ${dateStr} – ${endStr}
 
 — Radiant Booking`,
+    attachments: icsContent ? [{
+      filename: 'invite.ics',
+      content: Buffer.from(icsContent).toString('base64'),
+      contentType: 'text/calendar; charset=utf-8; method=REQUEST',
+    }] : undefined,
   });
 }
 
-async function sendCancellationAlert({ to, roomName, start }) {
+async function sendCancellationAlert({ to, roomName, start, icsContent }) {
   const resend = getResend();
   const dateStr = new Date(start).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
   return resend.emails.send({
     from: FROM_EMAIL,
     to: [to],
     subject: `Booking cancelled: ${roomName}`,
-    text: `The booking for ${roomName} on ${dateStr} has been cancelled.\n\n— Radiant Booking`,
+    text: `The booking for ${roomName} on ${dateStr} has been cancelled.${icsContent ? ' The calendar invite attached will remove it from your calendar automatically in most apps.' : ''}\n\n— Radiant Booking`,
+    attachments: icsContent ? [{
+      filename: 'cancel.ics',
+      content: Buffer.from(icsContent).toString('base64'),
+      contentType: 'text/calendar; charset=utf-8; method=CANCEL',
+    }] : undefined,
   });
 }
 

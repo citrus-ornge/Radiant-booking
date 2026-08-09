@@ -5,6 +5,7 @@ const { createCalendarEvent } = require('./_lib/google');
 const { requireAuth } = require('./_lib/auth');
 const { checkRateLimit } = require('./_lib/rateLimit');
 const { calculateSessionChargeInPence, isIncludedInMembershipFee } = require('./_lib/pricing');
+const { generateBookingIcs, bookingIcsUid } = require('./_lib/ics');
 // _lib/gocardless is deliberately NOT required at the top of this file.
 // It's only needed for the one payment-attempt branch inside POST, and
 // requiring it lazily there means a problem in that library (or how it
@@ -213,6 +214,22 @@ module.exports = async (req, res) => {
     const member = booking.member;
     const room = booking.room;
 
+    // Universal calendar invite — attached to both emails below regardless
+    // of whether the member has connected Google Calendar. Works in Gmail,
+    // Outlook, Apple Mail etc. with zero setup; the OAuth direct-sync
+    // further down is a bonus on top of this for members who've connected,
+    // not a replacement for it.
+    const icsContent = generateBookingIcs({
+      uid: bookingIcsUid(booking.id),
+      summary: `${room.name} — Radiant Booking`,
+      description: notes || '',
+      location: room.name,
+      startISO: booking.start_time,
+      endISO: booking.end_time,
+      sequence: 0,
+      method: 'REQUEST',
+    });
+
     // Fire-and-forget side effects — don't fail the booking if these fail,
     // just report what happened.
     const sideEffects = { email_sent: false, calendar_synced: false, warnings: [] };
@@ -225,6 +242,7 @@ module.exports = async (req, res) => {
           roomName: room.name,
           start: booking.start_time,
           end: booking.end_time,
+          icsContent,
         });
         sideEffects.email_sent = true;
       }
@@ -238,6 +256,7 @@ module.exports = async (req, res) => {
         roomName: room.name,
         start: booking.start_time,
         end: booking.end_time,
+        icsContent,
       });
     } catch (e) {
       // non-critical - the practitioner's own confirmation already succeeded

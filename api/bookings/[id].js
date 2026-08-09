@@ -3,6 +3,7 @@ const { sendCancellationAlert } = require('../_lib/email');
 const { requireAuth } = require('../_lib/auth');
 const { logAudit } = require('../_lib/audit');
 const { isNotificationEnabled } = require('../_lib/notificationSettings');
+const { generateBookingIcs, bookingIcsUid } = require('../_lib/ics');
 
 module.exports = async (req, res) => {
   const { id } = req.query;
@@ -49,10 +50,23 @@ module.exports = async (req, res) => {
     let email_sent = false;
     if (status === 'cancelled' && await isNotificationEnabled('cancellation_alert')) {
       try {
+        // Same UID as the original confirmation invite (bookingIcsUid is
+        // deterministic from the booking id) — that's what lets calendar
+        // apps match this to the earlier event and remove/grey it out,
+        // rather than just leaving a stray attachment sitting in the inbox.
+        const icsContent = generateBookingIcs({
+          uid: bookingIcsUid(booking.id),
+          summary: `${booking.room.name} — Radiant Booking`,
+          startISO: booking.start_time,
+          endISO: booking.end_time,
+          sequence: 1,
+          method: 'CANCEL',
+        });
         await sendCancellationAlert({
           to: booking.member.email,
           roomName: booking.room.name,
           start: booking.start_time,
+          icsContent,
         });
         email_sent = true;
       } catch (e) {
