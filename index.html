@@ -1388,8 +1388,9 @@ textarea.form-input { resize: vertical; }
                 </select>
               </div>
               <div class="form-row" id="invite-reserved-slot-row" style="display:none;background:var(--r-surface2);border-radius:8px;padding:12px;">
-                <label class="form-label" style="margin-bottom:8px;">Agreed Recurring Session (required for Core/Resident)</label>
-                <p style="font-size:12px;color:var(--r-warm-gray);margin:0 0 8px;">Core and Resident members book a fixed slot for their whole term rather than choosing dates themselves — agree the day, room and time with them before sending this invite.</p>
+                <label class="form-label" style="margin-bottom:8px;">Agreed Recurring Session(s) (required for Core/Resident)</label>
+                <p style="font-size:12px;color:var(--r-warm-gray);margin:0 0 8px;">Core and Resident members book fixed slot(s) for their whole term rather than choosing dates themselves — agree the day(s), room(s) and time(s) with them before sending this invite. A member can have more than one, e.g. a full day Monday plus a half day Friday.</p>
+                <div id="invite-pending-slots" style="margin-bottom:10px;"></div>
                 <div class="form-two">
                   <select class="form-input" id="invite-reserved-day">
                     <option value="">Day…</option>
@@ -1402,6 +1403,7 @@ textarea.form-input { resize: vertical; }
                   <input type="time" class="form-input" id="invite-reserved-start" placeholder="Start">
                   <input type="time" class="form-input" id="invite-reserved-end" placeholder="End">
                 </div>
+                <button type="button" class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="addPendingInviteSlot()">+ Add this slot</button>
               </div>
               <div class="form-row"><label class="form-label">Personal Note (optional)</label><textarea class="form-input" id="invite-note" rows="3" placeholder="Add a welcome message…"></textarea></div>
               <div class="form-row">
@@ -5743,6 +5745,7 @@ function toggleInviteReservedRow() {
   }
   const showReserved = ['core', 'resident'].includes(tier) && !bulk;
   if (row) row.style.display = showReserved ? 'block' : 'none';
+  if (showReserved) renderPendingInviteSlots();
 }
 
 async function sendInviteModal() {
@@ -5772,6 +5775,48 @@ function toggleBulkInvite() {
   toggleInviteReservedRow();
 }
 
+// Holds slots the admin has added for the invite currently being composed,
+// mirroring the pattern used in Manage Member — a Core/Resident invite can
+// offer more than one recurring slot now (e.g. full day Monday + half day
+// Friday) rather than being limited to a single one.
+let pendingInviteSlots = [];
+
+function renderPendingInviteSlots() {
+  const container = document.getElementById('invite-pending-slots');
+  if (!container) return;
+  if (pendingInviteSlots.length === 0) {
+    container.innerHTML = '<div style="font-size:12px;color:var(--r-warm-gray);">No slots added yet.</div>';
+    return;
+  }
+  container.innerHTML = pendingInviteSlots.map((s, i) => {
+    const room = state.rooms.find(r => r.id === s.room_id);
+    return `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--r-border);font-size:13px;">
+      <span>${esc(s.day_of_week)}, ${esc(s.time_start)}–${esc(s.time_end)}${room ? ' · ' + esc(room.name) : ''}</span>
+      <button type="button" class="btn btn-danger btn-sm" onclick="removePendingInviteSlot(${i})">Remove</button>
+    </div>`;
+  }).join('');
+}
+
+function addPendingInviteSlot() {
+  const day_of_week = document.getElementById('invite-reserved-day').value;
+  const room_id = document.getElementById('invite-reserved-room').value || null;
+  const time_start = document.getElementById('invite-reserved-start').value;
+  const time_end = document.getElementById('invite-reserved-end').value;
+  if (!day_of_week || !time_start || !time_end) { showToast('⚠ Pick a day, start time and end time'); return; }
+  pendingInviteSlots.push({ day_of_week, room_id, time_start, time_end });
+  document.getElementById('invite-reserved-day').value = '';
+  document.getElementById('invite-reserved-room').value = '';
+  document.getElementById('invite-reserved-start').value = '';
+  document.getElementById('invite-reserved-end').value = '';
+  renderPendingInviteSlots();
+}
+
+function removePendingInviteSlot(index) {
+  pendingInviteSlots.splice(index, 1);
+  renderPendingInviteSlots();
+}
+
 async function sendInviteFromPage() {
   const bulk = document.getElementById('invite-bulk-toggle').checked;
   const user_type = document.getElementById('invite-type').value;
@@ -5779,13 +5824,9 @@ async function sendInviteFromPage() {
   const is_owner = user_type === 'administrator' && document.getElementById('invite-is-owner').checked;
   const plan_tier = user_type === 'practitioner' ? (document.getElementById('invite-tier').value || null) : null;
   const lockedTiers = ['core', 'resident'];
-  const reserved_day_of_week = lockedTiers.includes(plan_tier) ? document.getElementById('invite-reserved-day').value : null;
-  const reserved_room_id = lockedTiers.includes(plan_tier) ? document.getElementById('invite-reserved-room').value : null;
-  const reserved_time_start = lockedTiers.includes(plan_tier) ? document.getElementById('invite-reserved-start').value : null;
-  const reserved_time_end = lockedTiers.includes(plan_tier) ? document.getElementById('invite-reserved-end').value : null;
 
-  if (!bulk && lockedTiers.includes(plan_tier) && !reserved_day_of_week) {
-    showToast('⚠ Core and Resident invites need an agreed day for their recurring slot');
+  if (!bulk && lockedTiers.includes(plan_tier) && pendingInviteSlots.length === 0) {
+    showToast('⚠ Core and Resident invites need at least one agreed recurring slot — add one below');
     return;
   }
 
@@ -5811,11 +5852,13 @@ async function sendInviteFromPage() {
   try {
     const result = await api('/invites', {
       method: 'POST',
-      body: JSON.stringify({ email, user_type, personal_note, is_owner, plan_tier, reserved_day_of_week, reserved_room_id, reserved_time_start, reserved_time_end }),
+      body: JSON.stringify({ email, user_type, personal_note, is_owner, plan_tier, reserved_slots: pendingInviteSlots }),
     });
     showToast(result.email_sent ? `✓ Invite sent to ${email}` : `✓ Invite created for ${email} (email not sent)`);
     document.getElementById('invite-email').value = '';
     document.getElementById('invite-note').value = '';
+    pendingInviteSlots = [];
+    renderPendingInviteSlots();
   } catch (e) {
     showToast('⚠ ' + e.message);
   }

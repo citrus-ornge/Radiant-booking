@@ -44,10 +44,6 @@ module.exports = async (req, res) => {
         onboarding_status: invite.is_owner ? 'completed' : 'profile_pending',
         plan_tier: invite.plan_tier || null,
         plan_tier_started_at: ['core', 'resident'].includes(invite.plan_tier) ? new Date().toISOString() : null,
-        reserved_day_of_week: invite.reserved_day_of_week || null,
-        reserved_time_start: invite.reserved_time_start || null,
-        reserved_time_end: invite.reserved_time_end || null,
-        reserved_room_id: invite.reserved_room_id || null,
       })
       .eq('id', existing.id)
       .select()
@@ -65,10 +61,6 @@ module.exports = async (req, res) => {
         status: 'active',
         plan_tier: invite.plan_tier || null,
         plan_tier_started_at: ['core', 'resident'].includes(invite.plan_tier) ? new Date().toISOString() : null,
-        reserved_day_of_week: invite.reserved_day_of_week || null,
-        reserved_time_start: invite.reserved_time_start || null,
-        reserved_time_end: invite.reserved_time_end || null,
-        reserved_room_id: invite.reserved_room_id || null,
       })
       .select()
       .single();
@@ -78,22 +70,24 @@ module.exports = async (req, res) => {
 
   await supabase.from('invites').update({ status: 'accepted' }).eq('id', invite.id);
 
-  // The invite carries at most one day/time/room (reserved_day_of_week
-  // etc., set at invite time) — this is what actually makes the recurring
-  // slot work now (member_recurring_slots supports more than one, but an
-  // invite can only pre-set the first; an admin can add more afterward via
-  // Manage Member). Guarded against duplicating if this invite is somehow
-  // accepted twice for an existing member who already has slots.
-  if (invite.reserved_day_of_week && invite.reserved_time_start && invite.reserved_time_end) {
+  // An invite can offer more than one recurring slot (e.g. full day Monday
+  // + half day Friday) — reserved_slots is a JSON array of
+  // { day_of_week, time_start, time_end, room_id }. Guarded against
+  // duplicating if this invite is somehow accepted twice for an existing
+  // member who already has slots.
+  const inviteSlots = Array.isArray(invite.reserved_slots) ? invite.reserved_slots : [];
+  if (inviteSlots.length > 0) {
     const { data: alreadyHasSlots } = await supabase.from('member_recurring_slots').select('id').eq('member_id', member.id).limit(1);
     if (!alreadyHasSlots || alreadyHasSlots.length === 0) {
-      await supabase.from('member_recurring_slots').insert({
-        member_id: member.id,
-        day_of_week: invite.reserved_day_of_week,
-        time_start: invite.reserved_time_start,
-        time_end: invite.reserved_time_end,
-        room_id: invite.reserved_room_id || null,
-      });
+      await supabase.from('member_recurring_slots').insert(
+        inviteSlots.map(s => ({
+          member_id: member.id,
+          day_of_week: s.day_of_week,
+          time_start: s.time_start,
+          time_end: s.time_end,
+          room_id: s.room_id || null,
+        }))
+      );
     }
   }
 

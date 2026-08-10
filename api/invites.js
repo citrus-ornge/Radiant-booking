@@ -51,8 +51,7 @@ module.exports = async (req, res) => {
     }
 
     const {
-      email, emails, user_type, personal_note, is_owner, plan_tier,
-      reserved_day_of_week, reserved_time_start, reserved_time_end, reserved_room_id,
+      email, emails, user_type, personal_note, is_owner, plan_tier, reserved_slots,
     } = req.body || {};
     const emailList = Array.isArray(emails) && emails.length > 0
       ? emails.map(e => e.trim()).filter(Boolean)
@@ -64,8 +63,12 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'Please invite up to 50 people at a time' });
     }
     const lockedTiers = ['core', 'resident'];
-    if (plan_tier && lockedTiers.includes(plan_tier) && !reserved_day_of_week) {
-      return res.status(400).json({ error: 'Core and Resident invites need an agreed day of the week for their fixed recurring slot' });
+    // A Core/Resident member can have more than one recurring slot (e.g.
+    // full day Monday + half day Friday) — reserved_slots is an array of
+    // { day_of_week, time_start, time_end, room_id }.
+    const slots = Array.isArray(reserved_slots) ? reserved_slots.filter(s => s && s.day_of_week && s.time_start && s.time_end) : [];
+    if (plan_tier && lockedTiers.includes(plan_tier) && slots.length === 0) {
+      return res.status(400).json({ error: 'Core and Resident invites need at least one agreed recurring slot' });
     }
 
     const allowed = await checkRateLimit(`invite_create:${requester.id}`, 20, 3600);
@@ -82,10 +85,7 @@ module.exports = async (req, res) => {
         .insert({
           email: oneEmail, user_type, personal_note, is_owner: !!is_owner,
           plan_tier: plan_tier || null,
-          reserved_day_of_week: lockedTiers.includes(plan_tier) ? reserved_day_of_week : null,
-          reserved_time_start: lockedTiers.includes(plan_tier) ? (reserved_time_start || null) : null,
-          reserved_time_end: lockedTiers.includes(plan_tier) ? (reserved_time_end || null) : null,
-          reserved_room_id: lockedTiers.includes(plan_tier) ? (reserved_room_id || null) : null,
+          reserved_slots: lockedTiers.includes(plan_tier) ? slots : [],
         })
         .select()
         .single();
