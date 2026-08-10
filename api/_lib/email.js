@@ -81,6 +81,104 @@ async function sendCancellationAlert({ to, roomName, start, icsContent }) {
   });
 }
 
+// ── Payment / billing emails ──
+// Added per the pre-launch review: previously the GoCardless webhook never
+// emailed the member anything at all — mandate going active, a payment
+// confirming or failing, a subscription starting all happened silently,
+// with only the in-app state to show for it.
+
+async function sendMandateActiveEmail({ to, memberName }) {
+  const resend = getResend();
+  return resend.emails.send({
+    from: FROM_EMAIL,
+    to: [to],
+    subject: 'Your Direct Debit is now active',
+    text: `Hi ${memberName},
+
+Your Direct Debit with Radiant is now active. Any session charges and your membership fee (if applicable) will be collected automatically from here on.
+
+You can review or update your bank details any time from My Profile.
+
+— Radiant Booking`,
+  });
+}
+
+async function sendSessionPaymentConfirmedEmail({ to, memberName, roomName, amountPence, start }) {
+  const resend = getResend();
+  const dateStr = new Date(start).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+  const amount = `£${(amountPence / 100).toFixed(2)}`;
+  return resend.emails.send({
+    from: FROM_EMAIL,
+    to: [to],
+    subject: `Payment confirmed: ${roomName} — ${amount}`,
+    text: `Hi ${memberName},
+
+Payment confirmed for your session:
+
+${roomName}
+${dateStr}
+${amount}
+
+— Radiant Booking`,
+  });
+}
+
+async function sendSessionPaymentFailedEmail({ to, memberName, roomName, amountPence, start }) {
+  const resend = getResend();
+  const dateStr = new Date(start).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+  const amount = `£${(amountPence / 100).toFixed(2)}`;
+  return resend.emails.send({
+    from: FROM_EMAIL,
+    to: [to],
+    subject: `Payment failed: ${roomName}`,
+    text: `Hi ${memberName},
+
+We weren't able to collect payment for your session:
+
+${roomName}
+${dateStr}
+${amount}
+
+Please check your Direct Debit details on My Profile, or use "Pay now" on the booking to pay instantly instead. If this keeps happening, contact Staff & Admin.
+
+— Radiant Booking`,
+  });
+}
+
+async function sendSubscriptionStartedEmail({ to, memberName, tierLabel, amountPence }) {
+  const resend = getResend();
+  const amount = `£${(amountPence / 100).toFixed(2)}`;
+  return resend.emails.send({
+    from: FROM_EMAIL,
+    to: [to],
+    subject: `Your ${tierLabel} membership fee is now set up`,
+    text: `Hi ${memberName},
+
+Your ${tierLabel} monthly membership fee (${amount}/month) is now set up and will be collected automatically via Direct Debit each month.
+
+You can review this any time from My Profile.
+
+— Radiant Booking`,
+  });
+}
+
+async function sendSubscriptionPaymentFailedEmail({ to, memberName, amountPence }) {
+  const resend = getResend();
+  const amount = `£${(amountPence / 100).toFixed(2)}`;
+  return resend.emails.send({
+    from: FROM_EMAIL,
+    to: [to],
+    subject: `We couldn't collect your monthly membership fee`,
+    text: `Hi ${memberName},
+
+We weren't able to collect your ${amount} monthly membership fee via Direct Debit.
+
+Please check your bank details are up to date on My Profile. If this keeps happening, contact Staff & Admin — your membership and recurring slot aren't affected while this gets sorted.
+
+— Radiant Booking`,
+  });
+}
+
 async function sendReminder({ to, memberName, roomName, start, hoursBefore }) {
   const resend = getResend();
   const dateStr = new Date(start).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
@@ -273,4 +371,9 @@ async function sendExitNoticeReminder({ to, memberName, planTier, noticeDays, cy
   });
 }
 
-module.exports = { sendBookingConfirmation, sendTeamBookingNotice, sendCancellationAlert, sendReminder, sendInvite, sendWelcomeEmail, sendRotaUpdate, sendLeaveUpdate, sendLeaveApprovalRequest, sendLeaveDecision, sendExitNoticeReminder };
+module.exports = {
+  sendBookingConfirmation, sendTeamBookingNotice, sendCancellationAlert, sendReminder, sendInvite,
+  sendWelcomeEmail, sendRotaUpdate, sendLeaveUpdate, sendLeaveApprovalRequest, sendLeaveDecision, sendExitNoticeReminder,
+  sendMandateActiveEmail, sendSessionPaymentConfirmedEmail, sendSessionPaymentFailedEmail,
+  sendSubscriptionStartedEmail, sendSubscriptionPaymentFailedEmail,
+};
