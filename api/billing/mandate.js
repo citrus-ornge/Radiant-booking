@@ -40,10 +40,7 @@ module.exports = async (req, res) => {
     client = gc.getGoCardlessClient();
   } catch (e) {
     console.error('Failed to load/init GoCardless client:', e.message);
-    // Temporary: surface the real reason in the response body itself, since
-    // server log access has been unreliable this session — remove once
-    // this is confirmed working end-to-end.
-    return res.status(503).json({ error: `Payments are not configured yet (${e.message}). Please contact Staff & Admin.` });
+    return res.status(503).json({ error: 'Payments are not configured yet. Please contact Staff & Admin.' });
   }
 
   try {
@@ -95,13 +92,13 @@ module.exports = async (req, res) => {
   } catch (e) {
     // GoCardless SDK errors carry structured detail (e.errors is an array of
     // { message, reason, field }) that's far more useful than e.message
-    // alone — e.g. "scheme is not supported" vs a generic failure. Surfaced
-    // temporarily in the response while we're still confirming this works
-    // end-to-end; server log access has been unreliable this session.
+    // alone for server-side debugging — e.g. "scheme is not supported" vs a
+    // generic failure. Logged, not shown to the member (see mandate.js commit
+    // history for why this was briefly user-facing while chasing real bugs).
     const detail = (e.errors && e.errors.length)
       ? e.errors.map(x => [x.field, x.message || x.reason].filter(Boolean).join(': ')).join('; ')
       : e.message;
     console.error('GoCardless mandate setup failed:', detail, JSON.stringify(e.errors || null));
-    return res.status(502).json({ error: `Could not start Direct Debit setup (${detail}). Please try again or contact Staff & Admin.` });
+    return res.status(502).json({ error: 'Could not start Direct Debit setup. Please try again or contact Staff & Admin.' });
   }
 };

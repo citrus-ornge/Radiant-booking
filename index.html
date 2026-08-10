@@ -1880,7 +1880,7 @@ textarea.form-input { resize: vertical; }
     <div class="modal-body">
       <div class="form-two">
         <div class="form-row"><label class="form-label">Member</label>
-          <select class="form-input" id="nb-member" onchange="toggleTopupRow();renderBookingCalendar();"><option>Loading…</option></select>
+          <select class="form-input" id="nb-member" onchange="toggleTopupRow();renderBookingCalendar();ensureMemberSlotsLoaded(this.value);"><option>Loading…</option></select>
         </div>
         <div class="form-row"><label class="form-label">Room</label>
           <select class="form-input" id="nb-room" onchange="renderBookingCalendar();refreshAdminTimeSlotAvailability();"><option>Loading…</option></select>
@@ -2665,6 +2665,28 @@ function bookingWindowRuleForMember(m) {
 function bookingWindowRuleFor(memberId) {
   const m = (state.members || []).find(x => x.id === memberId);
   return bookingWindowRuleForMember(m);
+}
+
+// The general /members list (what admins see) deliberately doesn't include
+// recurring_slots — only /api/me attaches that, for the logged-in user's
+// own record. Without this, admin booking on someone else's behalf would
+// always show "no agreed recurring day set" for a Core/Resident member
+// even when they genuinely have one, since bookingWindowRuleForMember had
+// nothing to read. Fetches once, caches on the member object (same pattern
+// /api/me already uses), then re-renders the calendar with real data.
+async function ensureMemberSlotsLoaded(memberId) {
+  const m = (state.members || []).find(x => x.id === memberId);
+  if (!m || !['core', 'resident'].includes(m.plan_tier) || m.recurring_slots) return;
+  try {
+    const result = await api(`/recurring-slots?member_id=${memberId}`);
+    m.recurring_slots = result.slots || [];
+  } catch (e) {
+    m.recurring_slots = []; // avoid retrying forever if the request keeps failing
+  }
+  // Only re-render if the admin hasn't already switched to a different member.
+  if (document.getElementById('nb-member') && document.getElementById('nb-member').value === memberId) {
+    renderBookingCalendar();
+  }
 }
 
 function navBookingCalendar(delta) {

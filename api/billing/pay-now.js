@@ -115,6 +115,6 @@ module.exports = async (req, res) => {
   } catch (e) {
     const detail = (e.errors && e.errors.length) ? e.errors.map(x => x.message || x.reason).join('; ') : e.message;
     console.error(`Instant Bank Pay setup failed for booking ${booking.id}:`, detail);
-    return res.status(502).json({ error: `Could not start payment (${detail}). Please try again or contact Staff & Admin.` });
+    return res.status(502).json({ error: 'Could not start payment. Please try again or contact Staff & Admin.' });
   }
 };
