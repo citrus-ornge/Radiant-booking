@@ -1559,7 +1559,10 @@ textarea.form-input { resize: vertical; }
       <div class="view-section" id="view-messages">
         <div class="page-header">
           <div><div class="page-title">Messages</div><div class="gold-line"></div><div class="page-sub">Talk with anyone on the team</div></div>
-          <button class="btn btn-primary" onclick="openNewMessageModal()">+ New Message</button>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button class="btn btn-outline btn-sm" id="chime-toggle-btn" onclick="toggleMessageChime()" title="Toggle new-message sound">🔔 Sound on</button>
+            <button class="btn btn-primary" onclick="openNewMessageModal()">+ New Message</button>
+          </div>
         </div>
         <div class="two-col">
           <div class="card">
@@ -4039,6 +4042,7 @@ function enterAppShell() {
   }
 
   loadAppData();
+  startMessagePolling();
 }
 
 // ── ONBOARDING WIZARD ──
@@ -5062,11 +5066,83 @@ async function deleteLeave(id) {
 
 // ── MESSAGES ──
 let currentThreadWith = null;
+let lastKnownUnreadTotal = null; // null until first check, so we never chime on initial login load
+let messagePollHandle = null;
+
+// A short two-tone bell, synthesized rather than an audio file — no asset
+// to host, no licensing to think about, works everywhere the app already
+// does. Reused wherever a "new message" sound is needed.
+function playMessageChime() {
+  if (localStorage.getItem('radiant_chime_muted') === 'true') return;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const now = ctx.currentTime;
+    [[880, 0], [1108.73, 0.09]].forEach(([freq, delay]) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0, now + delay);
+      gain.gain.linearRampToValueAtTime(0.18, now + delay + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + delay + 0.9);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(now + delay);
+      osc.stop(now + delay + 0.95);
+    });
+  } catch (e) { /* Web Audio unsupported/blocked — fail silently, badge still updates */ }
+}
+
+function toggleMessageChime() {
+  const muted = localStorage.getItem('radiant_chime_muted') === 'true';
+  localStorage.setItem('radiant_chime_muted', muted ? 'false' : 'true');
+  updateChimeToggleButton();
+  if (muted) playMessageChime(); // quick confirmation ping when turning back on
+}
+
+function updateChimeToggleButton() {
+  const btn = document.getElementById('chime-toggle-btn');
+  if (!btn) return;
+  const muted = localStorage.getItem('radiant_chime_muted') === 'true';
+  btn.textContent = muted ? '🔕 Sound off' : '🔔 Sound on';
+}
+
+// Polls for new messages every 30s so reception/admin and practitioners
+// actually notice a new message without needing to sit on the Messages
+// tab — chimes only when the unread total goes UP, never on every poll,
+// and never on the very first check after login (that would chime for
+// messages that were already sitting unread from before).
+async function checkForNewMessages() {
+  try {
+    const res = await api('/messages');
+    const total = (res.conversations || []).reduce((sum, c) => sum + c.unread, 0);
+    if (lastKnownUnreadTotal !== null && total > lastKnownUnreadTotal) {
+      playMessageChime();
+      // If we're actively looking at the thread the new message came in
+      // on, refresh it live rather than leaving it stale until the person
+      // clicks away and back.
+      if (currentThreadWith && document.getElementById('view-messages') && document.getElementById('view-messages').classList.contains('active')) {
+        openThread(currentThreadWith);
+      }
+    }
+    lastKnownUnreadTotal = total;
+    updateMessageBadges(total);
+    const messagesViewVisible = document.getElementById('view-messages') && document.getElementById('view-messages').classList.contains('active');
+    if (messagesViewVisible) loadConversations();
+  } catch (e) { /* non-critical */ }
+}
+
+function startMessagePolling() {
+  if (messagePollHandle) return;
+  updateChimeToggleButton();
+  checkForNewMessages();
+  messagePollHandle = setInterval(checkForNewMessages, 30000);
+}
 
 async function refreshMessageBadge() {
   try {
     const res = await api('/messages');
     const unread = (res.conversations || []).reduce((sum, c) => sum + c.unread, 0);
+    lastKnownUnreadTotal = unread;
     updateMessageBadges(unread);
   } catch (e) { /* non-critical */ }
 }
