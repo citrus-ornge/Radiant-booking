@@ -1153,7 +1153,7 @@ textarea.form-input { resize: vertical; }
           <span class="nav-icon">✉</span> Messages <span class="notif-dot" id="admin-msg-dot" style="display:none;"></span>
         </button>
         <button class="nav-item" onclick="showView('my-documents')">
-          <span class="nav-icon">📄</span> My Documents
+          <span class="nav-icon">📄</span> My Documents <span class="notif-dot" id="admin-docs-dot" style="display:none;"></span>
         </button>
         <button class="nav-item" onclick="showView('directory')">
           <span class="nav-icon">👥</span> Member Directory
@@ -1188,7 +1188,7 @@ textarea.form-input { resize: vertical; }
           <span class="nav-icon">⬡</span> Book a Room
         </button>
         <button class="nav-item" id="client-my-docs-btn" onclick="showClientView('my-documents')" style="display:none;">
-          <span class="nav-icon">📄</span> My Documents
+          <span class="nav-icon">📄</span> My Documents <span class="notif-dot" id="client-docs-dot" style="display:none;"></span>
         </button>
         <button class="nav-item" onclick="showClientView('messages')">
           <span class="nav-icon">✉</span> Messages <span class="notif-dot" id="client-msg-dot" style="display:none;"></span>
@@ -1948,6 +1948,25 @@ textarea.form-input { resize: vertical; }
 </div>
 
 <!-- ADD USER -->
+<!-- RE-SIGN DOCUMENT — standalone signing flow reusing the same content/
+     scroll-to-unlock/signature pattern as onboarding's document step, but
+     reachable from My Documents directly. Previously the ONLY place a
+     document could be signed anywhere in the app was inside the onboarding
+     wizard — if Radiant updated a policy document after someone had
+     already onboarded, the only way for them to re-sign it was an admin
+     manually resetting their entire onboarding status, which dropped them
+     back into the full wizard (profile, room offer, Direct Debit prompt —
+     not just the one updated document). -->
+<div class="modal-overlay" id="sign-document-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div><div class="modal-title" id="sd-title">Sign Document</div></div>
+      <button class="close-btn" onclick="closeModal('sign-document-modal')">✕</button>
+    </div>
+    <div class="modal-body" id="sd-body"></div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="add-user-modal">
   <div class="modal">
     <div class="modal-header">
@@ -2570,6 +2589,7 @@ async function loadAppData(isRetry) {
   renderMyBookings();
   renderDashboardStats();
   refreshMessageBadge();
+  checkDocumentSignatureBadge();
 
   if (failures.length > 0) {
     if (!isRetry) {
@@ -4773,6 +4793,7 @@ async function loadMyDocuments(targetId) {
   try {
     const res = await api('/documents');
     const docs = res.documents || [];
+    state.myDocumentsCache = docs; // so the sign modal can look up full content by id
     if (docs.length === 0) {
       el.innerHTML = `<div style="padding:18px 22px;color:var(--r-warm-gray);font-size:13px;">No documents apply to your role yet.</div>`;
       return;
@@ -4786,10 +4807,63 @@ async function loadMyDocuments(targetId) {
           </div>
         </div>
         <span class="badge ${d.signed ? 'badge-green' : 'badge-gray'}" style="margin-right:8px;">${d.signed ? 'Signed' : 'Pending'}</span>
+        ${!d.signed ? `<button class="btn btn-primary btn-sm" onclick="openSignDocumentModal('${d.id}')">Sign now</button>` : ''}
         ${d.pdf_path ? `<a class="btn btn-outline btn-sm" href="${esc(d.pdf_path)}" target="_blank" rel="noopener">Download PDF</a>` : ''}
       </div>`).join('');
   } catch (e) {
     el.innerHTML = `<div style="padding:18px 22px;color:var(--r-red);font-size:13px;">Could not load documents: ${esc(e.message)}</div>`;
+  }
+}
+
+function openSignDocumentModal(documentId) {
+  const doc = (state.myDocumentsCache || []).find(d => d.id === documentId);
+  if (!doc) { showToast('⚠ Document not found — try refreshing'); return; }
+  document.getElementById('sd-title').textContent = doc.title;
+  document.getElementById('sd-body').innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+      <span class="badge ${doc.category === 'clinical' ? 'badge-blue' : 'badge-gold'}">${esc(doc.category.charAt(0).toUpperCase() + doc.category.slice(1))}</span>
+      ${doc.signed_at ? `<span style="font-size:11.5px;color:var(--r-warm-gray);">You previously signed an earlier version of this document — it's been updated since and needs re-signing.</span>` : ''}
+    </div>
+    <div class="doc-scroll-box" id="sd-scroll-box" onscroll="checkSignDocScrolled()">${simpleMarkdownToHtml(doc.content)}</div>
+    <label style="display:flex;align-items:flex-start;gap:9px;font-size:13px;color:var(--r-warm-gray);margin:14px 0 16px;cursor:pointer;">
+      <input type="checkbox" id="sd-ack-checkbox" disabled style="margin-top:2px;">
+      <span id="sd-ack-label">Scroll to the bottom to continue</span>
+    </label>
+    <div class="form-row">
+      <label class="form-label">Type your full name to sign</label>
+      <input class="form-input" id="sd-signature-name" placeholder="Full name">
+    </div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;" id="sd-sign-btn" onclick="signDocumentFromModal('${doc.id}')">Sign</button>`;
+  openModal('sign-document-modal');
+  checkSignDocScrolled(); // handles documents short enough to need no scrolling at all
+}
+
+function checkSignDocScrolled() {
+  const box = document.getElementById('sd-scroll-box');
+  if (!box) return;
+  if (box.scrollTop + box.clientHeight >= box.scrollHeight - 6) {
+    document.getElementById('sd-ack-checkbox').disabled = false;
+    document.getElementById('sd-ack-checkbox').checked = true;
+    document.getElementById('sd-ack-label').textContent = 'I have read and understood this document';
+  }
+}
+
+async function signDocumentFromModal(documentId) {
+  const checkbox = document.getElementById('sd-ack-checkbox');
+  const signatureName = document.getElementById('sd-signature-name').value.trim();
+  if (!checkbox.checked) { showToast('⚠ Please scroll through and acknowledge the document first'); return; }
+  if (!signatureName || signatureName.length < 2) { showToast('⚠ Please type your full name to sign'); return; }
+
+  const btn = document.getElementById('sd-sign-btn');
+  btn.disabled = true;
+  try {
+    await api('/documents', { method: 'POST', body: JSON.stringify({ document_id: documentId, signature_name: signatureName }) });
+    closeModal('sign-document-modal');
+    showToast('✓ Document signed');
+    await loadMyDocuments();
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+    btn.disabled = false;
   }
 }
 
@@ -5333,6 +5407,19 @@ async function refreshMessageBadge() {
     const unread = (res.conversations || []).reduce((sum, c) => sum + c.unread, 0);
     lastKnownUnreadTotal = unread;
     updateMessageBadges(unread);
+  } catch (e) { /* non-critical */ }
+}
+
+async function checkDocumentSignatureBadge() {
+  try {
+    const res = await api('/documents');
+    const docs = res.documents || [];
+    state.myDocumentsCache = docs; // pre-warms the cache used by the sign modal
+    const unsigned = docs.filter(d => !d.signed).length;
+    const adminDot = document.getElementById('admin-docs-dot');
+    const clientDot = document.getElementById('client-docs-dot');
+    if (adminDot) adminDot.style.display = unsigned > 0 ? 'inline-block' : 'none';
+    if (clientDot) clientDot.style.display = unsigned > 0 ? 'inline-block' : 'none';
   } catch (e) { /* non-critical */ }
 }
 
