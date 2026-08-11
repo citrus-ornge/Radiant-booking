@@ -2263,6 +2263,10 @@ textarea.form-input { resize: vertical; }
       <div class="form-row"><label class="form-label">Message</label>
         <textarea class="form-input" id="nm-body" rows="4" placeholder="Type your message…"></textarea>
       </div>
+      <label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;cursor:pointer;">
+        <input type="checkbox" id="nm-urgent" style="margin-top:2px;">
+        <span>🔔 Urgent — also email them directly (for anything that needs attention right now, not just whenever they next check the app)</span>
+      </label>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('new-message-modal')">Cancel</button>
@@ -3006,6 +3010,8 @@ function renderBookingsTable() {
   }
   tbody.innerHTML = filtered.map(b => {
     try {
+      const isToday = new Date(b.start_time).toDateString() === new Date().toDateString();
+      const canNotify = b.status === 'confirmed' && isToday && b.member;
       return `
       <tr>
         <td><strong>${esc(b.room ? b.room.name : '—')}</strong></td>
@@ -3015,15 +3021,47 @@ function renderBookingsTable() {
         <td>${durationLabel(b.start_time, b.end_time)}</td>
         <td>${statusBadge(b.status)}</td>
         <td>${paymentBadge(b)}</td>
-        <td>${b.status !== 'cancelled'
-          ? `<button class="btn btn-ghost btn-sm" onclick="cancelBooking('${b.id}')">Cancel</button>`
-          : '<span style="color:var(--r-warm-gray);font-size:12.5px;">—</span>'}</td>
+        <td style="display:flex;gap:6px;flex-wrap:wrap;">
+          ${canNotify ? `<button class="btn btn-outline btn-sm" onclick="notifyPatientArrived('${b.id}')" title="Sends an urgent message + email to ${esc(b.member.first_name)}">🔔 Patient arrived</button>` : ''}
+          ${b.status !== 'cancelled'
+            ? `<button class="btn btn-ghost btn-sm" onclick="cancelBooking('${b.id}')">Cancel</button>`
+            : '<span style="color:var(--r-warm-gray);font-size:12.5px;">—</span>'}
+        </td>
       </tr>`;
     } catch (e) {
       console.error('Failed to render booking row', b, e);
       return '';
     }
   }).join('');
+}
+
+// One-click alternative to the New Message modal — pre-fills everything
+// from the booking itself (who, room, time) so reception doesn't have to
+// look up or type anything to get an urgent notice out. Sends immediately
+// as urgent (real email, not just the in-app chime) since "the patient is
+// standing in reception right now" is exactly the kind of thing a
+// practitioner needs to see wherever they actually are, not just next time
+// they happen to open the app.
+async function notifyPatientArrived(bookingId) {
+  const b = state.bookings.find(x => x.id === bookingId);
+  if (!b || !b.member) { showToast('⚠ Booking not found'); return; }
+  const time = fmtDateTime(b.start_time).split(' · ')[1] || '';
+  const roomName = b.room ? b.room.name : 'your room';
+  const contextLabel = `${roomName}, ${time}`;
+  try {
+    const result = await api('/messages', {
+      method: 'POST',
+      body: JSON.stringify({
+        recipient_id: b.member.id,
+        body: `Your patient has arrived for your ${roomName} booking at ${time}.`,
+        urgent: true,
+        context_label: contextLabel,
+      }),
+    });
+    showToast(result.urgent_email_sent ? `✓ ${b.member.first_name} notified — email delivered` : `✓ ${b.member.first_name} notified in-app (email failed to send)`);
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  }
 }
 
 // The main admin Bookings table previously showed no payment information
@@ -5471,7 +5509,7 @@ async function openThread(otherId) {
       container.innerHTML = msgs.map(m => {
         const mine = m.sender_id === state.currentMember.id;
         return `<div style="align-self:${mine ? 'flex-end' : 'flex-start'};max-width:75%;">
-          <div style="background:${mine ? 'var(--r-gold-light)' : 'var(--r-surface2)'};padding:10px 14px;border-radius:12px;font-size:13.5px;">${esc(m.body)}</div>
+          <div style="background:${m.urgent ? 'var(--r-red-light)' : (mine ? 'var(--r-gold-light)' : 'var(--r-surface2)')};padding:10px 14px;border-radius:12px;font-size:13.5px;">${m.urgent ? '🔔 <strong>Urgent</strong> — ' : ''}${esc(m.body)}</div>
           <div style="font-size:11px;color:var(--r-warm-gray);margin-top:3px;text-align:${mine ? 'right' : 'left'};">${esc(timeAgo(m.created_at))}</div>
         </div>`;
       }).join('');
@@ -5506,12 +5544,14 @@ function openNewMessageModal() {
 async function sendNewMessage() {
   const recipient_id = document.getElementById('nm-recipient').value;
   const body = document.getElementById('nm-body').value.trim();
+  const urgent = document.getElementById('nm-urgent').checked;
   if (!recipient_id || !body) { showToast('⚠ Please choose a recipient and write a message'); return; }
   try {
-    await api('/messages', { method: 'POST', body: JSON.stringify({ recipient_id, body }) });
+    const result = await api('/messages', { method: 'POST', body: JSON.stringify({ recipient_id, body, urgent }) });
     closeModal('new-message-modal');
     document.getElementById('nm-body').value = '';
-    showToast('✓ Message sent');
+    document.getElementById('nm-urgent').checked = false;
+    showToast(urgent ? (result.urgent_email_sent ? '✓ Urgent message sent — email delivered' : '✓ Message sent (urgent email failed — they\'ll still see it in-app)') : '✓ Message sent');
     if (document.getElementById('view-messages').classList.contains('active')) openThread(recipient_id);
   } catch (e) {
     showToast('⚠ ' + e.message);

@@ -1,6 +1,7 @@
 const { getSupabase } = require('./_lib/supabase');
 const { requireAuth } = require('./_lib/auth');
 const { checkRateLimit } = require('./_lib/rateLimit');
+const { sendUrgentMessageEmail } = require('./_lib/email');
 
 module.exports = async (req, res) => {
   let requester;
@@ -57,14 +58,14 @@ module.exports = async (req, res) => {
     const allowed = await checkRateLimit(`message_send:${requester.id}`, 60, 3600);
     if (!allowed) return res.status(429).json({ error: 'Too many messages sent recently. Please wait a while.' });
 
-    const { recipient_id, body } = req.body || {};
+    const { recipient_id, body, urgent, context_label } = req.body || {};
     if (!recipient_id || !body || !body.trim()) {
       return res.status(400).json({ error: 'recipient_id and body are required' });
     }
     if (recipient_id === requester.id) {
       return res.status(400).json({ error: "You can't message yourself" });
     }
-    const { data: recipient } = await supabase.from('members').select('id, user_type').eq('id', recipient_id).maybeSingle();
+    const { data: recipient } = await supabase.from('members').select('id, first_name, last_name, email, user_type').eq('id', recipient_id).maybeSingle();
     if (!recipient) return res.status(404).json({ error: 'Recipient not found' });
 
     if (requester.user_type === 'member' && recipient.user_type === 'member' && requester.directory_tier !== 'enhanced') {
@@ -73,11 +74,29 @@ module.exports = async (req, res) => {
 
     const { data, error } = await supabase
       .from('messages')
-      .insert({ sender_id: requester.id, recipient_id, body: body.trim() })
+      .insert({ sender_id: requester.id, recipient_id, body: body.trim(), urgent: !!urgent })
       .select()
       .single();
     if (error) return res.status(500).json({ error: error.message });
-    return res.status(201).json({ message: data });
+
+    // Urgent messages also send a real email — the point is reaching
+    // someone who isn't looking at the screen (smartwatch, phone in a
+    // pocket), which the in-app chime alone can't do. Never blocks the
+    // response on this; the message itself has already sent successfully
+    // either way.
+    let urgent_email_sent = false;
+    if (urgent && recipient.email) {
+      try {
+        const senderName = `${requester.first_name || ''} ${requester.last_name || ''}`.trim() || requester.email;
+        const recipientName = recipient.first_name || 'there';
+        await sendUrgentMessageEmail({ to: recipient.email, recipientName, senderName, body: body.trim(), contextLabel: context_label || null });
+        urgent_email_sent = true;
+      } catch (e) {
+        console.error(`Failed to send urgent message email to ${recipient.email}:`, e.message);
+      }
+    }
+
+    return res.status(201).json({ message: data, urgent_email_sent });
   }
 
   res.status(405).json({ error: 'Method not allowed' });

@@ -393,9 +393,31 @@ Once you've set a password, you can sign in any time with your email address.
   });
 }
 
+// Urgent in-app messages also send this — the point is reaching someone
+// who isn't looking at the screen (smartwatch, phone in a pocket), which a
+// bell chime alone can't do. Kept deliberately short and scannable since
+// urgency means someone's reading it on a lock screen, not settling in.
+async function sendUrgentMessageEmail({ to, recipientName, senderName, body, contextLabel }) {
+  const resend = getResend();
+  return resend.emails.send({
+    from: FROM_EMAIL,
+    to: [to],
+    subject: `🔔 Urgent from ${senderName}${contextLabel ? ` — ${contextLabel}` : ''}`,
+    text: `Hi ${recipientName},
+
+${senderName} sent you an urgent message${contextLabel ? ` (${contextLabel})` : ''}:
+
+"${body}"
+
+Reply in the Radiant Booking app.
+
+— Radiant Booking`,
+  });
+}
+
 module.exports = {
   sendBookingConfirmation, sendTeamBookingNotice, sendCancellationAlert, sendReminder, sendInvite,
   sendWelcomeEmail, sendRotaUpdate, sendLeaveUpdate, sendLeaveApprovalRequest, sendLeaveDecision, sendExitNoticeReminder,
   sendMandateActiveEmail, sendSessionPaymentConfirmedEmail, sendSessionPaymentFailedEmail,
-  sendSubscriptionStartedEmail, sendSubscriptionPaymentFailedEmail, sendAccountCreatedEmail,
+  sendSubscriptionStartedEmail, sendSubscriptionPaymentFailedEmail, sendAccountCreatedEmail, sendUrgentMessageEmail,
 };
