@@ -2346,6 +2346,46 @@ textarea.form-input { resize: vertical; }
   </div>
 </div>
 
+<!-- EDIT ROOM — the PATCH /api/rooms endpoint already existed with full
+     support for this; there was just no UI to reach it at all, meaning
+     something like Aesthetics' missing pricing category could only ever be
+     fixed via direct database access, not through the app itself. -->
+<div class="modal-overlay" id="edit-room-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div><div class="modal-title">Edit Room</div></div>
+      <button class="close-btn" onclick="closeModal('edit-room-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="er-id">
+      <div class="form-row"><label class="form-label">Room Name</label><input type="text" class="form-input" id="er-name"></div>
+      <div class="form-two">
+        <div class="form-row"><label class="form-label">Capacity</label><input type="number" class="form-input" id="er-capacity"></div>
+        <div class="form-row"><label class="form-label">Floor / Location</label><input type="text" class="form-input" id="er-floor"></div>
+      </div>
+      <div class="form-row"><label class="form-label">Accessible to</label>
+        <select class="form-input" id="er-access">
+          <option value="all">All members</option>
+          <option value="practitioners_only">Practitioners only</option>
+          <option value="admin_only">Admin only</option>
+        </select>
+      </div>
+      <div class="form-row"><label class="form-label">Pricing category <span style="font-weight:400;color:var(--r-warm-gray);font-size:12px;">(for billing — matches the brochure rate columns)</span></label>
+        <select class="form-input" id="er-pricing-category">
+          <option value="">— Not set (bookings will need manual invoicing) —</option>
+          <option value="clinical_wellness">Clinical / Wellness</option>
+          <option value="consultation">Consultation</option>
+        </select>
+      </div>
+      <div class="form-row"><label class="form-label">Notes</label><textarea class="form-input" id="er-notes" rows="2"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('edit-room-modal')">Cancel</button>
+      <button class="btn btn-primary" id="er-submit-btn" onclick="saveEditedRoom()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
 <!-- CALENDAR -->
 <div class="modal-overlay" id="payment-required-modal">
   <div class="modal">
@@ -3487,15 +3527,30 @@ function renderRoomsGrid() {
     grid.innerHTML = `<div style="grid-column:1/-1;color:var(--r-warm-gray);padding:20px;">No rooms yet — click "+ Add Room" to create one.</div>`;
     return;
   }
-  grid.innerHTML = state.rooms.map(r => `
-    <div class="room-card" onclick="openModal('new-booking-modal')">
+  const now = new Date();
+  grid.innerHTML = state.rooms.map(r => {
+    // Was previously a hardcoded "● Available now" on every card regardless
+    // of actual bookings — genuinely misleading for a room actively in use
+    // right now. Checks real confirmed bookings for this room against the
+    // current moment instead.
+    const activeBooking = (state.bookings || []).find(b =>
+      b.room && b.room.id === r.id && b.status === 'confirmed' &&
+      new Date(b.start_time) <= now && now < new Date(b.end_time)
+    );
+    const statusHtml = activeBooking
+      ? `<div style="font-size:12px;color:var(--r-red);font-weight:500;margin-top:8px;">● In use until ${esc(new Date(activeBooking.end_time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }))}</div>`
+      : `<div style="font-size:12px;color:var(--r-green);font-weight:500;margin-top:8px;">● Available now</div>`;
+    return `
+    <div class="room-card" style="position:relative;" onclick="openModal('new-booking-modal')">
+      <button class="btn btn-outline btn-sm" style="position:absolute;top:10px;right:10px;z-index:1;" onclick="event.stopPropagation();openEditRoomModal('${r.id}')">Edit</button>
       <div class="room-visual"><div class="room-monogram">${esc((r.name || '?').charAt(0))}</div></div>
       <div class="room-card-body">
         <div class="room-name">${esc(r.name)}</div>
         <div class="room-detail">Capacity: ${esc(r.capacity)} · ${esc(r.floor || '')}</div>
-        <div style="font-size:12px;color:var(--r-green);font-weight:500;margin-top:8px;">● Available now</div>
+        ${statusHtml}
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function renderBookRoomList() {
@@ -6057,6 +6112,44 @@ async function addUser() {
   } finally {
     btn.disabled = false;
     btn.textContent = 'Add User';
+  }
+}
+
+function openEditRoomModal(roomId) {
+  const r = state.rooms.find(x => x.id === roomId);
+  if (!r) { showToast('⚠ Room not found'); return; }
+  document.getElementById('er-id').value = r.id;
+  document.getElementById('er-name').value = r.name || '';
+  document.getElementById('er-capacity').value = r.capacity || '';
+  document.getElementById('er-floor').value = r.floor || '';
+  document.getElementById('er-access').value = r.accessible_to || 'all';
+  document.getElementById('er-pricing-category').value = r.pricing_category || '';
+  document.getElementById('er-notes').value = r.notes || '';
+  openModal('edit-room-modal');
+}
+
+async function saveEditedRoom() {
+  const id = document.getElementById('er-id').value;
+  const name = document.getElementById('er-name').value.trim();
+  const capacity = parseInt(document.getElementById('er-capacity').value, 10);
+  const floor = document.getElementById('er-floor').value.trim();
+  const accessible_to = document.getElementById('er-access').value;
+  const pricing_category = document.getElementById('er-pricing-category').value || null;
+  const notes = document.getElementById('er-notes').value.trim();
+
+  if (!name || !capacity) { showToast('⚠ Please enter a room name and capacity'); return; }
+
+  const btn = document.getElementById('er-submit-btn');
+  btn.disabled = true;
+  try {
+    await api('/rooms', { method: 'PATCH', body: JSON.stringify({ id, name, capacity, floor, accessible_to, pricing_category, notes }) });
+    closeModal('edit-room-modal');
+    showToast('✓ Room updated');
+    await loadAppData();
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  } finally {
+    btn.disabled = false;
   }
 }
 
