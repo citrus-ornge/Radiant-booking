@@ -4487,7 +4487,9 @@ async function loadDirectory() {
     grid.innerHTML = members.map(m => {
       const name = `${m.first_name || ''} ${m.last_name || ''}`.trim() || 'Member';
       const isEnhanced = m.user_type === 'practitioner' ? ['core','resident'].includes(m.plan_tier) : m.directory_tier === 'enhanced';
-      const tierBadge = m.user_type === 'practitioner' ? esc(roleLabel('practitioner')) : (isEnhanced ? 'Enhanced Member' : 'Access Member');
+      const tierBadge = m.user_type === 'practitioner'
+        ? `${esc(tierLabel(m) || 'Practitioner')} ${esc(roleLabel('practitioner'))}`
+        : (isEnhanced ? 'Enhanced Member' : 'Access Member');
       const bioPreview = (m.bio || m.qualifications || '').slice(0, 90) + ((m.bio || m.qualifications || '').length > 90 ? '…' : '');
       return `
       <div class="card" style="padding:18px;cursor:pointer;" onclick="showMemberProfile('${m.id}')">
@@ -4518,7 +4520,7 @@ async function showMemberProfile(id) {
 
     document.getElementById('mp-body').innerHTML = `
       ${isEnhanced && m.logo_url ? `<img src="${esc(m.logo_url)}" style="width:100%;max-height:140px;object-fit:contain;margin-bottom:14px;" alt="">` : ''}
-      <span class="badge ${isEnhanced ? 'badge-gold' : 'badge-blue'}" style="margin-bottom:10px;">${m.user_type === 'practitioner' ? esc(roleLabel('practitioner')) : (isEnhanced ? 'Enhanced Member' : 'Access Member')}</span>
+      <span class="badge ${isEnhanced ? 'badge-gold' : 'badge-blue'}" style="margin-bottom:10px;">${m.user_type === 'practitioner' ? `${esc(tierLabel(m) || 'Practitioner')} ${esc(roleLabel('practitioner'))}` : (isEnhanced ? 'Enhanced Member' : 'Access Member')}</span>
       ${m.qualifications ? `<p style="font-size:12.5px;color:var(--r-warm-gray);margin-top:6px;">${esc(m.qualifications)}</p>` : ''}
       <p style="font-size:13.5px;line-height:1.6;margin-top:10px;">${esc(m.bio) || 'No bio added yet.'}</p>
       ${isEnhanced && m.website_url ? `<p style="margin-top:12px;"><a href="${esc(m.website_url)}" target="_blank" rel="noopener" style="color:var(--r-gold-dark);font-size:13px;">${esc(m.website_url)}</a></p>` : ''}
