@@ -1308,9 +1308,9 @@ textarea.form-input { resize: vertical; }
         <div class="card">
           <div class="table-scroll">
           <table>
-            <thead><tr><th>Room</th><th>Member</th><th>Type</th><th>Date &amp; Time</th><th>Duration</th><th>Status</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Room</th><th>Member</th><th>Type</th><th>Date &amp; Time</th><th>Duration</th><th>Status</th><th>Payment</th><th>Actions</th></tr></thead>
             <tbody id="bookings-table">
-              <tr><td colspan="7" style="text-align:center;color:var(--r-warm-gray);padding:20px;">Loading…</td></tr>
+              <tr><td colspan="8" style="text-align:center;color:var(--r-warm-gray);padding:20px;">Loading…</td></tr>
             </tbody>
           </table>
           </div>
@@ -2970,12 +2970,18 @@ function renderBookingsTable() {
   const tbody = document.getElementById('bookings-table');
   if (!tbody) return;
 
+  // 'pending' here means payment_status === 'pending' — bookings.status
+  // itself is only ever 'confirmed' or 'cancelled', it never has a
+  // 'pending' value at all, so this tab always showed zero results
+  // regardless of how many bookings genuinely needed payment.
   const filtered = bookingsTableFilter === 'all'
     ? state.bookings
-    : state.bookings.filter(b => (b.status || '') === bookingsTableFilter);
+    : bookingsTableFilter === 'pending'
+      ? state.bookings.filter(b => b.payment_status === 'pending')
+      : state.bookings.filter(b => (b.status || '') === bookingsTableFilter);
 
   if (filtered.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" style="color:var(--r-warm-gray);text-align:center;padding:24px;">${state.bookings.length === 0 ? 'No bookings yet — click "+ New Booking" to create one.' : 'No bookings in this category.'}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="color:var(--r-warm-gray);text-align:center;padding:24px;">${state.bookings.length === 0 ? 'No bookings yet — click "+ New Booking" to create one.' : 'No bookings in this category.'}</td></tr>`;
     return;
   }
   tbody.innerHTML = filtered.map(b => {
@@ -2988,6 +2994,7 @@ function renderBookingsTable() {
         <td>${fmtDateTime(b.start_time)}</td>
         <td>${durationLabel(b.start_time, b.end_time)}</td>
         <td>${statusBadge(b.status)}</td>
+        <td>${paymentBadge(b)}</td>
         <td>${b.status !== 'cancelled'
           ? `<button class="btn btn-ghost btn-sm" onclick="cancelBooking('${b.id}')">Cancel</button>`
           : '<span style="color:var(--r-warm-gray);font-size:12.5px;">—</span>'}</td>
@@ -2997,6 +3004,20 @@ function renderBookingsTable() {
       return '';
     }
   }).join('');
+}
+
+// The main admin Bookings table previously showed no payment information
+// at all despite payment_status/amount_pence being central to everything
+// built tonight — an admin had no way to see which bookings needed
+// chasing for payment without opening each one individually.
+function paymentBadge(b) {
+  if (b.payment_status === 'not_required') return '<span style="color:var(--r-warm-gray);font-size:12px;">—</span>';
+  const amount = b.amount_pence != null ? `£${(b.amount_pence / 100).toFixed(2)}` : '';
+  if (b.payment_status === 'paid') return `<span class="badge badge-green">Paid${amount ? ' · ' + amount : ''}</span>`;
+  if (b.payment_status === 'failed') return `<span class="badge badge-red">Failed${amount ? ' · ' + amount : ''}</span>`;
+  if (b.payment_status === 'pending_manual') return `<span class="badge badge-gray">Manual invoice${amount ? '' : ''}</span>`;
+  if (b.payment_status === 'pending') return `<span class="badge badge-gold">Pending${amount ? ' · ' + amount : ''}</span>`;
+  return '<span style="color:var(--r-warm-gray);font-size:12px;">—</span>';
 }
 
 function openManageMember(id) {
