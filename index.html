@@ -5534,15 +5534,22 @@ function openGoogleCalendarAdd(el) {
 
 function downloadICS(el) {
   if (!lastBookingForCal) { showToast('⚠ No booking details available'); return; }
-  const { roomName, start, end, notes } = lastBookingForCal;
+  const { id, roomName, start, end, notes } = lastBookingForCal;
+  // Same UID scheme as the server-side generator (api/_lib/ics.js,
+  // bookingIcsUid) — this used to be Date.now()-based, meaning downloading
+  // here and later opening the emailed calendar attachment for the SAME
+  // booking created two different calendar entries instead of one. Falls
+  // back to a timestamp only if we somehow don't have the booking id.
+  const uid = id ? `booking-${id}@booking.radiantfr.com` : `${Date.now()}@radiant-booking.vercel.app`;
+  const escText = s => String(s || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
   const ics = [
     'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Radiant Booking//EN', 'BEGIN:VEVENT',
-    `UID:${Date.now()}@radiant-booking.vercel.app`,
+    `UID:${uid}`,
     `DTSTAMP:${toGCalDate(new Date().toISOString())}`,
     `DTSTART:${toGCalDate(start)}`,
     `DTEND:${toGCalDate(end)}`,
-    `SUMMARY:${roomName} — Radiant Booking`,
-    `DESCRIPTION:${(notes || 'Booked via Radiant Booking Platform').replace(/\n/g, '\\n')}`,
+    `SUMMARY:${escText(roomName + ' — Radiant Booking')}`,
+    `DESCRIPTION:${escText(notes || 'Booked via Radiant Booking Platform')}`,
     'END:VEVENT', 'END:VCALENDAR',
   ].join('\r\n');
   const blob = new Blob([ics], { type: 'text/calendar' });
@@ -5607,7 +5614,7 @@ async function confirmAdminBooking() {
         paymentPending += result.booking.gocardless_payment_id ? 0 : 1;
         chargeAttempted += result.booking.gocardless_payment_id ? 1 : 0;
       }
-      if (!firstBooking) firstBooking = { roomName: room ? room.name : 'Room', start: start.toISOString(), end: end.toISOString(), notes };
+      if (!firstBooking) firstBooking = { id: result.booking && result.booking.id, roomName: room ? room.name : 'Room', start: start.toISOString(), end: end.toISOString(), notes };
     } catch (e) {
       failed++;
       errors.push(`${date}: ${e.message}`);
@@ -5678,7 +5685,7 @@ async function confirmClientBooking() {
           if (!unpaidBooking) unpaidBooking = result.booking;
         }
       }
-      if (!firstBooking) firstBooking = { roomName: room ? room.name : 'Room', start: start.toISOString(), end: end.toISOString(), notes };
+      if (!firstBooking) firstBooking = { id: result.booking && result.booking.id, roomName: room ? room.name : 'Room', start: start.toISOString(), end: end.toISOString(), notes };
     } catch (e) {
       failed++;
       errors.push(`${date}: ${e.message}`);
