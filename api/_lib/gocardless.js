@@ -22,10 +22,20 @@ function getGoCardlessClient() {
 // Membership tier monthly prices, in pence. Kept here (server-side) as the
 // source of truth for subscription amounts — never trust a price sent from
 // the client.
-// TODO: confirm these against the current brochure rate card before going live.
+//
+// Only Core and Resident actually have a flat monthly fee — confirmed
+// against the real booking/pricing logic (api/bookings.js,
+// isIncludedInMembershipFee): Flex has no "included slot" concept at all,
+// every single Flex booking is charged individually. flex: 9900 here used
+// to be a leftover placeholder from an early scaffold written before that
+// was clarified, and was never removed — left live, it would have started
+// an EXTRA £99/month subscription on top of a Flex member's legitimate
+// per-session charges the moment their mandate went active. Found and
+// fixed during the pre-launch UI/UX review, before any real Flex mandate
+// had gone active.
 const PLAN_TIER_MONTHLY_PENCE = {
-  community: null, // Community tier is pay-as-you-go, no recurring subscription
-  flex: 9900,
+  community: null, // pay-as-you-go, no recurring subscription
+  flex: null,       // pay-as-you-go per session, no recurring subscription
   core: 24900,
   resident: 44900,
 };
