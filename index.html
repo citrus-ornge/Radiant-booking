@@ -4685,6 +4685,27 @@ async function loadMyDocuments(targetId) {
   }
 }
 
+// Raw JSON.stringify(details) is unreadable to a non-technical admin
+// (e.g. {"billing_request_id":"BRQ01KZ...","amount_pence":3200}). Formats
+// the common keys that actually show up across the billing/onboarding
+// audit entries into plain text; anything unrecognised still falls back to
+// compact JSON rather than being silently dropped.
+function formatAuditDetails(details) {
+  if (!details || typeof details !== 'object') return '';
+  const parts = [];
+  if (details.amount_pence != null) parts.push(`£${(details.amount_pence / 100).toFixed(2)}`);
+  if (details.target_name) parts.push(details.target_name);
+  if (details.slot || details.slots) parts.push(details.slot || details.slots);
+  if (details.day_of_week) parts.push(`${details.day_of_week}${details.time_start ? ' ' + details.time_start.slice(0, 5) + '–' + (details.time_end || '').slice(0, 5) : ''}`);
+  if (details.stage) parts.push(`→ ${details.stage}`);
+  if (details.error) parts.push(`error: ${details.error}`);
+  if (parts.length > 0) return parts.join(' · ');
+  // Nothing recognised — still show something rather than an empty cell,
+  // but keep it compact rather than a full raw dump.
+  const keys = Object.keys(details);
+  return keys.length > 0 ? keys.map(k => `${k}: ${details[k]}`).join(' · ') : '';
+}
+
 async function loadAuditLog() {
   const tbody = document.getElementById('audit-log-table');
   try {
@@ -4699,13 +4720,41 @@ async function loadAuditLog() {
       'booking.cancelled': 'Cancelled booking', 'booking.updated': 'Updated booking',
       'invite.sent': 'Sent invite', 'room.created': 'Added room', 'room.updated': 'Updated room',
       'document.created': 'Created document', 'document.updated': 'Updated document', 'document.deactivated': 'Removed document',
+      'event.created': 'Created event', 'event.deleted': 'Deleted event',
+      'notification_settings.updated': 'Updated notification settings',
+      // Onboarding
+      'onboarding.reset_for_testing': 'Reset onboarding (testing)',
+      'onboarding.room_terms_accepted': 'Accepted room offer',
+      'onboarding.room_terms_rejected': 'Declined room offer',
+      'recurring_slot.added': 'Added recurring slot',
+      'recurring_slot.removed': 'Removed recurring slot',
+      // Direct Debit
+      'billing.mandate_setup_started': 'Started Direct Debit setup',
+      'billing.mandate_pending_customer_approval': 'Direct Debit awaiting bank approval',
+      'billing.mandate_pending_submission': 'Direct Debit submitted to bank',
+      'billing.mandate_submitted': 'Direct Debit submitted to bank',
+      'billing.mandate_active': 'Direct Debit activated',
+      'billing.mandate_cancelled': 'Direct Debit cancelled',
+      'billing.mandate_failed': 'Direct Debit setup failed',
+      'billing.mandate_expired': 'Direct Debit expired',
+      // Subscription (flat monthly membership fee)
+      'billing.subscription_created': 'Membership subscription created',
+      'billing.subscription_created_manually': 'Membership subscription created (manual)',
+      'billing.subscription_creation_failed': 'Membership subscription creation failed',
+      'billing.subscription_payment_paid': 'Membership fee collected',
+      'billing.subscription_payment_failed': 'Membership fee failed to collect',
+      // Session / booking payments
+      'billing.instant_pay_started': 'Started instant payment',
+      'billing.instant_pay_fulfilled': 'Instant payment confirmed',
+      'billing.payment_paid': 'Session payment confirmed',
+      'billing.payment_failed': 'Session payment failed',
     };
     tbody.innerHTML = entries.map(e => `
       <tr>
         <td style="white-space:nowrap;color:var(--r-warm-gray);">${esc(timeAgo(e.created_at))}</td>
         <td>${esc(e.actor_name || 'System')}</td>
         <td>${esc(actionLabel[e.action] || e.action)}</td>
-        <td style="color:var(--r-warm-gray);font-size:12px;">${esc(e.details ? JSON.stringify(e.details) : '')}</td>
+        <td style="color:var(--r-warm-gray);font-size:12px;">${esc(formatAuditDetails(e.details))}</td>
       </tr>`).join('');
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="4" style="color:var(--r-red);padding:16px;">${esc(e.message)}</td></tr>`;
