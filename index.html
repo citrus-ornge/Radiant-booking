@@ -1951,26 +1951,54 @@ textarea.form-input { resize: vertical; }
 <div class="modal-overlay" id="add-user-modal">
   <div class="modal">
     <div class="modal-header">
-      <div><div class="modal-title">Add New User</div></div>
+      <div><div class="modal-title">Add New User</div><div style="font-size:12px;color:var(--r-warm-gray);margin-top:3px;">Creates a real, active account immediately — for someone who's already agreed to join and shouldn't need to wait on an email. To send an invite they accept themselves instead, use "Invite".</div></div>
       <button class="close-btn" onclick="closeModal('add-user-modal')">✕</button>
     </div>
     <div class="modal-body">
       <div class="form-two">
-        <div class="form-row"><label class="form-label">First Name</label><input type="text" class="form-input" placeholder="First name"></div>
-        <div class="form-row"><label class="form-label">Last Name</label><input type="text" class="form-input" placeholder="Last name"></div>
+        <div class="form-row"><label class="form-label">First Name</label><input type="text" class="form-input" id="au-first-name" placeholder="First name"></div>
+        <div class="form-row"><label class="form-label">Last Name</label><input type="text" class="form-input" id="au-last-name" placeholder="Last name"></div>
       </div>
-      <div class="form-row"><label class="form-label">Email</label><input type="email" class="form-input" placeholder="email@domain.com"></div>
+      <div class="form-row"><label class="form-label">Email</label><input type="email" class="form-input" id="au-email" placeholder="email@domain.com"></div>
       <div class="form-two">
         <div class="form-row"><label class="form-label">User Type</label>
-          <select class="form-input"><option>Practitioner</option><option>Member</option><option>Guest</option><option>Staff & Admin</option></select>
+          <select class="form-input" id="au-type" onchange="toggleAddUserTierRow()">
+            <option value="practitioner">Practitioner</option><option value="member">Member</option><option value="guest">Guest</option><option value="administrator">Staff & Admin</option>
+          </select>
         </div>
-        <div class="form-row"><label class="form-label">Phone</label><input type="tel" class="form-input" placeholder="+44…"></div>
+        <div class="form-row"><label class="form-label">Phone</label><input type="tel" class="form-input" id="au-phone" placeholder="+44…"></div>
       </div>
-      <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer;"><input type="checkbox" checked> Send welcome email with login link</label>
+      <div class="form-row" id="au-tier-row">
+        <label class="form-label">Membership Tier</label>
+        <select class="form-input" id="au-tier" onchange="toggleAddUserSlotRow()">
+          <option value="">Not set yet</option>
+          <option value="community">Community</option>
+          <option value="flex">Flex</option>
+          <option value="core">Core</option>
+          <option value="resident">Resident</option>
+        </select>
+      </div>
+      <div class="form-row" id="au-reserved-slot-row" style="display:none;background:var(--r-surface2);border-radius:8px;padding:12px;">
+        <label class="form-label" style="margin-bottom:8px;">Agreed Recurring Session(s) (required for Core/Resident)</label>
+        <div id="au-pending-slots" style="margin-bottom:10px;"></div>
+        <div class="form-two">
+          <select class="form-input" id="au-reserved-day">
+            <option value="">Day…</option>
+            <option>Monday</option><option>Tuesday</option><option>Wednesday</option>
+            <option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option>
+          </select>
+          <select class="form-input" id="au-reserved-room"></select>
+        </div>
+        <div class="form-two" style="margin-top:8px;">
+          <input type="time" class="form-input" id="au-reserved-start" placeholder="Start">
+          <input type="time" class="form-input" id="au-reserved-end" placeholder="End">
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="addPendingAddUserSlot()">+ Add this slot</button>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('add-user-modal')">Cancel</button>
-      <button class="btn btn-primary" onclick="addUser()">Add User</button>
+      <button class="btn btn-primary" id="add-user-submit-btn" onclick="addUser()">Add User</button>
     </div>
   </div>
 </div>
@@ -4720,7 +4748,7 @@ async function loadAuditLog() {
       return;
     }
     const actionLabel = {
-      'member.updated': 'Updated member', 'member.deleted': 'Deleted member',
+      'member.updated': 'Updated member', 'member.deleted': 'Deleted member', 'member.created_directly': 'Added user directly',
       'booking.cancelled': 'Cancelled booking', 'booking.updated': 'Updated booking',
       'invite.sent': 'Sent invite', 'room.created': 'Added room', 'room.updated': 'Updated room',
       'document.created': 'Created document', 'document.updated': 'Updated document', 'document.deactivated': 'Removed document',
@@ -5932,9 +5960,104 @@ async function sendInviteFromPage() {
   }
 }
 
-function addUser() {
-  closeModal('add-user-modal');
-  showToast('✓ User added — welcome email sent!');
+function toggleAddUserTierRow() {
+  const type = document.getElementById('au-type').value;
+  const row = document.getElementById('au-tier-row');
+  if (row) row.style.display = type === 'practitioner' ? 'block' : 'none';
+  if (type !== 'practitioner') {
+    document.getElementById('au-tier').value = '';
+    toggleAddUserSlotRow();
+  }
+}
+
+let pendingAddUserSlots = [];
+
+function toggleAddUserSlotRow() {
+  const tier = document.getElementById('au-tier').value;
+  const row = document.getElementById('au-reserved-slot-row');
+  const roomSel = document.getElementById('au-reserved-room');
+  if (roomSel && roomSel.options.length === 0) {
+    roomSel.innerHTML = '<option value="">Room…</option>' + state.rooms.map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join('');
+  }
+  const show = ['core', 'resident'].includes(tier);
+  if (row) row.style.display = show ? 'block' : 'none';
+  if (show) renderPendingAddUserSlots();
+}
+
+function renderPendingAddUserSlots() {
+  const container = document.getElementById('au-pending-slots');
+  if (!container) return;
+  if (pendingAddUserSlots.length === 0) {
+    container.innerHTML = '<div style="font-size:12px;color:var(--r-warm-gray);">No slots added yet.</div>';
+    return;
+  }
+  container.innerHTML = pendingAddUserSlots.map((s, i) => {
+    const room = state.rooms.find(r => r.id === s.room_id);
+    return `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--r-border);font-size:13px;">
+      <span>${esc(s.day_of_week)}, ${esc(s.time_start)}–${esc(s.time_end)}${room ? ' · ' + esc(room.name) : ''}</span>
+      <button type="button" class="btn btn-danger btn-sm" onclick="removePendingAddUserSlot(${i})">Remove</button>
+    </div>`;
+  }).join('');
+}
+
+function addPendingAddUserSlot() {
+  const day_of_week = document.getElementById('au-reserved-day').value;
+  const room_id = document.getElementById('au-reserved-room').value || null;
+  const time_start = document.getElementById('au-reserved-start').value;
+  const time_end = document.getElementById('au-reserved-end').value;
+  if (!day_of_week || !time_start || !time_end) { showToast('⚠ Pick a day, start time and end time'); return; }
+  pendingAddUserSlots.push({ day_of_week, room_id, time_start, time_end });
+  document.getElementById('au-reserved-day').value = '';
+  document.getElementById('au-reserved-room').value = '';
+  document.getElementById('au-reserved-start').value = '';
+  document.getElementById('au-reserved-end').value = '';
+  renderPendingAddUserSlots();
+}
+
+function removePendingAddUserSlot(index) {
+  pendingAddUserSlots.splice(index, 1);
+  renderPendingAddUserSlots();
+}
+
+async function addUser() {
+  const first_name = document.getElementById('au-first-name').value.trim();
+  const last_name = document.getElementById('au-last-name').value.trim();
+  const email = document.getElementById('au-email').value.trim();
+  const phone = document.getElementById('au-phone').value.trim();
+  const user_type = document.getElementById('au-type').value;
+  const plan_tier = user_type === 'practitioner' ? (document.getElementById('au-tier').value || null) : null;
+
+  if (!first_name || !last_name || !email) { showToast('⚠ First name, last name and email are required'); return; }
+  if (['core', 'resident'].includes(plan_tier) && pendingAddUserSlots.length === 0) {
+    showToast('⚠ Core and Resident need at least one agreed recurring slot — add one below');
+    return;
+  }
+
+  const btn = document.getElementById('add-user-submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Adding…';
+  try {
+    const result = await api('/members-create', {
+      method: 'POST',
+      body: JSON.stringify({ first_name, last_name, email, phone, user_type, plan_tier, reserved_slots: pendingAddUserSlots }),
+    });
+    closeModal('add-user-modal');
+    showToast(result.email_sent ? '✓ User added — set-password email sent!' : '✓ User added (email not sent — check Resend setup, they can still use Forgot Password)');
+    document.getElementById('au-first-name').value = '';
+    document.getElementById('au-last-name').value = '';
+    document.getElementById('au-email').value = '';
+    document.getElementById('au-phone').value = '';
+    document.getElementById('au-tier').value = '';
+    pendingAddUserSlots = [];
+    renderPendingAddUserSlots();
+    await loadAppData();
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Add User';
+  }
 }
 
 async function addRoom() {

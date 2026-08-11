@@ -371,9 +371,31 @@ async function sendExitNoticeReminder({ to, memberName, planTier, noticeDays, cy
   });
 }
 
+// For the "Add User" (create now) path on the Members page — distinct from
+// the token-based Invite flow, this account already exists and is already
+// active; the link just lets them set their own password via the app's
+// existing password-recovery UI (the same one behind "Forgot password?").
+async function sendAccountCreatedEmail({ to, firstName, actionLink }) {
+  const resend = getResend();
+  return resend.emails.send({
+    from: FROM_EMAIL,
+    to: [to],
+    subject: 'Your Radiant Booking account is ready',
+    text: `Hi ${firstName},
+
+An account has been set up for you on the Radiant Booking Platform.
+
+Set your password to get started: ${actionLink}
+
+Once you've set a password, you can sign in any time with your email address.
+
+— Radiant Booking`,
+  });
+}
+
 module.exports = {
   sendBookingConfirmation, sendTeamBookingNotice, sendCancellationAlert, sendReminder, sendInvite,
   sendWelcomeEmail, sendRotaUpdate, sendLeaveUpdate, sendLeaveApprovalRequest, sendLeaveDecision, sendExitNoticeReminder,
   sendMandateActiveEmail, sendSessionPaymentConfirmedEmail, sendSessionPaymentFailedEmail,
-  sendSubscriptionStartedEmail, sendSubscriptionPaymentFailedEmail,
+  sendSubscriptionStartedEmail, sendSubscriptionPaymentFailedEmail, sendAccountCreatedEmail,
 };
