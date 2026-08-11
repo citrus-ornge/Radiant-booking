@@ -415,9 +415,52 @@ Reply in the Radiant Booking app.
   });
 }
 
+// Sent when a practitioner invites their own patient to a booking (opt-in,
+// separate from the practitioner's own confirmation) — the patient is an
+// external third party, not a system user, so this is deliberately its
+// own thing rather than reusing sendBookingConfirmation. Includes the
+// practice address as a real Google Maps link (a stable search-query URL,
+// no API key needed) and a calendar invite, matching the same quality bar
+// as every other booking email tonight.
+const PRACTICE_ADDRESS = '88 High Street, Heathfield, East Sussex, TN21 8JD';
+const PRACTICE_MAPS_LINK = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(PRACTICE_ADDRESS)}`;
+
+async function sendPatientInviteEmail({ to, patientName, practitionerName, roomName, start, end, notes, icsContent }) {
+  const resend = getResend();
+  const dateStr = new Date(start).toLocaleString('en-GB', { dateStyle: 'full', timeStyle: 'short' });
+  const endStr = new Date(end).toLocaleString('en-GB', { timeStyle: 'short' });
+  return resend.emails.send({
+    from: FROM_EMAIL,
+    to: [to],
+    subject: `Your appointment with ${practitionerName} — Radiant`,
+    text: `Hi ${patientName || 'there'},
+
+You have an appointment with ${practitionerName} at Radiant:
+
+${dateStr} – ${endStr}
+${roomName ? `Room: ${roomName}\n` : ''}
+${PRACTICE_ADDRESS}
+Get directions: ${PRACTICE_MAPS_LINK}
+
+When you arrive, someone will meet you at reception.
+${notes ? `\nA note from ${practitionerName}:\n${notes}\n` : ''}
+A calendar invite is attached — most email apps will show an "Add to calendar" option.
+
+See you then!
+
+— Radiant`,
+    attachments: icsContent ? [{
+      filename: 'appointment.ics',
+      content: Buffer.from(icsContent).toString('base64'),
+      contentType: 'text/calendar; charset=utf-8; method=REQUEST',
+    }] : undefined,
+  });
+}
+
 module.exports = {
   sendBookingConfirmation, sendTeamBookingNotice, sendCancellationAlert, sendReminder, sendInvite,
   sendWelcomeEmail, sendRotaUpdate, sendLeaveUpdate, sendLeaveApprovalRequest, sendLeaveDecision, sendExitNoticeReminder,
   sendMandateActiveEmail, sendSessionPaymentConfirmedEmail, sendSessionPaymentFailedEmail,
   sendSubscriptionStartedEmail, sendSubscriptionPaymentFailedEmail, sendAccountCreatedEmail, sendUrgentMessageEmail,
+  sendPatientInviteEmail,
 };

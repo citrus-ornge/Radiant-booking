@@ -1,5 +1,5 @@
 const { getSupabase } = require('./_lib/supabase');
-const { sendBookingConfirmation, sendTeamBookingNotice } = require('./_lib/email');
+const { sendBookingConfirmation, sendTeamBookingNotice, sendPatientInviteEmail } = require('./_lib/email');
 const { isNotificationEnabled } = require('./_lib/notificationSettings');
 const { createCalendarEvent } = require('./_lib/google');
 const { requireAuth } = require('./_lib/auth');
@@ -30,6 +30,7 @@ module.exports = async (req, res) => {
       .from('bookings')
       .select(`
         id, start_time, end_time, status, notes, created_at, is_topup, payment_status, amount_pence, gocardless_payment_id, parent_booking_id,
+        patient_email, patient_name, patient_notes, patient_invite_sent_at,
         room:rooms ( id, name, emoji, floor ),
         member:members ( id, first_name, last_name, email, user_type, is_owner )
       `)
@@ -44,7 +45,7 @@ module.exports = async (req, res) => {
       return res.status(429).json({ error: 'Too many bookings created recently. Please wait a while before booking more.' });
     }
 
-    const { room_id, member_id, start_time, end_time, notes, parent_booking_id } = req.body || {};
+    const { room_id, member_id, start_time, end_time, notes, parent_booking_id, patient_email, patient_name, patient_notes } = req.body || {};
     if (!room_id || !member_id || !start_time || !end_time) {
       return res.status(400).json({ error: 'room_id, member_id, start_time, end_time are required' });
     }
@@ -179,7 +180,11 @@ module.exports = async (req, res) => {
 
     const { data: booking, error } = await supabase
       .from('bookings')
-      .insert({ room_id, member_id, start_time, end_time, notes, status: 'confirmed', parent_booking_id: parent_booking_id || null, is_topup, payment_status: finalPaymentStatus, amount_pence: amountPence })
+      .insert({
+        room_id, member_id, start_time, end_time, notes, status: 'confirmed', parent_booking_id: parent_booking_id || null,
+        is_topup, payment_status: finalPaymentStatus, amount_pence: amountPence,
+        patient_email: patient_email || null, patient_name: patient_name || null, patient_notes: patient_notes || null,
+      })
       .select(`
         id, start_time, end_time, status, notes, is_topup, payment_status, amount_pence, parent_booking_id,
         room:rooms ( id, name, emoji, floor ),
@@ -275,6 +280,40 @@ module.exports = async (req, res) => {
         sideEffects.calendar_synced = true;
       } catch (e) {
         sideEffects.warnings.push(`Calendar sync failed: ${e.message}`);
+      }
+    }
+
+    // Optional: the practitioner invited their own patient to this booking
+    // (address, map link, appointment time, a note that reception will meet
+    // them) — an external third party, not a system user, so this is
+    // deliberately separate from the practitioner's own confirmation above.
+    if (patient_email) {
+      try {
+        const patientIcs = generateBookingIcs({
+          uid: `patient-${booking.id}@booking.radiantfr.com`, // distinct UID from the practitioner's own invite — same booking, but the patient's calendar entry is conceptually separate
+          summary: `Appointment with ${member.first_name} ${member.last_name} — Radiant`,
+          description: patient_notes || '',
+          location: room.name,
+          startISO: booking.start_time,
+          endISO: booking.end_time,
+          sequence: 0,
+          method: 'REQUEST',
+        });
+        await sendPatientInviteEmail({
+          to: patient_email,
+          patientName: patient_name || '',
+          practitionerName: `${member.first_name} ${member.last_name}`.trim(),
+          roomName: room.name,
+          start: booking.start_time,
+          end: booking.end_time,
+          notes: patient_notes || '',
+          icsContent: patientIcs,
+        });
+        await supabase.from('bookings').update({ patient_invite_sent_at: new Date().toISOString() }).eq('id', booking.id);
+        sideEffects.patient_invite_sent = true;
+      } catch (e) {
+        sideEffects.warnings.push(`Patient invite not sent: ${e.message}`);
+        sideEffects.patient_invite_sent = false;
       }
     }
 

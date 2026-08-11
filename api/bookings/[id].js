@@ -25,7 +25,77 @@ module.exports = async (req, res) => {
   }
 
   if (req.method === 'PATCH') {
-    const { status } = req.body || {};
+    const { status, patient_email, patient_name, patient_notes } = req.body || {};
+
+    // Two distinct kinds of update sharing this endpoint: a status change
+    // (existing behaviour), or adding/editing patient details on an
+    // existing booking — the latter deliberately has no time restriction
+    // ("add whenever"), so a practitioner can invite their patient right
+    // when booking, or come back and add it later, or update the notes
+    // before the appointment.
+    if (patient_email !== undefined || patient_name !== undefined || patient_notes !== undefined) {
+      if (patient_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(patient_email)) {
+        return res.status(400).json({ error: 'Please enter a valid email address' });
+      }
+      const updates = {};
+      if (patient_email !== undefined) updates.patient_email = patient_email || null;
+      if (patient_name !== undefined) updates.patient_name = patient_name || null;
+      if (patient_notes !== undefined) updates.patient_notes = patient_notes || null;
+
+      const { data: booking, error } = await supabase
+        .from('bookings')
+        .update(updates)
+        .eq('id', id)
+        .select(`
+          id, start_time, end_time, patient_email, patient_name, patient_notes,
+          room:rooms ( name ),
+          member:members ( first_name, last_name )
+        `)
+        .single();
+      if (error) return res.status(500).json({ error: error.message });
+
+      let patient_invite_sent = false;
+      if (updates.patient_email) {
+        try {
+          const { generateBookingIcs } = require('../_lib/ics');
+          const { sendPatientInviteEmail } = require('../_lib/email');
+          const patientIcs = generateBookingIcs({
+            uid: `patient-${booking.id}@booking.radiantfr.com`,
+            summary: `Appointment with ${booking.member.first_name} ${booking.member.last_name} — Radiant`,
+            description: booking.patient_notes || '',
+            location: booking.room.name,
+            startISO: booking.start_time,
+            endISO: booking.end_time,
+            sequence: 0,
+            method: 'REQUEST',
+          });
+          await sendPatientInviteEmail({
+            to: booking.patient_email,
+            patientName: booking.patient_name || '',
+            practitionerName: `${booking.member.first_name} ${booking.member.last_name}`.trim(),
+            roomName: booking.room.name,
+            start: booking.start_time,
+            end: booking.end_time,
+            notes: booking.patient_notes || '',
+            icsContent: patientIcs,
+          });
+          await supabase.from('bookings').update({ patient_invite_sent_at: new Date().toISOString() }).eq('id', id);
+          patient_invite_sent = true;
+        } catch (e) {
+          // don't fail the request over email issues — the booking's own
+          // patient details are already saved successfully either way
+        }
+      }
+
+      logAudit({
+        actorId: requester.id, actorName: `${requester.first_name} ${requester.last_name}`.trim(),
+        action: 'booking.patient_details_updated', entityType: 'booking', entityId: id,
+        details: { patient_invited: !!updates.patient_email },
+      });
+
+      return res.status(200).json({ booking, patient_invite_sent });
+    }
+
     if (!['confirmed', 'pending', 'cancelled'].includes(status)) {
       return res.status(400).json({ error: 'status must be confirmed, pending, or cancelled' });
     }

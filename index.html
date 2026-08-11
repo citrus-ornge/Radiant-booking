@@ -1738,6 +1738,20 @@ textarea.form-input { resize: vertical; }
                 <select class="form-input" id="client-duration" onchange="refreshClientTimeSlotAvailability()"><option value="1">1 hour</option><option value="2" selected>2 hours</option><option value="3">3 hours</option><option value="4">Half day (4hrs)</option><option value="8">Full day</option></select>
               </div>
               <div class="form-row"><label class="form-label">Notes</label><textarea class="form-input" id="client-notes" rows="2" placeholder="Any special requirements…"></textarea></div>
+              <div class="form-row" style="background:var(--r-surface2);border-radius:8px;padding:12px;">
+                <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:500;cursor:pointer;margin-bottom:2px;">
+                  <input type="checkbox" id="client-invite-patient-toggle" onchange="document.getElementById('client-patient-fields').style.display=this.checked?'block':'none'">
+                  Invite a patient to this appointment
+                </label>
+                <div style="font-size:11.5px;color:var(--r-warm-gray);margin-bottom:8px;">Optional — they'll get an email with the address, a map link, the time, and a note that reception will meet them.</div>
+                <div id="client-patient-fields" style="display:none;">
+                  <div class="form-two">
+                    <div class="form-row"><label class="form-label">Patient name</label><input class="form-input" id="client-patient-name" placeholder="Optional"></div>
+                    <div class="form-row"><label class="form-label">Patient email</label><input type="email" class="form-input" id="client-patient-email" placeholder="patient@email.com"></div>
+                  </div>
+                  <div class="form-row"><label class="form-label">A note for the patient</label><textarea class="form-input" id="client-patient-notes" rows="2" placeholder="e.g. please arrive 10 minutes early, wear comfortable clothing…"></textarea></div>
+                </div>
+              </div>
               <div style="height:64px;"></div>
               <button class="btn btn-primary" style="position:fixed;left:16px;right:16px;bottom:16px;max-width:400px;margin:0 auto;justify-content:center;box-shadow:0 6px 20px rgba(0,0,0,0.25);z-index:50;" id="client-book-btn" onclick="confirmClientBooking()">Confirm Booking</button>
             </div>
@@ -1964,6 +1978,29 @@ textarea.form-input { resize: vertical; }
       <button class="close-btn" onclick="closeModal('sign-document-modal')">✕</button>
     </div>
     <div class="modal-body" id="sd-body"></div>
+  </div>
+</div>
+
+<!-- ADD/EDIT PATIENT INVITE — reachable any time from My Bookings, not just
+     at booking creation ("add whenever" per request). -->
+<div class="modal-overlay" id="patient-invite-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div><div class="modal-title">Invite a Patient</div><div style="font-size:13px;color:var(--r-warm-gray);margin-top:3px;">They'll get an email with the address, a map link, the time, and a note that reception will meet them.</div></div>
+      <button class="close-btn" onclick="closeModal('patient-invite-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="pi-booking-id">
+      <div class="form-two">
+        <div class="form-row"><label class="form-label">Patient name</label><input class="form-input" id="pi-patient-name" placeholder="Optional"></div>
+        <div class="form-row"><label class="form-label">Patient email</label><input type="email" class="form-input" id="pi-patient-email" placeholder="patient@email.com"></div>
+      </div>
+      <div class="form-row"><label class="form-label">A note for the patient</label><textarea class="form-input" id="pi-patient-notes" rows="2" placeholder="e.g. please arrive 10 minutes early, wear comfortable clothing…"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('patient-invite-modal')">Cancel</button>
+      <button class="btn btn-primary" id="pi-submit-btn" onclick="savePatientInvite()">Send Invite</button>
+    </div>
   </div>
 </div>
 
@@ -3478,14 +3515,51 @@ function renderMyBookings() {
         <div style="font-size:13.5px;font-weight:500;">${esc(b.room ? b.room.name : '—')}</div>
         <div style="font-size:12px;color:var(--r-warm-gray);">${time} · ${esc(b.room ? b.room.floor || '' : '')}</div>
         ${needsPayment ? `<div style="font-size:12px;color:var(--r-gold);margin-top:3px;">£${(b.amount_pence / 100).toFixed(2)} payment due</div>` : ''}
+        ${b.patient_email ? `<div style="font-size:12px;color:var(--r-warm-gray);margin-top:3px;">👤 ${esc(b.patient_name || b.patient_email)} invited</div>` : ''}
       </div>
-      <div style="display:flex;gap:8px;">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
         ${needsPayment ? `<button class="btn btn-primary btn-sm" onclick="payNowForBooking('${b.id}', this)">Pay now</button>` : ''}
+        <button class="btn btn-outline btn-sm" onclick="openPatientInviteModal('${b.id}')">${b.patient_email ? 'Edit patient invite' : 'Invite a patient'}</button>
         <button class="btn btn-outline btn-sm" onclick="openCalModalFor('${esc(b.room ? b.room.name : 'Room')}','${b.start_time}','${b.end_time}')">Add to Cal</button>
         <button class="btn btn-danger btn-sm" onclick="cancelBooking('${b.id}')">Cancel</button>
       </div>
     </div>`;
   }).join('');
+}
+
+function openPatientInviteModal(bookingId) {
+  const b = state.bookings.find(x => x.id === bookingId);
+  if (!b) { showToast('⚠ Booking not found'); return; }
+  document.getElementById('pi-booking-id').value = bookingId;
+  document.getElementById('pi-patient-name').value = b.patient_name || '';
+  document.getElementById('pi-patient-email').value = b.patient_email || '';
+  document.getElementById('pi-patient-notes').value = b.patient_notes || '';
+  document.getElementById('pi-submit-btn').textContent = b.patient_email ? 'Update & Re-send Invite' : 'Send Invite';
+  openModal('patient-invite-modal');
+}
+
+async function savePatientInvite() {
+  const bookingId = document.getElementById('pi-booking-id').value;
+  const patient_name = document.getElementById('pi-patient-name').value.trim();
+  const patient_email = document.getElementById('pi-patient-email').value.trim();
+  const patient_notes = document.getElementById('pi-patient-notes').value.trim();
+  if (!patient_email) { showToast('⚠ Please enter the patient\'s email'); return; }
+
+  const btn = document.getElementById('pi-submit-btn');
+  btn.disabled = true;
+  try {
+    const result = await api(`/bookings/${bookingId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ patient_email, patient_name, patient_notes }),
+    });
+    closeModal('patient-invite-modal');
+    showToast(result.patient_invite_sent ? '✓ Patient invited — email sent' : '✓ Saved (email failed to send — check the address and try again)');
+    await loadAppData();
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 async function payNowForBooking(bookingId, btn) {
@@ -4937,7 +5011,7 @@ async function loadAuditLog() {
     }
     const actionLabel = {
       'member.updated': 'Updated member', 'member.deleted': 'Deleted member', 'member.created_directly': 'Added user directly',
-      'booking.cancelled': 'Cancelled booking', 'booking.updated': 'Updated booking',
+      'booking.cancelled': 'Cancelled booking', 'booking.updated': 'Updated booking', 'booking.patient_details_updated': 'Updated patient invite',
       'invite.sent': 'Sent invite', 'room.created': 'Added room', 'room.updated': 'Updated room',
       'document.created': 'Created document', 'document.updated': 'Updated document', 'document.deactivated': 'Removed document',
       'event.created': 'Created event', 'event.deleted': 'Deleted event',
@@ -5886,6 +5960,11 @@ async function confirmClientBooking() {
 
   const duration = parseFloat(document.getElementById('client-duration').value);
   const notes = document.getElementById('client-notes').value;
+  const invitingPatient = document.getElementById('client-invite-patient-toggle').checked;
+  const patient_email = invitingPatient ? document.getElementById('client-patient-email').value.trim() : '';
+  const patient_name = invitingPatient ? document.getElementById('client-patient-name').value.trim() : '';
+  const patient_notes = invitingPatient ? document.getElementById('client-patient-notes').value.trim() : '';
+  if (invitingPatient && !patient_email) { showToast('⚠ Please enter the patient\'s email, or untick "Invite a patient"'); return; }
 
   const btn = document.getElementById('client-book-btn');
   btn.disabled = true;
@@ -5909,6 +5988,9 @@ async function confirmClientBooking() {
           start_time: start.toISOString(),
           end_time: end.toISOString(),
           notes,
+          patient_email: patient_email || undefined,
+          patient_name: patient_name || undefined,
+          patient_notes: patient_notes || undefined,
         }),
       });
       succeeded++;
