@@ -1406,14 +1406,6 @@ textarea.form-input { resize: vertical; }
                 <button type="button" class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="addPendingInviteSlot()">+ Add this slot</button>
               </div>
               <div class="form-row"><label class="form-label">Personal Note (optional)</label><textarea class="form-input" id="invite-note" rows="3" placeholder="Add a welcome message…"></textarea></div>
-              <div class="form-row">
-                <label class="form-label">Permissions</label>
-                <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px;">
-                  <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer;"><input type="checkbox" checked> Room bookings</label>
-                  <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer;"><input type="checkbox" checked> Calendar invites</label>
-                  <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer;"><input type="checkbox"> Admin panel access</label>
-                </div>
-              </div>
               <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="sendInviteFromPage()">Send Invitation</button>
             </div>
           </div>
@@ -4425,6 +4417,16 @@ function showView(name, _fromHistory) {
   _activateView(name, adminViews, '#admin-nav');
   if (name === 'settings') loadNotificationSettings();
   if (name === 'notifications') markNotificationsSeen();
+  if (name === 'invite') {
+    // The tier/reserved-slot fields only ever showed on a real 'change'
+    // event on the User Type dropdown — but it defaults to Practitioner
+    // already selected, so no change event fires on first load, and the
+    // Membership Tier field stayed hidden until someone switched away and
+    // back. Re-run the same toggle the dropdown's onchange calls, once,
+    // whenever this page is actually opened.
+    toggleInviteOwnerRow('invite');
+    toggleInviteReservedRow();
+  }
   if (!_fromHistory) {
     navHistory.push(name);
     history.pushState({ appView: name, role: 'admin' }, '', '#' + name);
