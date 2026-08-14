@@ -270,7 +270,7 @@ body {
 /* ── STATS ── */
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 14px;
   margin-bottom: 24px;
 }
@@ -1266,6 +1266,11 @@ textarea.form-input { resize: vertical; }
             <div class="stat-label">Pending Invites</div>
             <div class="stat-value" id="stat-pending-invites">–</div>
             <div class="stat-delta" id="stat-pending-invites-delta"></div>
+          </div>
+          <div class="stat-card" style="cursor:pointer;" onclick="showView('bookings');setTimeout(()=>document.querySelectorAll('#view-bookings .tab')[2]?.click(),50)" title="View pending payments in the Bookings table">
+            <div class="stat-label">Payments Awaiting</div>
+            <div class="stat-value" id="stat-payments-awaiting">–</div>
+            <div class="stat-delta" id="stat-payments-awaiting-delta"></div>
           </div>
         </div>
 
@@ -3766,6 +3771,15 @@ function renderDashboardStats() {
   const expiredInvites = state.invites.filter(i => i.status === 'expired').length;
   document.getElementById('stat-pending-invites').textContent = pendingInvites;
   document.getElementById('stat-pending-invites-delta').textContent = `${expiredInvites} expired`;
+
+  // Payments Awaiting — pending here means payment_status === 'pending'
+  // (bookings.status itself is only ever confirmed/cancelled, see the
+  // Bookings table's own 'Pending' tab fix). Excludes cancelled bookings —
+  // no point chasing payment on a session nobody's using anymore.
+  const awaitingPayment = state.bookings.filter(b => b.payment_status === 'pending' && b.status !== 'cancelled');
+  const awaitingTotalPence = awaitingPayment.reduce((sum, b) => sum + (b.amount_pence || 0), 0);
+  document.getElementById('stat-payments-awaiting').textContent = awaitingPayment.length;
+  document.getElementById('stat-payments-awaiting-delta').textContent = awaitingTotalPence > 0 ? `£${(awaitingTotalPence / 100).toFixed(2)} total` : 'all settled';
 }
 
 function renderUpcomingBookingsWidget() {
