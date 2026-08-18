@@ -4486,6 +4486,22 @@ async function loadOnboardingDocuments() {
   }
 }
 
+// Shared by both the onboarding document step and the standalone "Sign
+// Document" modal on My Documents. People reliably scroll-flick straight
+// to the bottom of a policy document — especially on mobile — without
+// reading a word of it, which defeats the entire point of requiring a
+// read before signing something that covers real clinical/safety and
+// compliance matters. ~200 words/minute is a standard average adult
+// reading speed estimate; floored at 8s so even a very short document
+// still gets a genuine moment before it can be signed.
+function estimateReadingSeconds(text) {
+  const words = (text || '').trim().split(/\s+/).filter(Boolean).length;
+  return Math.max(Math.round((words / 200) * 60), 8);
+}
+
+let onboardingReadGate = null;
+let onboardingReadGateInterval = null;
+
 function renderCurrentOnboardingDoc() {
   const doc = onboarding.docs[onboarding.docIndex];
   const container = document.getElementById('onboarding-doc-container');
@@ -4509,19 +4525,50 @@ function renderCurrentOnboardingDoc() {
       </div>
       <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;" onclick="signCurrentOnboardingDoc('${doc.id}')">Sign &amp; Continue</button>
     </div>`;
+
+  if (onboardingReadGateInterval) clearInterval(onboardingReadGateInterval);
+  const readSeconds = estimateReadingSeconds(doc.content);
+  onboardingReadGate = { scrolled: false, timeUp: false, deadline: Date.now() + readSeconds * 1000 };
+  onboardingReadGateInterval = setInterval(updateOnboardingDocLock, 500);
+  updateOnboardingDocLock();
+
   // Handle documents short enough to fit without any scrolling at all -
   // otherwise the unlock checkbox would never fire (no scroll event to trigger it)
   checkDocScrolled();
 }
 
+function updateOnboardingDocLock() {
+  const gate = onboardingReadGate;
+  if (!gate) return;
+  const remaining = Math.ceil((gate.deadline - Date.now()) / 1000);
+  if (remaining <= 0) gate.timeUp = true;
+
+  const checkboxEl = document.getElementById('doc-ack-checkbox');
+  const labelEl = document.getElementById('doc-ack-label');
+  if (!checkboxEl || !labelEl) { clearInterval(onboardingReadGateInterval); return; }
+
+  if (gate.scrolled && gate.timeUp) {
+    checkboxEl.disabled = false;
+    checkboxEl.checked = true;
+    labelEl.textContent = 'I have read and understood this document';
+    clearInterval(onboardingReadGateInterval);
+  } else if (!gate.scrolled) {
+    labelEl.textContent = 'Scroll to the bottom to continue';
+  } else {
+    // scrolled already, just waiting out the clock — explain why rather
+    // than leaving it looking stuck with no context
+    labelEl.textContent = `This covers real clinical/safety matters, so we ask you to take a moment with it — ${remaining}s`;
+  }
+}
+
 function checkDocScrolled() {
   const box = document.getElementById('doc-scroll-box');
   if (box.scrollTop + box.clientHeight >= box.scrollHeight - 6) {
-    document.getElementById('doc-ack-checkbox').disabled = false;
-    document.getElementById('doc-ack-checkbox').checked = true;
-    document.getElementById('doc-ack-label').textContent = 'I have read and understood this document';
+    if (onboardingReadGate) onboardingReadGate.scrolled = true;
+    updateOnboardingDocLock();
   }
 }
+
 
 async function signCurrentOnboardingDoc(documentId) {
   const checkbox = document.getElementById('doc-ack-checkbox');
@@ -5001,6 +5048,9 @@ async function loadMyDocuments(targetId) {
   }
 }
 
+let signDocReadGate = null;
+let signDocReadGateInterval = null;
+
 function openSignDocumentModal(documentId) {
   const doc = (state.myDocumentsCache || []).find(d => d.id === documentId);
   if (!doc) { showToast('⚠ Document not found — try refreshing'); return; }
@@ -5021,16 +5071,44 @@ function openSignDocumentModal(documentId) {
     </div>
     <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;" id="sd-sign-btn" onclick="signDocumentFromModal('${doc.id}')">Sign</button>`;
   openModal('sign-document-modal');
+
+  if (signDocReadGateInterval) clearInterval(signDocReadGateInterval);
+  const readSeconds = estimateReadingSeconds(doc.content);
+  signDocReadGate = { scrolled: false, timeUp: false, deadline: Date.now() + readSeconds * 1000 };
+  signDocReadGateInterval = setInterval(updateSignDocLock, 500);
+  updateSignDocLock();
+
   checkSignDocScrolled(); // handles documents short enough to need no scrolling at all
+}
+
+function updateSignDocLock() {
+  const gate = signDocReadGate;
+  if (!gate) return;
+  const remaining = Math.ceil((gate.deadline - Date.now()) / 1000);
+  if (remaining <= 0) gate.timeUp = true;
+
+  const checkboxEl = document.getElementById('sd-ack-checkbox');
+  const labelEl = document.getElementById('sd-ack-label');
+  if (!checkboxEl || !labelEl) { clearInterval(signDocReadGateInterval); return; }
+
+  if (gate.scrolled && gate.timeUp) {
+    checkboxEl.disabled = false;
+    checkboxEl.checked = true;
+    labelEl.textContent = 'I have read and understood this document';
+    clearInterval(signDocReadGateInterval);
+  } else if (!gate.scrolled) {
+    labelEl.textContent = 'Scroll to the bottom to continue';
+  } else {
+    labelEl.textContent = `This covers real clinical/safety matters, so we ask you to take a moment with it — ${remaining}s`;
+  }
 }
 
 function checkSignDocScrolled() {
   const box = document.getElementById('sd-scroll-box');
   if (!box) return;
   if (box.scrollTop + box.clientHeight >= box.scrollHeight - 6) {
-    document.getElementById('sd-ack-checkbox').disabled = false;
-    document.getElementById('sd-ack-checkbox').checked = true;
-    document.getElementById('sd-ack-label').textContent = 'I have read and understood this document';
+    if (signDocReadGate) signDocReadGate.scrolled = true;
+    updateSignDocLock();
   }
 }
 
