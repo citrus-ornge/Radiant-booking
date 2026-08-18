@@ -393,6 +393,30 @@ Once you've set a password, you can sign in any time with your email address.
   });
 }
 
+// For an admin helping someone who's already got an account but is stuck
+// getting back in (forgotten password, etc.) — distinct from
+// sendAccountCreatedEmail, which is for a brand new account. Reuses the
+// exact same Supabase recovery-link mechanism as the person's own "Forgot
+// Password" would, just triggered by an admin on their behalf instead of
+// requiring them to do it themselves.
+async function sendPasswordResetEmail({ to, firstName, actionLink }) {
+  const resend = getResend();
+  return resend.emails.send({
+    from: FROM_EMAIL,
+    to: [to],
+    subject: 'Reset your Radiant Booking password',
+    text: `Hi ${firstName},
+
+Staff & Admin have sent you a link to reset your Radiant Booking password.
+
+Set a new password: ${actionLink}
+
+If you didn't need this, you can safely ignore it — your existing password stays unchanged unless you use the link above.
+
+— Radiant Booking`,
+  });
+}
+
 // Urgent in-app messages also send this — the point is reaching someone
 // who isn't looking at the screen (smartwatch, phone in a pocket), which a
 // bell chime alone can't do. Kept deliberately short and scannable since
@@ -462,5 +486,6 @@ module.exports = {
   sendWelcomeEmail, sendRotaUpdate, sendLeaveUpdate, sendLeaveApprovalRequest, sendLeaveDecision, sendExitNoticeReminder,
   sendMandateActiveEmail, sendSessionPaymentConfirmedEmail, sendSessionPaymentFailedEmail,
   sendSubscriptionStartedEmail, sendSubscriptionPaymentFailedEmail, sendAccountCreatedEmail, sendUrgentMessageEmail,
+  sendPasswordResetEmail,
   sendPatientInviteEmail,
 };

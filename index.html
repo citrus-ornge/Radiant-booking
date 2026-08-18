@@ -2078,6 +2078,10 @@ textarea.form-input { resize: vertical; }
         <div class="form-row"><label class="form-label">Last Name</label><input class="form-input" id="mm-last-name"></div>
       </div>
       <div class="form-row"><label class="form-label">Email</label><input class="form-input" id="mm-email" disabled style="opacity:0.6;"></div>
+      <div class="form-row" id="mm-password-reset-row" style="display:none;">
+        <button type="button" class="btn btn-outline btn-sm" id="mm-password-reset-btn" onclick="sendMemberPasswordReset()">Send password reset</button>
+        <div style="font-size:11.5px;color:var(--r-warm-gray);margin-top:4px;">For someone who already has an account but can't get back in — emails them a reset link, same as their own "Forgot Password" would.</div>
+      </div>
       <div class="form-two">
         <div class="form-row"><label class="form-label">User Type</label>
           <select class="form-input" id="mm-user-type" onchange="toggleInviteOwnerRow('mm')">
@@ -3134,6 +3138,11 @@ function openManageMember(id) {
   document.getElementById('mm-phone').value = m.phone || '';
   document.getElementById('mm-qualifications').value = m.qualifications || '';
 
+  document.getElementById('mm-password-reset-row').style.display = m.auth_user_id ? 'block' : 'none';
+  const resetBtn = document.getElementById('mm-password-reset-btn');
+  resetBtn.disabled = false;
+  resetBtn.textContent = 'Send password reset';
+
   const isPractitioner = m.user_type === 'practitioner';
   const isMember = m.user_type === 'member';
 
@@ -3276,6 +3285,22 @@ async function deleteRecurringSlot(slotId, memberId) {
     showToast('✓ Slot removed');
   } catch (e) {
     showToast('⚠ ' + e.message);
+  }
+}
+
+async function sendMemberPasswordReset() {
+  const id = document.getElementById('mm-id').value;
+  const btn = document.getElementById('mm-password-reset-btn');
+  btn.disabled = true;
+  btn.textContent = 'Sending…';
+  try {
+    await api('/members-reset-password', { method: 'POST', body: JSON.stringify({ member_id: id }) });
+    showToast('✓ Password reset email sent');
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Send password reset';
   }
 }
 
@@ -5029,7 +5054,7 @@ async function loadAuditLog() {
       return;
     }
     const actionLabel = {
-      'member.updated': 'Updated member', 'member.deleted': 'Deleted member', 'member.created_directly': 'Added user directly',
+      'member.updated': 'Updated member', 'member.deleted': 'Deleted member', 'member.created_directly': 'Added user directly', 'member.password_reset_sent': 'Sent password reset',
       'booking.cancelled': 'Cancelled booking', 'booking.updated': 'Updated booking', 'booking.patient_details_updated': 'Updated patient invite',
       'invite.sent': 'Sent invite', 'invite.resent': 'Resent invite', 'room.created': 'Added room', 'room.updated': 'Updated room',
       'document.created': 'Created document', 'document.updated': 'Updated document', 'document.deactivated': 'Removed document',
