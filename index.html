@@ -3817,9 +3817,9 @@ function renderPendingInvitesWidget() {
     ? `<div style="color:var(--r-warm-gray);font-size:13px;padding:4px 0 10px;">No pending invites.</div>`
     : pending.map(i => `
       <div class="invite-pill" style="${i.status === 'expired' ? 'opacity:0.55;' : ''}">
-        <div class="avatar" style="width:34px;height:34px;font-size:12px;background:var(--r-gold-light);color:var(--r-gold-dark);">${esc(inviteInitials(i.email))}</div>
-        <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">${esc(i.email)}</div><div style="font-size:12px;color:${i.status === 'expired' ? 'var(--r-red)' : 'var(--r-warm-gray)'};">${esc(roleLabel(i.user_type))} · ${i.status === 'expired' ? 'expired' : 'sent'} ${esc(timeAgo(i.invited_at))}</div></div>
-        <span class="badge ${i.status === 'expired' ? 'badge-red' : 'badge-gold'}">${i.status.charAt(0).toUpperCase() + i.status.slice(1)}</span>
+        <div class="avatar" style="width:34px;height:34px;font-size:12px;background:var(--r-gold-light);color:var(--r-gold-dark);flex-shrink:0;">${esc(inviteInitials(i.email))}</div>
+        <div style="flex:1;min-width:0;"><div style="font-size:13.5px;font-weight:500;overflow-wrap:anywhere;">${esc(i.email)}</div><div style="font-size:12px;color:${i.status === 'expired' ? 'var(--r-red)' : 'var(--r-warm-gray)'};">${esc(roleLabel(i.user_type))} · ${i.status === 'expired' ? 'expired' : 'sent'} ${esc(timeAgo(i.invited_at))}</div></div>
+        <span class="badge ${i.status === 'expired' ? 'badge-red' : 'badge-gold'}" style="flex-shrink:0;">${i.status.charAt(0).toUpperCase() + i.status.slice(1)}</span>
       </div>`).join('');
   el.innerHTML = listHtml + `<button class="btn btn-outline" style="width:100%;justify-content:center;margin-top:6px;" onclick="openModal('invite-modal')">+ Send New Invite</button>`;
 }
@@ -3831,11 +3831,16 @@ function renderSentInvitesWidget() {
     el.innerHTML = `<div style="color:var(--r-warm-gray);font-size:13px;">No invites sent yet.</div>`;
     return;
   }
+  // min-width:0 on the flex:1 text column matters here — without it, a flex
+  // child won't shrink below its content's natural width, so a long email
+  // with no spaces (jason+1@pureperformancemedia.com) has nowhere to break
+  // and just overflows straight into the Resend button on a narrow screen,
+  // instead of wrapping onto a second line the way it's meant to.
   el.innerHTML = state.invites.map(i => `
     <div class="invite-pill" style="${i.status === 'expired' ? 'opacity:0.55;' : ''}">
-      <div class="avatar" style="width:34px;height:34px;font-size:12px;background:var(--r-gold-light);color:var(--r-gold-dark);">${esc(inviteInitials(i.email))}</div>
-      <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">${esc(i.email)}</div><div style="font-size:12px;color:${i.status === 'expired' ? 'var(--r-red)' : 'var(--r-warm-gray)'};">${esc(roleLabel(i.user_type))} · ${i.status === 'expired' ? 'expired' : esc(i.status)}</div></div>
-      <button class="btn btn-ghost btn-sm" onclick="resendInvite('${esc(i.email)}','${esc(i.user_type)}')">Resend</button>
+      <div class="avatar" style="width:34px;height:34px;font-size:12px;background:var(--r-gold-light);color:var(--r-gold-dark);flex-shrink:0;">${esc(inviteInitials(i.email))}</div>
+      <div style="flex:1;min-width:0;"><div style="font-size:13.5px;font-weight:500;overflow-wrap:anywhere;">${esc(i.email)}</div><div style="font-size:12px;color:${i.status === 'expired' ? 'var(--r-red)' : 'var(--r-warm-gray)'};">${esc(roleLabel(i.user_type))} · ${i.status === 'expired' ? 'expired' : esc(i.status)}</div></div>
+      <button class="btn btn-ghost btn-sm" style="flex-shrink:0;" onclick="resendInvite('${esc(i.email)}','${esc(i.user_type)}')">Resend</button>
     </div>`).join('');
 }
 
