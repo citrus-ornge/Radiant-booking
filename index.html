@@ -4103,12 +4103,13 @@ async function doForgotPassword() {
   btn.disabled = true;
   document.getElementById('forgot-error').style.display = 'none';
   try {
-    const { error } = await _sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
-    if (error) throw error;
-    // Deliberately vague either way - we never confirm/deny whether an
-    // account exists for a given email (this is what actually enforces
-    // "must be invited first": if there's no account, nothing gets sent,
-    // but we don't reveal that to whoever's asking).
+    // Uses our own branded email (via /api/request-password-reset) rather
+    // than calling Supabase's auth.resetPasswordForEmail() directly, which
+    // sends Supabase's own default unbranded email — jarring next to every
+    // other email this app sends, which comes from Radiant. Same
+    // deliberately-vague response either way — never confirms/denies
+    // whether an account exists for a given email.
+    await api('/request-password-reset', { method: 'POST', body: JSON.stringify({ email }) });
     document.getElementById('forgot-info').textContent = 'If an account exists for that email, a reset link is on its way.';
     document.getElementById('forgot-info').style.display = 'block';
   } catch (e) {
