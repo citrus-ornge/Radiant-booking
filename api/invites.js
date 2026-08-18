@@ -80,15 +80,44 @@ module.exports = async (req, res) => {
     const results = [];
 
     for (const oneEmail of emailList) {
-      const { data: invite, error } = await supabase
+      // Real bug found from actual usage: every Resend click called this
+      // same endpoint with no de-duplication at all, so it just kept
+      // inserting a brand new invite row (with a brand new token) every
+      // time — Sent Invitations ended up with 3+ duplicate pending rows
+      // for the same person. If a pending invite already exists for this
+      // email, refresh and resend THAT one instead of creating another.
+      const { data: existing } = await supabase
         .from('invites')
-        .insert({
-          email: oneEmail, user_type, personal_note, is_owner: !!is_owner,
-          plan_tier: plan_tier || null,
-          reserved_slots: lockedTiers.includes(plan_tier) ? slots : [],
-        })
-        .select()
-        .single();
+        .select('id, token')
+        .eq('email', oneEmail)
+        .eq('status', 'pending')
+        .maybeSingle();
+
+      let invite, error;
+      if (existing) {
+        ({ data: invite, error } = await supabase
+          .from('invites')
+          .update({
+            user_type, personal_note, is_owner: !!is_owner,
+            plan_tier: plan_tier || null,
+            reserved_slots: lockedTiers.includes(plan_tier) ? slots : [],
+            invited_at: new Date().toISOString(),
+            expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          })
+          .eq('id', existing.id)
+          .select()
+          .single());
+      } else {
+        ({ data: invite, error } = await supabase
+          .from('invites')
+          .insert({
+            email: oneEmail, user_type, personal_note, is_owner: !!is_owner,
+            plan_tier: plan_tier || null,
+            reserved_slots: lockedTiers.includes(plan_tier) ? slots : [],
+          })
+          .select()
+          .single());
+      }
       if (error) {
         results.push({ email: oneEmail, ok: false, error: error.message });
         continue;
@@ -96,7 +125,7 @@ module.exports = async (req, res) => {
 
       logAudit({
         actorId: requester.id, actorName: `${requester.first_name} ${requester.last_name}`.trim(),
-        action: 'invite.sent', entityType: 'invite', entityId: invite.id,
+        action: existing ? 'invite.resent' : 'invite.sent', entityType: 'invite', entityId: invite.id,
         details: { email: oneEmail, user_type, is_owner: !!is_owner },
       });
 
@@ -106,7 +135,7 @@ module.exports = async (req, res) => {
         await sendInvite({ to: oneEmail, userType: user_type, note: personal_note, inviteUrl });
         email_sent = true;
       } catch (e) {
-        // invite record still created even if email delivery fails
+        // invite record still created/updated even if email delivery fails
       }
       results.push({ email: oneEmail, ok: true, invite, email_sent });
     }
