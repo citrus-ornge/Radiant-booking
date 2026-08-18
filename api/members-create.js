@@ -103,7 +103,7 @@ module.exports = async (req, res) => {
     );
   }
 
-  const baseUrl = process.env.PUBLIC_APP_URL || 'https://radiant-booking.vercel.app';
+  const baseUrl = process.env.PUBLIC_APP_URL || 'https://booking.radiantfr.com';
   let email_sent = false;
   try {
     const { data: linkData, error: linkErr } = await supabase.auth.admin.generateLink({

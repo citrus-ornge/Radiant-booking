@@ -215,7 +215,7 @@ function tierSectionFor(planTier) {
 async function sendWelcomeEmail({ to, firstName, userType, planTier, directoryTier, isOwner }) {
   const resend = getResend();
   const name = firstName || 'there';
-  const appUrl = process.env.PUBLIC_APP_URL || 'https://radiant-booking.vercel.app';
+  const appUrl = process.env.PUBLIC_APP_URL || 'https://booking.radiantfr.com';
 
   if (isOwner) {
     const body = `Hi ${name},
@@ -417,6 +417,28 @@ If you didn't need this, you can safely ignore it — your existing password sta
   });
 }
 
+// The "Sign in with a magic link instead" option — same bug class as
+// sendPasswordResetEmail, found from real usage: was calling Supabase's
+// own signInWithOtp() directly from the browser, which sends Supabase's
+// unbranded default email.
+async function sendMagicLinkEmail({ to, firstName, actionLink }) {
+  const resend = getResend();
+  return resend.emails.send({
+    from: FROM_EMAIL,
+    to: [to],
+    subject: 'Your Radiant Booking sign-in link',
+    text: `Hi ${firstName},
+
+Here's your link to sign in to Radiant Booking — no password needed.
+
+Sign in: ${actionLink}
+
+This link expires shortly and can only be used once. If you didn't request this, you can safely ignore it.
+
+— Radiant Booking`,
+  });
+}
+
 // Urgent in-app messages also send this — the point is reaching someone
 // who isn't looking at the screen (smartwatch, phone in a pocket), which a
 // bell chime alone can't do. Kept deliberately short and scannable since
@@ -487,5 +509,6 @@ module.exports = {
   sendMandateActiveEmail, sendSessionPaymentConfirmedEmail, sendSessionPaymentFailedEmail,
   sendSubscriptionStartedEmail, sendSubscriptionPaymentFailedEmail, sendAccountCreatedEmail, sendUrgentMessageEmail,
   sendPasswordResetEmail,
+  sendMagicLinkEmail,
   sendPatientInviteEmail,
 };

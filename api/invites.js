@@ -76,7 +76,7 @@ module.exports = async (req, res) => {
       return res.status(429).json({ error: 'Too many invites sent recently. Please wait a while before sending more.' });
     }
 
-    const baseUrl = process.env.PUBLIC_APP_URL || 'https://radiant-booking.vercel.app';
+    const baseUrl = process.env.PUBLIC_APP_URL || 'https://booking.radiantfr.com';
     const results = [];
 
     for (const oneEmail of emailList) {

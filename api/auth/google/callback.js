@@ -3,7 +3,7 @@ const { getSupabase } = require('../../_lib/supabase');
 
 module.exports = async (req, res) => {
   const { code, state, error: oauthError } = req.query;
-  const baseUrl = process.env.PUBLIC_APP_URL || 'https://radiant-booking.vercel.app';
+  const baseUrl = process.env.PUBLIC_APP_URL || 'https://booking.radiantfr.com';
 
   if (oauthError) {
     res.writeHead(302, { Location: `${baseUrl}/?calendar=error&reason=${encodeURIComponent(oauthError)}` });

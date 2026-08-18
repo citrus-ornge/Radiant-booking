@@ -35,7 +35,7 @@ module.exports = async (req, res) => {
   try {
     const { data: member } = await supabase.from('members').select('id, first_name, email, auth_user_id').eq('email', email).maybeSingle();
     if (member && member.auth_user_id) {
-      const baseUrl = process.env.PUBLIC_APP_URL || 'https://radiant-booking.vercel.app';
+      const baseUrl = process.env.PUBLIC_APP_URL || 'https://booking.radiantfr.com';
       const { data: linkData, error: linkErr } = await supabase.auth.admin.generateLink({
         type: 'recovery', email: member.email, options: { redirectTo: baseUrl },
       });

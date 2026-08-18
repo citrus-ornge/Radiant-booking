@@ -34,7 +34,7 @@ module.exports = async (req, res) => {
   if (!member) return res.status(404).json({ error: 'Member not found' });
   if (!member.auth_user_id) return res.status(400).json({ error: 'This person doesn\'t have a login account yet — use Invite or Add User instead.' });
 
-  const baseUrl = process.env.PUBLIC_APP_URL || 'https://radiant-booking.vercel.app';
+  const baseUrl = process.env.PUBLIC_APP_URL || 'https://booking.radiantfr.com';
   try {
     const { data: linkData, error: linkErr } = await supabase.auth.admin.generateLink({
       type: 'recovery', email: member.email, options: { redirectTo: baseUrl },

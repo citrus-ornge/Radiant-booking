@@ -17,7 +17,7 @@ async function notifyApproversForRequest(supabase, rows, requesterName) {
   if (approvers.length === 0) return;
 
   const token = rows[0].approval_token;
-  const baseUrl = process.env.PUBLIC_APP_URL || 'https://radiant-booking.vercel.app';
+  const baseUrl = process.env.PUBLIC_APP_URL || 'https://booking.radiantfr.com';
   const approveUrl = `${baseUrl}/api/staff/leave-respond?token=${token}&action=approve`;
   const declineUrl = `${baseUrl}/api/staff/leave-respond?token=${token}&action=decline`;
   const rangeText = fmtRange(rows, 'leave_date');
