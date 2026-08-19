@@ -95,10 +95,14 @@ module.exports = async (req, res) => {
     // alone for server-side debugging — e.g. "scheme is not supported" vs a
     // generic failure. Logged, not shown to the member (see mandate.js commit
     // history for why this was briefly user-facing while chasing real bugs).
+    // request_id specifically is what lets GoCardless support look up the
+    // exact failed request on their end instantly instead of us describing
+    // it to them — found (not previously captured) while chasing the real
+    // 'Forbidden request' error on the live account.
     const detail = (e.errors && e.errors.length)
       ? e.errors.map(x => [x.field, x.message || x.reason].filter(Boolean).join(': ')).join('; ')
       : e.message;
-    console.error('GoCardless mandate setup failed:', detail, JSON.stringify(e.errors || null));
+    console.error('GoCardless mandate setup failed:', detail, 'request_id:', e.request_id || null, JSON.stringify(e.errors || null));
     return res.status(502).json({ error: 'Could not start Direct Debit setup. Please try again or contact Staff & Admin.' });
   }
 };

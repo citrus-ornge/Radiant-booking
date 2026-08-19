@@ -114,7 +114,7 @@ module.exports = async (req, res) => {
     return res.status(200).json({ authorisation_url: billingRequestFlow.authorisation_url });
   } catch (e) {
     const detail = (e.errors && e.errors.length) ? e.errors.map(x => x.message || x.reason).join('; ') : e.message;
-    console.error(`Instant Bank Pay setup failed for booking ${booking.id}:`, detail);
+    console.error(`Instant Bank Pay setup failed for booking ${booking.id}:`, detail, 'request_id:', e.request_id || null);
     return res.status(502).json({ error: 'Could not start payment. Please try again or contact Staff & Admin.' });
   }
 };
