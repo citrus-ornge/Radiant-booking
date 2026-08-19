@@ -2856,7 +2856,7 @@ function bookingWindowRuleForMember(m) {
   }
   if (m.plan_tier === 'community') {
     const max = new Date(today.getTime() + 7 * 24 * 3600e3);
-    return { allow: d => d >= today && d <= max, multi: false, note: 'Community: book up to 7 days ahead' };
+    return { allow: d => d >= today && d <= max, multi: true, note: 'Community: book up to 7 days ahead — select multiple days to book them together' };
   }
   if (m.plan_tier === 'flex') {
     const max = new Date(today.getTime() + 30 * 24 * 3600e3);
@@ -3659,7 +3659,7 @@ function renderMyBookings() {
   const ddBannerEl = document.getElementById('my-dd-required-banner');
   if (ddBannerEl) {
     const m = state.currentMember;
-    const needsDD = m.user_type === 'practitioner' && ['flex', 'core', 'resident'].includes(m.plan_tier) && m.mandate_status !== 'active';
+    const needsDD = m.user_type === 'practitioner' && ['community', 'flex', 'core', 'resident'].includes(m.plan_tier) && m.mandate_status !== 'active';
     const alreadyShowingPaymentBanner = dueBannerEl && dueBannerEl.style.display === 'block';
     if (needsDD && !alreadyShowingPaymentBanner) {
       const isReservedTier = ['core', 'resident'].includes(m.plan_tier);
@@ -4519,7 +4519,7 @@ async function bootstrapSession(session) {
 // app without deciding — mobile browsers don't reliably distinguish the
 // two) eventually stops being gated on login and only sees the banner.
 function checkDDGateOnLogin(m) {
-  if (m.user_type !== 'practitioner' || !['flex', 'core', 'resident'].includes(m.plan_tier)) return false;
+  if (m.user_type !== 'practitioner' || !['community', 'flex', 'core', 'resident'].includes(m.plan_tier)) return false;
   if (m.mandate_status) return false; // already started (or further) — stop gating
   return (m.dd_prompt_shown_count || 0) < 3;
 }
@@ -4861,7 +4861,7 @@ function showOnboardingDone() {
 
   const m = state.currentMember;
   const infoEl = document.getElementById('onboarding-reserved-slot-info');
-  const ddOutstanding = m && ['flex', 'core', 'resident'].includes(m.plan_tier) && m.mandate_status !== 'active';
+  const ddOutstanding = m && ['community', 'flex', 'core', 'resident'].includes(m.plan_tier) && m.mandate_status !== 'active';
   const ddInProgress = m && ['pending_customer_approval', 'pending_submission', 'submitted'].includes(m.mandate_status);
   const ddNote = ddInProgress
     ? 'Direct Debit submitted and being processed by your bank — usually active within about 1 business day.'

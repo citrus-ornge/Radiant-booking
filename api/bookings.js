@@ -117,11 +117,16 @@ module.exports = async (req, res) => {
     }
 
     // Pricing: figure out what (if anything) this booking should be charged.
-    // - Community: not charged through the app (existing behaviour, unchanged).
+    // - Community and Flex: always a chargeable session (both pay-as-you-go,
+    //   no recurring membership fee — see PLAN_TIER_MONTHLY_PENCE). Rosie,
+    //   19 Aug 2026: Community was previously excluded here ("not charged
+    //   through the app") despite having real brochure rates on the
+    //   Membership & Pricing page the whole time — that exclusion was
+    //   stale, not an actual current policy.
     // - Core/Resident: free if it matches one of their included recurring
-    //   slots for this week; otherwise priced as an extra session like Flex
-    //   would be.
-    // - Flex, and any top-up regardless of tier: always a chargeable session.
+    //   slots for this week; otherwise priced as an extra session like
+    //   Flex/Community would be.
+    // - Any top-up, regardless of tier: always a chargeable session.
     // calculateSessionChargeInPence returns null when the brochure doesn't
     // define a rate for this duration/room-category combo (see pricing.js) —
     // that's routed to 'pending_manual' rather than guessed or charged £0.
@@ -130,7 +135,7 @@ module.exports = async (req, res) => {
 
     const includedInMembership = await isIncludedInMembershipFee(supabase, tierMember, recurringSlots, { room_id, start_time });
 
-    const needsCharge = is_topup || tierMember.plan_tier === 'flex'
+    const needsCharge = is_topup || ['flex', 'community'].includes(tierMember.plan_tier)
       || (['core', 'resident'].includes(tierMember.plan_tier) && !includedInMembership);
 
     if (needsCharge) {
@@ -211,18 +216,15 @@ module.exports = async (req, res) => {
     // 'paid' (or 'failed') once GoCardless actually reports the outcome.
     // A failure here (no mandate yet, GoCardless error, etc.) is logged but
     // never blocks the booking itself — staff can always collect manually.
-    // Flex is excluded here even with an active mandate — team review 19
-    // Aug 2026: "we need to be able to charge for all flex bookings
-    // immediately, NOT DD, as they are an advance booking not a monthly
-    // slot". A Direct Debit charge against a mandate can take a few
-    // business days to actually clear (it's a BACS collection, not an
-    // instant transfer) — fine for Core/Resident's ongoing membership
-    // relationship, but not for a one-off Flex booking that should have
-    // confirmed payment before the room is treated as secured. Flex always
-    // falls through to paymentPending below, which surfaces the same
-    // Payment Required modal (Instant Bank Pay) regardless of whether they
-    // happen to have a mandate on file.
-    if (finalPaymentStatus === 'pending' && tierMember.plan_tier !== 'flex' && tierMember.mandate_status === 'active' && tierMember.gocardless_mandate_id) {
+    // Community and Flex both excluded here even with an active mandate —
+    // same reasoning for both: a DD charge against a mandate is a BACS
+    // collection that can take a few business days to clear, fine for
+    // Core/Resident's ongoing membership relationship, wrong for a one-off
+    // advance booking that should have confirmed payment before the room
+    // is treated as secured. Both always fall through to paymentPending
+    // below, surfacing the Payment Required modal (Instant Bank Pay)
+    // regardless of whether they happen to have a mandate on file.
+    if (finalPaymentStatus === 'pending' && !['flex', 'community'].includes(tierMember.plan_tier) && tierMember.mandate_status === 'active' && tierMember.gocardless_mandate_id) {
       try {
         const { getGoCardlessClient, createOneOffPayment } = require('./_lib/gocardless');
         const client = getGoCardlessClient();
