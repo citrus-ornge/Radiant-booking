@@ -2531,6 +2531,19 @@ textarea.form-input { resize: vertical; }
   </div>
 </div>
 
+<div class="modal-overlay" id="manual-invoice-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div><div class="modal-title">Booking confirmed — price to be confirmed</div><div style="font-size:13px;color:var(--r-warm-gray);margin-top:3px;">This session isn't in the standard rate table</div></div>
+      <button class="close-btn" onclick="closeModal('manual-invoice-modal')">✕</button>
+    </div>
+    <div class="modal-body" id="manual-invoice-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="closeModal('manual-invoice-modal'); showClientView('my-bookings');">Got it</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="cal-modal">
   <div class="modal">
     <div class="modal-header">
@@ -6329,10 +6342,11 @@ async function confirmClientBooking() {
   btn.textContent = dates.length > 1 ? `Booking ${dates.length} days…` : 'Booking…';
 
   const room = state.rooms.find(r => r.id === selectedClientRoomId);
-  let succeeded = 0, failed = 0, paymentPending = 0, chargeAttempted = 0;
+  let succeeded = 0, failed = 0, paymentPending = 0, chargeAttempted = 0, manualInvoice = 0;
   const errors = [];
   let firstBooking = null;
   let unpaidBooking = null; // first booking still needing payment, no mandate charge attempted
+  let manualInvoiceBooking = null; // first booking priced null — see pricing.js's documented gap
 
   for (const date of dates) {
     const start = new Date(`${date}T${selectedClientTime}:00`);
@@ -6359,6 +6373,17 @@ async function confirmClientBooking() {
           paymentPending++;
           if (!unpaidBooking) unpaidBooking = result.booking;
         }
+      } else if (result.booking && result.booking.payment_status === 'pending_manual') {
+        // pricing.js couldn't find a brochure rate for this duration/room
+        // combo (documented gap: 3hr and full-day sessions, or a room with
+        // no pricing_category set) and deliberately didn't guess a price.
+        // This used to be entirely silent to the member — booking succeeded
+        // looking identical to a free one, with the only trace being a
+        // small "Manual invoice" badge buried in My Bookings later. Real
+        // case: a room missing its pricing_category produced exactly this,
+        // unnoticed until Staff & Admin went looking for it directly.
+        manualInvoice++;
+        if (!manualInvoiceBooking) manualInvoiceBooking = result.booking;
       }
       if (!firstBooking) firstBooking = { id: result.booking && result.booking.id, roomName: room ? room.name : 'Room', start: start.toISOString(), end: end.toISOString(), notes };
     } catch (e) {
@@ -6378,6 +6403,23 @@ async function confirmClientBooking() {
   // Bank Pay is what actually lets them use the room today).
   if (unpaidBooking) {
     showPaymentRequiredModal(unpaidBooking, paymentPending - 1);
+    btn.disabled = false;
+    btn.textContent = 'Confirm Booking';
+    return;
+  }
+
+  // No fixed-price booking pending, but one or more sessions couldn't be
+  // priced at all (see the comment where manualInvoice is incremented
+  // above) — tell the member explicitly rather than letting it pass
+  // silently. Checked after unpaidBooking so a real payable amount always
+  // takes priority over this less-common case.
+  if (manualInvoiceBooking) {
+    const roomName = manualInvoiceBooking.room ? manualInvoiceBooking.room.name : 'this room';
+    document.getElementById('manual-invoice-body').innerHTML = `
+      <p style="margin:0 0 14px;font-size:14px;">Your booking for <strong>${esc(roomName)}</strong> is confirmed${manualInvoice > 1 ? ` (plus ${manualInvoice - 1} more like it)` : ''} — but this session's duration isn't in the standard rate table, so we can't charge it automatically.</p>
+      <p style="margin:0;font-size:13px;color:var(--r-warm-gray);">Staff & Admin will follow up with the price and arrange payment separately — no action needed from you right now.</p>
+    `;
+    openModal('manual-invoice-modal');
     btn.disabled = false;
     btn.textContent = 'Confirm Booking';
     return;
