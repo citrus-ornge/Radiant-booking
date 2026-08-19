@@ -23,9 +23,24 @@ module.exports = async (req, res) => {
         if (member.user_type !== 'administrator') {
           return res.status(403).json({ error: 'Only Staff & Admin can view another member\'s documents' });
         }
-        const { data: target, error: targetErr } = await supabase.from('members').select('id, user_type').eq('id', req.query.member_id).maybeSingle();
+        const { data: target, error: targetErr } = await supabase
+          .from('members')
+          .select('id, user_type, first_name, last_name, business_name, company_address, company_number, plan_tier')
+          .eq('id', req.query.member_id)
+          .maybeSingle();
         if (targetErr || !target) return res.status(404).json({ error: 'Member not found' });
         targetMember = target;
+      }
+
+      // For resolveDocumentContent's {{room_type}} token — member (from
+      // requireAuth) already has every other field it needs via select('*'),
+      // but not recurring slots, which live in a separate table.
+      if (['core', 'resident'].includes(targetMember.plan_tier)) {
+        const { data: slots } = await supabase
+          .from('member_recurring_slots')
+          .select('room:rooms(name)')
+          .eq('member_id', targetMember.id);
+        targetMember.recurring_slots = slots || [];
       }
 
       const { data: docs, error } = await supabase
@@ -42,9 +57,14 @@ module.exports = async (req, res) => {
         .eq('member_id', targetMember.id);
       if (sigErr) return res.status(500).json({ error: sigErr.message });
 
+      const { resolveDocumentContent } = require('./_lib/documentTemplate');
       const withStatus = docs.map(d => {
         const sig = sigs.find(s => s.document_id === d.id && s.version_signed === d.version && s.status === 'signed');
-        return { ...d, signed: !!sig, signed_at: sig ? sig.signed_at : null, signature_name: sig ? sig.signature_name : null };
+        return {
+          ...d,
+          resolved_content: resolveDocumentContent(d.content, targetMember),
+          signed: !!sig, signed_at: sig ? sig.signed_at : null, signature_name: sig ? sig.signature_name : null,
+        };
       });
 
       return res.status(200).json({ documents: withStatus });
@@ -60,6 +80,19 @@ module.exports = async (req, res) => {
       const { data: doc, error: docErr } = await supabase.from('documents').select('*').eq('id', document_id).single();
       if (docErr) return res.status(404).json({ error: 'Document not found' });
 
+      // member (from requireAuth) has everything resolveDocumentContent
+      // needs except recurring slots — same as the GET path above, only
+      // relevant for Core/Resident's {{room_type}}.
+      if (['core', 'resident'].includes(member.plan_tier)) {
+        const { data: slots } = await supabase
+          .from('member_recurring_slots')
+          .select('room:rooms(name)')
+          .eq('member_id', member.id);
+        member.recurring_slots = slots || [];
+      }
+      const { resolveDocumentContent } = require('./_lib/documentTemplate');
+      const resolvedContent = resolveDocumentContent(doc.content, member);
+
       const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket?.remoteAddress || null;
 
       const { data: sig, error } = await supabase
@@ -67,7 +100,10 @@ module.exports = async (req, res) => {
         .upsert({
           document_id: doc.id, member_id: member.id, version_signed: doc.version,
           signature_name: signature_name.trim(), ip_address: ip, status: 'signed',
-          title_snapshot: doc.title, content_snapshot: doc.content,
+          // content_snapshot is the permanent historical record of what was
+          // actually agreed to — must be the resolved text (their real
+          // name/tier/business details filled in), never the raw template.
+          title_snapshot: doc.title, content_snapshot: resolvedContent,
         }, { onConflict: 'document_id,member_id,version_signed' })
         .select()
         .single();
