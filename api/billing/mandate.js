@@ -43,14 +43,17 @@ module.exports = async (req, res) => {
     return res.status(503).json({ error: 'Payments are not configured yet. Please contact Staff & Admin.' });
   }
 
+  let stage = 'customer';
   try {
     const customerId = await getOrCreateCustomer(supabase, client, member);
 
+    stage = 'billing_request';
     const billingRequest = await client.billingRequests.create({
       mandate_request: { scheme: 'bacs' },
       links: { customer: customerId },
     });
 
+    stage = 'billing_request_flow';
     const origin = req.headers.origin || `https://${req.headers.host}`;
     const billingRequestFlow = await client.billingRequestFlows.create({
       links: { billing_request: billingRequest.id },
@@ -99,10 +102,17 @@ module.exports = async (req, res) => {
     // exact failed request on their end instantly instead of us describing
     // it to them — found (not previously captured) while chasing the real
     // 'Forbidden request' error on the live account.
+    //
+    // `stage` matters too: this whole block covers THREE separate API calls
+    // (create customer -> create billing request -> create billing request
+    // flow), and until now they all shared one catch with no way to tell
+    // which one actually failed. Assumed it was billing request creation
+    // specifically while chasing this — that was a guess, not something
+    // confirmed. Now it's explicit.
     const detail = (e.errors && e.errors.length)
       ? e.errors.map(x => [x.field, x.message || x.reason].filter(Boolean).join(': ')).join('; ')
       : e.message;
-    console.error('GoCardless mandate setup failed:', detail, 'request_id:', e.request_id || null, JSON.stringify(e.errors || null));
+    console.error(`GoCardless mandate setup failed at stage '${stage}':`, detail, 'request_id:', e.request_id || null, JSON.stringify(e.errors || null));
     return res.status(502).json({ error: 'Could not start Direct Debit setup. Please try again or contact Staff & Admin.' });
   }
 };
