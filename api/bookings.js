@@ -53,6 +53,17 @@ module.exports = async (req, res) => {
       return res.status(403).json({ error: 'You can only create bookings for yourself' });
     }
 
+    // Admin-only rooms (e.g. Aesthetics — team review 19 Aug 2026): the
+    // room stays visible in the self-service list for transparency, but
+    // only Staff & Admin can actually complete a booking for it. This is
+    // the authoritative check; the client also hides the option to select
+    // it as a courtesy so people don't hit this error in the first place.
+    const { data: roomCheck, error: roomCheckErr } = await supabase.from('rooms').select('name, admin_only').eq('id', room_id).maybeSingle();
+    if (roomCheckErr) return res.status(500).json({ error: roomCheckErr.message });
+    if (roomCheck && roomCheck.admin_only && requester.user_type !== 'administrator') {
+      return res.status(403).json({ error: `${roomCheck.name} is reserved for Staff & Admin — contact them if you need this room.` });
+    }
+
     // Top-up rule: a 1-hour booking can never stand alone — it must be
     // attached to an existing (non-cancelled) booking belonging to the same
     // member. Top-ups are always a chargeable session (see pricing below).

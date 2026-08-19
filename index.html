@@ -3142,6 +3142,7 @@ function renderBookingsTable() {
         <td>${paymentBadge(b)}</td>
         <td style="display:flex;gap:6px;flex-wrap:wrap;">
           ${canNotify ? `<button class="btn btn-outline btn-sm" onclick="notifyPatientArrived('${b.id}')" title="Sends an urgent message + email to ${esc(b.member.first_name)}">🔔 Patient arrived</button>` : ''}
+          ${paymentActionButtons(b)}
           ${b.status !== 'cancelled'
             ? `<button class="btn btn-ghost btn-sm" onclick="cancelBooking('${b.id}')">Cancel</button>`
             : '<span style="color:var(--r-warm-gray);font-size:12.5px;">—</span>'}
@@ -3195,6 +3196,50 @@ function paymentBadge(b) {
   if (b.payment_status === 'pending_manual') return `<span class="badge badge-gray">Manual invoice${amount ? '' : ''}</span>`;
   if (b.payment_status === 'pending') return `<span class="badge badge-gold">Pending${amount ? ' · ' + amount : ''}</span>`;
   return '<span style="color:var(--r-warm-gray);font-size:12px;">—</span>';
+}
+
+// "Retry charge" and "Mark as paid" — team review 19 Aug 2026: "there needs
+// to be a manual force payment function" for people who owe money (a failed
+// Direct Debit, or a booking that was never charged) plus a way to record
+// payment taken outside the app (cash/card in person). Shown for any
+// booking that genuinely still needs resolving; hidden once paid, or when
+// no payment is required at all.
+function paymentActionButtons(b) {
+  if (['paid', 'not_required'].includes(b.payment_status)) return '';
+  const retryBtn = b.payment_status !== 'pending_manual'
+    ? `<button class="btn btn-outline btn-sm" onclick="retryBookingCharge('${b.id}')" title="Re-attempt the GoCardless charge against this member's current mandate">↻ Retry charge</button>`
+    : '';
+  return `${retryBtn}<button class="btn btn-outline btn-sm" onclick="markBookingPaid('${b.id}', ${b.amount_pence == null})">✓ Mark as paid</button>`;
+}
+
+async function retryBookingCharge(bookingId) {
+  if (!confirm('Re-attempt the Direct Debit charge for this booking now?')) return;
+  try {
+    await api('/billing/retry-charge', { method: 'POST', body: JSON.stringify({ booking_id: bookingId }) });
+    showToast('✓ Charge retried — payment status will update once GoCardless confirms it');
+    await loadAppData();
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  }
+}
+
+async function markBookingPaid(bookingId, needsAmount) {
+  let amount_pence;
+  if (needsAmount) {
+    const input = prompt('This booking has no price on record. Enter the amount collected, in pounds (e.g. 45.00):');
+    if (input === null) return;
+    const pounds = parseFloat(input);
+    if (Number.isNaN(pounds) || pounds < 0) { showToast('⚠ Enter a valid amount'); return; }
+    amount_pence = Math.round(pounds * 100);
+  }
+  if (!confirm('Mark this booking as paid? This does not process any payment — only use this once you\'ve actually collected it (cash, card in person, etc).')) return;
+  try {
+    await api('/billing/mark-paid', { method: 'POST', body: JSON.stringify({ booking_id: bookingId, ...(amount_pence != null ? { amount_pence } : {}) }) });
+    showToast('✓ Marked as paid');
+    await loadAppData();
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  }
 }
 
 function openManageMember(id) {
@@ -3820,12 +3865,23 @@ function renderBookRoomList() {
     list.innerHTML = `<div style="color:var(--r-warm-gray);padding:8px;">No rooms available.</div>`;
     return;
   }
-  list.innerHTML = state.rooms.map(r => `
-    <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--r-stone);border-radius:10px;cursor:pointer;transition:all 0.15s;" onmouseover="this.style.borderColor='var(--r-gold)'" onmouseout="this.style.borderColor='var(--r-stone)'" onclick="selectRoomOption(this,'${esc(r.name)}','${r.id}')">
+  const isStaffAdmin = state.currentMember && state.currentMember.user_type === 'administrator';
+  list.innerHTML = state.rooms.map(r => {
+    // Admin-only rooms (e.g. Aesthetics) stay visible for transparency —
+    // hiding it entirely would just make people wonder where it went —
+    // but a non-admin can't select it. api/bookings.js enforces this for
+    // real; this is just so they see why before they try.
+    const blocked = r.admin_only && !isStaffAdmin;
+    const clickHandler = blocked
+      ? `showToast('⚠ ${esc(r.name)} is reserved for Staff & Admin — contact them if you need this room')`
+      : `selectRoomOption(this,'${esc(r.name)}','${r.id}')`;
+    return `
+    <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--r-stone);border-radius:10px;cursor:pointer;transition:all 0.15s;${blocked ? 'opacity:0.55;' : ''}" ${blocked ? '' : `onmouseover="this.style.borderColor='var(--r-gold)'" onmouseout="this.style.borderColor='var(--r-stone)'"`} onclick="${clickHandler}">
       <div class="room-monogram" style="width:34px;height:34px;font-size:14px;">${esc((r.name || '?').charAt(0))}</div>
       <div style="flex:1;"><div style="font-size:13.5px;font-weight:500;">${esc(r.name)}</div><div style="font-size:12px;color:var(--r-warm-gray);">Capacity ${esc(r.capacity)} · ${esc(r.floor || '')}</div></div>
-      <span class="badge badge-green">Free</span>
-    </div>`).join('');
+      ${blocked ? '<span class="badge badge-gray">Admin only</span>' : '<span class="badge badge-green">Free</span>'}
+    </div>`;
+  }).join('');
 }
 
 function timeAgo(iso) {
@@ -4573,17 +4629,11 @@ async function loadOnboardingDocuments() {
 // reading speed estimate; floored at 8s so even a very short document
 // still gets a genuine moment before it can be signed.
 function estimateReadingSeconds(text) {
-  const words = (text || '').trim().split(/\s+/).filter(Boolean).length;
-  // 250 wpm (a genuine average adult reading speed, not a stretch) rather
-  // than 200 — and capped at 25s regardless of length. With the current
-  // 15 policy documents (179-508 words each), someone needing all of them
-  // (Staff & Admin) previously faced up to ~40 minutes worst case at
-  // 200wpm/no-cap — genuinely too much for a real onboarding. Capped at
-  // 25s/doc keeps that same worst case to ~6 minutes, while still being
-  // meaningfully longer than the 1-2 second flick-scroll that prompted
-  // this in the first place. Floored at 5s so a future very short document
-  // still gets a genuine moment.
-  return Math.min(Math.max(Math.round((words / 250) * 60), 5), 25);
+  // Was adaptive (up to 25s, scaled by word count) — team review (19 Aug
+  // 2026) decided flat 5s per document for every document, regardless of
+  // length, to keep onboarding quick. `text` param kept (unused) so call
+  // sites don't need touching if this changes again.
+  return 5;
 }
 
 let onboardingReadGate = null;
