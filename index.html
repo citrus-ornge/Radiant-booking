@@ -4496,7 +4496,16 @@ async function loadOnboardingDocuments() {
 // still gets a genuine moment before it can be signed.
 function estimateReadingSeconds(text) {
   const words = (text || '').trim().split(/\s+/).filter(Boolean).length;
-  return Math.max(Math.round((words / 200) * 60), 8);
+  // 250 wpm (a genuine average adult reading speed, not a stretch) rather
+  // than 200 — and capped at 25s regardless of length. With the current
+  // 15 policy documents (179-508 words each), someone needing all of them
+  // (Staff & Admin) previously faced up to ~40 minutes worst case at
+  // 200wpm/no-cap — genuinely too much for a real onboarding. Capped at
+  // 25s/doc keeps that same worst case to ~6 minutes, while still being
+  // meaningfully longer than the 1-2 second flick-scroll that prompted
+  // this in the first place. Floored at 5s so a future very short document
+  // still gets a genuine moment.
+  return Math.min(Math.max(Math.round((words / 250) * 60), 5), 25);
 }
 
 let onboardingReadGate = null;
