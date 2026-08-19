@@ -54,20 +54,42 @@ function readRawBody(req) {
   });
 }
 
-// Returns the member's GoCardless customer id, creating one (and persisting
-// it) if they don't have one yet. Shared by mandate setup and Instant Bank
-// Pay, both of which need a customer to attach the billing request to.
-async function getOrCreateCustomer(supabase, client, member) {
+// Builds the `links` object for a Billing Request create call. Returns
+// undefined (omit `links` entirely) when the member has no GoCardless
+// customer yet, rather than calling `client.customers.create()` first.
+//
+// That direct Customer:Create call is what used to live here (as
+// getOrCreateCustomer) — and it's exactly the endpoint GoCardless's live
+// environment restricts unless your payment pages are scheme-rules
+// approved (confirmed by GoCardless support, ticket #4423820, after our
+// mandate setup started 403ing on live: "the 403 error you are getting is
+// due to the POST /Customer endpoint being restricted via the API... start
+// the flow by creating a billing request [and] you can call the
+// collect_customer_details action to create a customer"). Omitting `links`
+// on Billing Request creation makes GoCardless create a blank customer as
+// part of that (unrestricted) call instead — see persistNewCustomerId below
+// for picking its id up afterwards.
+function customerLinksFor(member) {
+  return member.gocardless_customer_id ? { customer: member.gocardless_customer_id } : undefined;
+}
+
+// After creating a Billing Request for a member with no gocardless_customer_id
+// yet, GoCardless will have auto-created a blank customer as part of that
+// call — its id comes back in billingRequest.resources.customer.id (see the
+// gocardless-nodejs BillingRequestResourcesCustomer type). Persist it
+// immediately, synchronously, right here — not just when the mandate.active
+// webhook eventually arrives — because the mandate webhook handler
+// (api/webhooks/gocardless.js) matches incoming events back to a member via
+// `.eq('gocardless_customer_id', links.customer)`. If nothing had saved this
+// yet, that lookup would find no member and silently drop every mandate
+// status update for a first-time customer.
+async function persistNewCustomerId(supabase, member, billingRequest) {
   if (member.gocardless_customer_id) return member.gocardless_customer_id;
-  const customer = await client.customers.create({
-    email: member.email,
-    given_name: member.first_name || undefined,
-    family_name: member.last_name || undefined,
-    country_code: 'GB',
-  });
-  const { error } = await supabase.from('members').update({ gocardless_customer_id: customer.id }).eq('id', member.id);
-  if (error) throw new Error(`Saved GoCardless customer but failed to store it: ${error.message}`);
-  return customer.id;
+  const newId = billingRequest.resources && billingRequest.resources.customer && billingRequest.resources.customer.id;
+  if (!newId) return null;
+  const { error } = await supabase.from('members').update({ gocardless_customer_id: newId }).eq('id', member.id);
+  if (error) throw new Error(`Billing request created (customer ${newId}) but failed to save it: ${error.message}`);
+  return newId;
 }
 
 // Creates a one-off Direct Debit payment against an existing active mandate
@@ -124,4 +146,4 @@ async function ensureMembershipSubscription(supabase, member) {
   }
 }
 
-module.exports = { getGoCardlessClient, PLAN_TIER_MONTHLY_PENCE, readRawBody, createOneOffPayment, createMembershipSubscription, getOrCreateCustomer, ensureMembershipSubscription };
+module.exports = { getGoCardlessClient, PLAN_TIER_MONTHLY_PENCE, readRawBody, createOneOffPayment, createMembershipSubscription, customerLinksFor, persistNewCustomerId, ensureMembershipSubscription };

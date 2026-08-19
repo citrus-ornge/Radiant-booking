@@ -62,10 +62,11 @@ module.exports = async (req, res) => {
     return res.status(400).json({ error: 'A payment has already been started for this booking.' });
   }
 
-  let client, getOrCreateCustomer;
+  let client, customerLinksFor, persistNewCustomerId;
   try {
     const gc = require('../_lib/gocardless');
-    getOrCreateCustomer = gc.getOrCreateCustomer;
+    customerLinksFor = gc.customerLinksFor;
+    persistNewCustomerId = gc.persistNewCustomerId;
     client = gc.getGoCardlessClient();
   } catch (e) {
     console.error('Failed to load/init GoCardless client:', e.message);
@@ -73,8 +74,11 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const customerId = await getOrCreateCustomer(supabase, client, member);
-
+    // See customerLinksFor's comment in _lib/gocardless.js — no separate
+    // "create the customer first" call (that's the restricted live
+    // endpoint GoCardless support identified in ticket #4423820). Link an
+    // existing customer if we have one; otherwise GoCardless creates one as
+    // part of this Billing Request, and persistNewCustomerId picks it up.
     const billingRequestParams = {
       payment_request: {
         amount: String(booking.amount_pence),
@@ -82,10 +86,12 @@ module.exports = async (req, res) => {
         scheme: 'faster_payments',
         description: `${booking.room ? booking.room.name : 'Room'} booking — ${new Date(booking.start_time).toLocaleDateString('en-GB')}`,
       },
-      links: { customer: customerId },
     };
+    const links = customerLinksFor(member);
+    if (links) billingRequestParams.links = links;
 
     const billingRequest = await client.billingRequests.create(billingRequestParams);
+    await persistNewCustomerId(supabase, member, billingRequest);
 
     const origin = req.headers.origin || `https://${req.headers.host}`;
     const billingRequestFlow = await client.billingRequestFlows.create({

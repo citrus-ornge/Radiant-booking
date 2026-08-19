@@ -8,9 +8,10 @@ const { logAudit } = require('../_lib/audit');
 // hit this file before even reaching the GoCardless-specific code.
 
 // POST /api/billing/mandate
-// Starts (or restarts) Direct Debit setup for the calling member: creates a
-// GoCardless customer if they don't have one yet, opens a Billing Request for
-// a mandate, wraps it in a Billing Request Flow, and returns the hosted
+// Starts (or restarts) Direct Debit setup for the calling member: opens a
+// Billing Request for a mandate (linking their existing GoCardless customer
+// if they have one, otherwise letting GoCardless create one as part of the
+// same call), wraps it in a Billing Request Flow, and returns the hosted
 // authorisation_url for the browser to redirect the member to. GoCardless's
 // hosted flow collects/confirms bank details and handles bank authorisation;
 // completion is reported back to us asynchronously via the webhook in
@@ -33,25 +34,31 @@ module.exports = async (req, res) => {
   }
 
   const supabase = getSupabase();
-  let client, getOrCreateCustomer;
+  let client, customerLinksFor, persistNewCustomerId;
   try {
     const gc = require('../_lib/gocardless');
-    getOrCreateCustomer = gc.getOrCreateCustomer;
+    customerLinksFor = gc.customerLinksFor;
+    persistNewCustomerId = gc.persistNewCustomerId;
     client = gc.getGoCardlessClient();
   } catch (e) {
     console.error('Failed to load/init GoCardless client:', e.message);
     return res.status(503).json({ error: 'Payments are not configured yet. Please contact Staff & Admin.' });
   }
 
-  let stage = 'customer';
+  let stage = 'billing_request';
   try {
-    const customerId = await getOrCreateCustomer(supabase, client, member);
-
-    stage = 'billing_request';
-    const billingRequest = await client.billingRequests.create({
-      mandate_request: { scheme: 'bacs' },
-      links: { customer: customerId },
-    });
+    // No separate "create the customer first" step — see customerLinksFor's
+    // comment in _lib/gocardless.js for why (that direct Customer:Create
+    // call is restricted on live GoCardless accounts pre-approval, and was
+    // the actual cause of every 403 we chased down before GoCardless
+    // support confirmed it, ticket #4423820). If the member already has a
+    // customer, link it; otherwise GoCardless creates one as part of this
+    // call, and we pick its id up via persistNewCustomerId right below.
+    const billingRequestParams = { mandate_request: { scheme: 'bacs' } };
+    const links = customerLinksFor(member);
+    if (links) billingRequestParams.links = links;
+    const billingRequest = await client.billingRequests.create(billingRequestParams);
+    await persistNewCustomerId(supabase, member, billingRequest);
 
     stage = 'billing_request_flow';
     const origin = req.headers.origin || `https://${req.headers.host}`;
@@ -103,12 +110,12 @@ module.exports = async (req, res) => {
     // it to them — found (not previously captured) while chasing the real
     // 'Forbidden request' error on the live account.
     //
-    // `stage` matters too: this whole block covers THREE separate API calls
-    // (create customer -> create billing request -> create billing request
-    // flow), and until now they all shared one catch with no way to tell
-    // which one actually failed. Assumed it was billing request creation
-    // specifically while chasing this — that was a guess, not something
-    // confirmed. Now it's explicit.
+    // `stage` matters too: this whole block covers TWO separate API calls
+    // (create billing request -> create billing request flow), and until
+    // now they all shared one catch with no way to tell which one actually
+    // failed. Assumed it was billing request creation specifically while
+    // chasing this — that was a guess, not something confirmed. Now it's
+    // explicit.
     const detail = (e.errors && e.errors.length)
       ? e.errors.map(x => [x.field, x.message || x.reason].filter(Boolean).join(': ')).join('; ')
       : e.message;
