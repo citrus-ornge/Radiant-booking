@@ -143,7 +143,7 @@ async function handleEvent(supabase, event) {
       .from('members')
       .update(updates)
       .eq('gocardless_customer_id', links.customer)
-      .select('id, first_name, last_name, email, plan_tier, gocardless_subscription_id, gocardless_mandate_id')
+      .select('id, first_name, last_name, email, plan_tier, custom_monthly_fee_pence, gocardless_subscription_id, gocardless_mandate_id')
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!member) {

@@ -1409,6 +1409,20 @@ textarea.form-input { resize: vertical; }
                   <option value="resident">Resident</option>
                 </select>
               </div>
+              <div class="form-row" id="invite-fee-row" style="display:none;background:var(--r-surface2);border-radius:8px;padding:12px;">
+                <label class="form-label" style="margin-bottom:4px;">Monthly Membership Fee</label>
+                <p style="font-size:12px;color:var(--r-warm-gray);margin:0 0 8px;">Standard rate for this tier is shown below — override it only for an agreed special deal.</p>
+                <div class="form-two">
+                  <div class="form-row" style="margin:0;">
+                    <label class="form-label" style="font-weight:400;">Standard rate</label>
+                    <input class="form-input" id="invite-fee-standard" disabled style="opacity:0.7;">
+                  </div>
+                  <div class="form-row" style="margin:0;">
+                    <label class="form-label" style="font-weight:400;">Override <span style="color:var(--r-warm-gray);">(optional, in £)</span></label>
+                    <input class="form-input" id="invite-fee-override" type="number" min="0" step="0.01" placeholder="Leave blank to use standard rate">
+                  </div>
+                </div>
+              </div>
               <div class="form-row" id="invite-reserved-slot-row" style="display:none;background:var(--r-surface2);border-radius:8px;padding:12px;">
                 <label class="form-label" style="margin-bottom:8px;">Agreed Recurring Session(s) (required for Core/Resident)</label>
                 <p style="font-size:12px;color:var(--r-warm-gray);margin:0 0 8px;">Core and Resident members book fixed slot(s) for their whole term rather than choosing dates themselves — agree the day(s), room(s) and time(s) with them before sending this invite. A member can have more than one, e.g. a full day Monday plus a half day Friday.</p>
@@ -1771,8 +1785,9 @@ textarea.form-input { resize: vertical; }
                 </div>
               </div>
               <div class="form-row"><label class="form-label">Duration</label>
-                <select class="form-input" id="client-duration" onchange="refreshClientTimeSlotAvailability()"><option value="1">1 hour</option><option value="2" selected>2 hours</option><option value="3">3 hours</option><option value="4">Half day (4hrs)</option><option value="8">Full day</option></select>
+                <select class="form-input" id="client-duration" onchange="refreshClientTimeSlotAvailability();updateClientPricePreview();"><option value="1">1 hour</option><option value="2" selected>2 hours</option><option value="3">3 hours</option><option value="4">Half day (4hrs)</option><option value="8">Full day</option></select>
               </div>
+              <div class="form-row" id="client-price-preview" style="display:none;background:var(--r-surface2);border-radius:8px;padding:10px 14px;font-size:13px;"></div>
               <div class="form-row"><label class="form-label">Notes</label><textarea class="form-input" id="client-notes" rows="2" placeholder="Any special requirements…"></textarea></div>
               <div class="form-row" style="background:var(--r-surface2);border-radius:8px;padding:12px;">
                 <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:500;cursor:pointer;margin-bottom:2px;">
@@ -3067,6 +3082,28 @@ function statusBadge(status) {
   const map = { confirmed: 'badge-green', pending: 'badge-gold', cancelled: 'badge-red' };
   return `<span class="badge ${map[status] || 'badge-gray'}">${status.charAt(0).toUpperCase() + status.slice(1)}</span>`;
 }
+
+// Cancellation tracking (team review 19 Aug 2026) — who cancelled, when
+// relative to the booking, and for Flex specifically whether it landed
+// inside or outside the 7-day notice window. This is display only: no
+// refund is triggered automatically anywhere in the app — Staff & Admin
+// still go and do that manually in the GoCardless dashboard. This just
+// means they don't have to reconstruct the timing from memory or dig
+// through the audit log to decide whether one's owed.
+function cancellationDetail(b) {
+  if (b.status !== 'cancelled' || !b.cancelled_at) return '';
+  const canceller = state.members && state.members.find(m => m.id === b.cancelled_by);
+  const who = canceller ? `${canceller.first_name || ''} ${canceller.last_name || ''}`.trim() || canceller.email : null;
+  const parts = [`Cancelled ${fmtDateTime(b.cancelled_at)}`];
+  if (who) parts.push(`by ${esc(who)}`);
+  let windowNote = '';
+  if (b.member && b.member.plan_tier === 'flex' && b.cancellation_within_notice_window != null) {
+    windowNote = b.cancellation_within_notice_window
+      ? ' · <span style="color:var(--r-green);">✓ Within 7-day notice</span>'
+      : ' · <span style="color:var(--r-red);">⚠ Outside 7-day notice</span>';
+  }
+  return `<div style="font-size:11px;color:var(--r-warm-gray);margin-top:3px;">${esc(parts.join(' '))}${windowNote}</div>`;
+}
 function roleLabel(userType, isOwner) {
   if (isOwner) return 'Owner (Super Admin)';
   const map = { administrator: 'Staff & Admin', practitioner: 'Practitioner', member: 'Member', guest: 'Guest' };
@@ -3150,7 +3187,7 @@ function renderBookingsTable() {
         <td>${b.member ? typeBadge(b.member.user_type, b.member.is_owner) : '—'}</td>
         <td>${fmtDateTime(b.start_time)}</td>
         <td>${durationLabel(b.start_time, b.end_time)}</td>
-        <td>${statusBadge(b.status)}</td>
+        <td>${statusBadge(b.status)}${cancellationDetail(b)}</td>
         <td>${paymentBadge(b)}</td>
         <td style="display:flex;gap:6px;flex-wrap:wrap;">
           ${canNotify ? `<button class="btn btn-outline btn-sm" onclick="notifyPatientArrived('${b.id}')" title="Sends an urgent message + email to ${esc(b.member.first_name)}">🔔 Patient arrived</button>` : ''}
@@ -6590,6 +6627,14 @@ function toggleInviteOwnerRow(prefix) {
   }
 }
 
+// Mirrors PLAN_TIER_MONTHLY_PENCE in api/_lib/gocardless.js — keep in sync
+// by hand if the brochure rate changes. Display-only, for showing the
+// standard rate next to the override field when inviting a Core/Resident
+// member; the server never trusts anything read from here — the actual
+// charge always uses its own value (or a per-member override) at billing
+// time.
+const PLAN_TIER_MONTHLY_PENCE_DISPLAY = { core: 24900, resident: 44900 };
+
 function toggleInviteReservedRow() {
   const bulk = document.getElementById('invite-bulk-toggle').checked;
   const tier = document.getElementById('invite-tier').value;
@@ -6601,6 +6646,20 @@ function toggleInviteReservedRow() {
   const showReserved = ['core', 'resident'].includes(tier) && !bulk;
   if (row) row.style.display = showReserved ? 'block' : 'none';
   if (showReserved) renderPendingInviteSlots();
+
+  // Fee override (team review 19 Aug 2026: "one or two people have
+  // special deals") — same eligibility as the reserved-slot row (only
+  // Core/Resident have a monthly fee at all; bulk invites are for
+  // multiple people at once, not a spot for a one-off special deal).
+  const feeRow = document.getElementById('invite-fee-row');
+  if (feeRow) {
+    feeRow.style.display = showReserved ? 'block' : 'none';
+    if (showReserved) {
+      const standardPence = PLAN_TIER_MONTHLY_PENCE_DISPLAY[tier];
+      document.getElementById('invite-fee-standard').value = standardPence != null ? `£${(standardPence / 100).toFixed(2)} / month` : '—';
+      document.getElementById('invite-fee-override').value = '';
+    }
+  }
 }
 
 async function sendInviteModal() {
@@ -6728,6 +6787,19 @@ async function sendInviteFromPage() {
     return;
   }
 
+  // Special-deal override — only read/validated when the row's actually
+  // showing (Core/Resident, non-bulk); a blank field means "use the
+  // standard rate", not "override to £0".
+  let custom_monthly_fee_pence;
+  if (!bulk && lockedTiers.includes(plan_tier)) {
+    const overrideRaw = document.getElementById('invite-fee-override').value;
+    if (overrideRaw.trim() !== '') {
+      const pounds = parseFloat(overrideRaw);
+      if (Number.isNaN(pounds) || pounds < 0) { showToast('⚠ Enter a valid override amount, or leave it blank to use the standard rate'); return; }
+      custom_monthly_fee_pence = Math.round(pounds * 100);
+    }
+  }
+
   if (bulk) {
     const raw = document.getElementById('invite-bulk-emails').value;
     const emails = raw.split('\n').map(e => e.trim()).filter(Boolean);
@@ -6750,7 +6822,7 @@ async function sendInviteFromPage() {
   try {
     const result = await api('/invites', {
       method: 'POST',
-      body: JSON.stringify({ email, user_type, personal_note, is_owner, plan_tier, reserved_slots: pendingInviteSlots }),
+      body: JSON.stringify({ email, user_type, personal_note, is_owner, plan_tier, reserved_slots: pendingInviteSlots, ...(custom_monthly_fee_pence !== undefined ? { custom_monthly_fee_pence } : {}) }),
     });
     showToast(result.email_sent ? `✓ Invite sent to ${email}` : `✓ Invite created for ${email} (email not sent)`);
     document.getElementById('invite-email').value = '';
@@ -6951,7 +7023,54 @@ function selectRoomOption(el, name, roomId) {
   el.style.borderColor = 'var(--r-gold)';
   el.style.background = 'rgba(201,169,110,0.05)';
   showToast(name + ' selected');
+  updateClientPricePreview();
 }
+
+// Team review 19 Aug 2026: "we need to be showing the cost of bookings at
+// confirmation stages" — price was previously only ever shown AFTER
+// booking (the Payment Required modal), never before. Reuses TIER_DATA's
+// existing rate strings (already shown on the Membership & Pricing page)
+// rather than duplicating a second pence-based table client-side. This is
+// a preview only — the authoritative price is always calculated
+// server-side at booking time (see api/_lib/pricing.js); this can't
+// replicate that exactly for Core/Resident (whether a given day/room/time
+// matches their included slot depends on their actual weekly booking
+// history, which isn't available here), so it's phrased as "likely" for
+// them rather than asserted as fact.
+function updateClientPricePreview() {
+  const el = document.getElementById('client-price-preview');
+  if (!el) return;
+  const m = state.currentMember;
+  if (!m || !selectedClientRoomId) { el.style.display = 'none'; return; }
+
+  const room = state.rooms.find(r => r.id === selectedClientRoomId);
+  const tier = m.plan_tier;
+  const tierData = tier && TIER_DATA[tier];
+  if (!room || !tierData) { el.style.display = 'none'; return; }
+
+  const durationValue = document.getElementById('client-duration').value;
+  const durationLabel = { '1': '1 Hour', '2': '2 Hours', '4': 'Half Day (50%)' }[durationValue];
+  if (!durationLabel) {
+    // 3-hour and full-day sessions have no brochure rate at all (same
+    // documented gap as the server side) — say so plainly rather than
+    // showing nothing and letting them find out only after confirming.
+    el.style.display = 'block';
+    el.innerHTML = `<span style="color:var(--r-warm-gray);">⚠ This duration isn't in the standard rate table — Staff & Admin will confirm the price with you separately.</span>`;
+    return;
+  }
+
+  const categoryIndex = room.pricing_category === 'consultation' ? 1 : 0;
+  const priceStr = tierData.rates[durationLabel] ? tierData.rates[durationLabel][categoryIndex] : null;
+  if (!priceStr) { el.style.display = 'none'; return; }
+
+  el.style.display = 'block';
+  if (['core', 'resident'].includes(tier)) {
+    el.innerHTML = `<strong>${esc(priceStr)}</strong> if this is outside your included recurring slot — free if it matches it (confirmed when you book).`;
+  } else {
+    el.innerHTML = `Price: <strong>${esc(priceStr)}</strong>`;
+  }
+}
+
 
 // ── TABS ──
 function filterTab(el) {

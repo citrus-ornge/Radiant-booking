@@ -31,8 +31,9 @@ module.exports = async (req, res) => {
       .select(`
         id, start_time, end_time, status, notes, created_at, is_topup, payment_status, amount_pence, gocardless_payment_id, parent_booking_id,
         patient_email, patient_name, patient_notes, patient_invite_sent_at,
+        cancelled_at, cancelled_by, cancellation_notice_hours, cancellation_within_notice_window,
         room:rooms ( id, name, emoji, floor ),
-        member:members ( id, first_name, last_name, email, user_type, is_owner )
+        member:members ( id, first_name, last_name, email, user_type, is_owner, plan_tier )
       `)
       .order('start_time', { ascending: true });
     if (error) return res.status(500).json({ error: error.message });
@@ -210,7 +211,18 @@ module.exports = async (req, res) => {
     // 'paid' (or 'failed') once GoCardless actually reports the outcome.
     // A failure here (no mandate yet, GoCardless error, etc.) is logged but
     // never blocks the booking itself — staff can always collect manually.
-    if (finalPaymentStatus === 'pending' && tierMember.mandate_status === 'active' && tierMember.gocardless_mandate_id) {
+    // Flex is excluded here even with an active mandate — team review 19
+    // Aug 2026: "we need to be able to charge for all flex bookings
+    // immediately, NOT DD, as they are an advance booking not a monthly
+    // slot". A Direct Debit charge against a mandate can take a few
+    // business days to actually clear (it's a BACS collection, not an
+    // instant transfer) — fine for Core/Resident's ongoing membership
+    // relationship, but not for a one-off Flex booking that should have
+    // confirmed payment before the room is treated as secured. Flex always
+    // falls through to paymentPending below, which surfaces the same
+    // Payment Required modal (Instant Bank Pay) regardless of whether they
+    // happen to have a mandate on file.
+    if (finalPaymentStatus === 'pending' && tierMember.plan_tier !== 'flex' && tierMember.mandate_status === 'active' && tierMember.gocardless_mandate_id) {
       try {
         const { getGoCardlessClient, createOneOffPayment } = require('./_lib/gocardless');
         const client = getGoCardlessClient();

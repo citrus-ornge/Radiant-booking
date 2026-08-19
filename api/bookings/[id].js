@@ -99,12 +99,35 @@ module.exports = async (req, res) => {
     if (!['confirmed', 'pending', 'cancelled'].includes(status)) {
       return res.status(400).json({ error: 'status must be confirmed, pending, or cancelled' });
     }
+
+    const updates = { status };
+    if (status === 'cancelled') {
+      // Cancellation tracking (team review 19 Aug 2026): "we track this in
+      // platform" — who cancelled, when, and for Flex specifically whether
+      // it was inside or outside the 7-day notice window. This never
+      // processes a refund itself — Staff & Admin still handle that
+      // manually in the GoCardless dashboard — it just gives them the
+      // fact to act on instead of having to reconstruct it from memory.
+      const { data: forNotice } = await supabase
+        .from('bookings')
+        .select('start_time, member:members(plan_tier)')
+        .eq('id', id)
+        .maybeSingle();
+      const noticeHours = forNotice ? (new Date(forNotice.start_time) - new Date()) / 3600000 : null;
+      updates.cancelled_at = new Date().toISOString();
+      updates.cancelled_by = requester.id;
+      updates.cancellation_notice_hours = noticeHours;
+      updates.cancellation_within_notice_window = (forNotice && forNotice.member && forNotice.member.plan_tier === 'flex' && noticeHours != null)
+        ? noticeHours >= 168
+        : null;
+    }
+
     const { data: booking, error } = await supabase
       .from('bookings')
-      .update({ status })
+      .update(updates)
       .eq('id', id)
       .select(`
-        id, start_time, end_time, status,
+        id, start_time, end_time, status, cancelled_at, cancelled_by, cancellation_notice_hours, cancellation_within_notice_window,
         room:rooms ( name ),
         member:members ( email )
       `)
@@ -114,7 +137,7 @@ module.exports = async (req, res) => {
     logAudit({
       actorId: requester.id, actorName: `${requester.first_name} ${requester.last_name}`.trim(),
       action: status === 'cancelled' ? 'booking.cancelled' : 'booking.updated', entityType: 'booking', entityId: id,
-      details: { status, room: booking.room ? booking.room.name : null },
+      details: { status, room: booking.room ? booking.room.name : null, ...(status === 'cancelled' ? { within_notice_window: booking.cancellation_within_notice_window, notice_hours: booking.cancellation_notice_hours != null ? Math.round(booking.cancellation_notice_hours) : null } : {}) },
     });
 
     let email_sent = false;

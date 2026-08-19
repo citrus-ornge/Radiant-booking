@@ -44,6 +44,7 @@ module.exports = async (req, res) => {
         onboarding_status: invite.is_owner ? 'completed' : 'profile_pending',
         plan_tier: invite.plan_tier || null,
         plan_tier_started_at: ['core', 'resident'].includes(invite.plan_tier) ? new Date().toISOString() : null,
+        custom_monthly_fee_pence: invite.custom_monthly_fee_pence ?? null,
       })
       .eq('id', existing.id)
       .select()
@@ -61,6 +62,7 @@ module.exports = async (req, res) => {
         status: 'active',
         plan_tier: invite.plan_tier || null,
         plan_tier_started_at: ['core', 'resident'].includes(invite.plan_tier) ? new Date().toISOString() : null,
+        custom_monthly_fee_pence: invite.custom_monthly_fee_pence ?? null,
       })
       .select()
       .single();

@@ -51,7 +51,7 @@ module.exports = async (req, res) => {
     }
 
     const {
-      email, emails, user_type, personal_note, is_owner, plan_tier, reserved_slots,
+      email, emails, user_type, personal_note, is_owner, plan_tier, reserved_slots, custom_monthly_fee_pence,
     } = req.body || {};
     const emailList = Array.isArray(emails) && emails.length > 0
       ? emails.map(e => e.trim()).filter(Boolean)
@@ -69,6 +69,19 @@ module.exports = async (req, res) => {
     const slots = Array.isArray(reserved_slots) ? reserved_slots.filter(s => s && s.day_of_week && s.time_start && s.time_end) : [];
     if (plan_tier && lockedTiers.includes(plan_tier) && slots.length === 0) {
       return res.status(400).json({ error: 'Core and Resident invites need at least one agreed recurring slot' });
+    }
+
+    // Special-deal monthly fee override (team review 19 Aug 2026) — only
+    // meaningful for Core/Resident, who are the only tiers with a monthly
+    // membership fee at all. Silently ignored for other tiers rather than
+    // erroring, since the UI simply shouldn't show this field for them.
+    let monthlyFeeOverride = null;
+    if (custom_monthly_fee_pence != null && lockedTiers.includes(plan_tier)) {
+      const parsed = Math.round(Number(custom_monthly_fee_pence));
+      if (Number.isNaN(parsed) || parsed < 0) {
+        return res.status(400).json({ error: 'custom_monthly_fee_pence must be a non-negative number' });
+      }
+      monthlyFeeOverride = parsed;
     }
 
     const allowed = await checkRateLimit(`invite_create:${requester.id}`, 20, 3600);
@@ -101,6 +114,7 @@ module.exports = async (req, res) => {
             user_type, personal_note, is_owner: !!is_owner,
             plan_tier: plan_tier || null,
             reserved_slots: lockedTiers.includes(plan_tier) ? slots : [],
+            custom_monthly_fee_pence: monthlyFeeOverride,
             invited_at: new Date().toISOString(),
             expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
           })
@@ -114,6 +128,7 @@ module.exports = async (req, res) => {
             email: oneEmail, user_type, personal_note, is_owner: !!is_owner,
             plan_tier: plan_tier || null,
             reserved_slots: lockedTiers.includes(plan_tier) ? slots : [],
+            custom_monthly_fee_pence: monthlyFeeOverride,
           })
           .select()
           .single());

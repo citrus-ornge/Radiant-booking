@@ -124,7 +124,18 @@ async function createMembershipSubscription(client, { mandateId, amountPence, na
 // set up, and a single place to fix if the logic needs to change.
 // Returns { skipped: true, reason } | { created: true, subscriptionId } | { failed: true, error }.
 async function ensureMembershipSubscription(supabase, member) {
-  const monthlyPence = PLAN_TIER_MONTHLY_PENCE[member.plan_tier];
+  // Tier eligibility is checked BEFORE applying any override — a stray
+  // custom_monthly_fee_pence value on a Community/Flex member (shouldn't
+  // happen given it's only ever set via the Core/Resident invite flow, but
+  // worth guarding regardless) must never activate a subscription for a
+  // tier that isn't supposed to have one at all.
+  if (!['core', 'resident'].includes(member.plan_tier)) return { skipped: true, reason: 'not_eligible_tier' };
+
+  // custom_monthly_fee_pence lets Staff & Admin override the standard tier
+  // rate for a specific member — special negotiated deals (team review 19
+  // Aug 2026: "one or two people have special deals"). Falls back to the
+  // standard rate when not set.
+  const monthlyPence = member.custom_monthly_fee_pence != null ? member.custom_monthly_fee_pence : PLAN_TIER_MONTHLY_PENCE[member.plan_tier];
   if (!monthlyPence) return { skipped: true, reason: 'not_eligible_tier' };
   if (member.mandate_status !== 'active' || !member.gocardless_mandate_id) return { skipped: true, reason: 'no_active_mandate' };
   if (member.gocardless_subscription_id) return { skipped: true, reason: 'already_has_subscription' };
