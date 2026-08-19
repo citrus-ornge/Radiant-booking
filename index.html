@@ -6745,6 +6745,18 @@ checkCalendarRedirectStatus();
   const hasInvite = await checkInviteParam();
   if (hasInvite) return; // sign-up panel is now showing; don't also try to restore a session
 
+  // A password-recovery link must never silently log someone into the app —
+  // it needs to show the "set a new password" screen instead. Found a real
+  // race condition here: Supabase's client library auto-establishes a
+  // session from the recovery token in the URL the instant it initialises,
+  // and the dedicated onAuthStateChange('PASSWORD_RECOVERY') handler below
+  // was racing against this getSession() call for that same session — and
+  // losing, since this ran first and bootstrapped the user straight into
+  // the app without ever actually changing their password. Checking the
+  // URL directly, synchronously, before any async Supabase call, closes
+  // that race entirely.
+  if (window.location.hash.includes('type=recovery')) return;
+
   const { data } = await _sb.auth.getSession();
   if (data && data.session) {
     await bootstrapSession(data.session);
