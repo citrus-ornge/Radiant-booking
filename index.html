@@ -1119,7 +1119,7 @@ textarea.form-input { resize: vertical; }
     <div style="flex:1;overflow-y:auto;min-height:0;">
     <div class="view-toggle" id="role-toggle" style="display:none;">
       <button class="toggle-btn active" id="toggle-admin" onclick="switchRole('admin')">Admin</button>
-      <button class="toggle-btn" id="toggle-client" onclick="switchRole('client')">Client</button>
+      <button class="toggle-btn" id="toggle-client" onclick="switchRole('client')" title="Preview as Practitioner — read-only, for training &amp; support">Preview</button>
     </div>
 
     <div id="admin-nav">
@@ -1184,7 +1184,7 @@ textarea.form-input { resize: vertical; }
         <button class="nav-item active" onclick="showClientView('my-bookings')">
           <span class="nav-icon">◈</span> My Bookings
         </button>
-        <button class="nav-item" onclick="showClientView('book-room')">
+        <button class="nav-item" id="client-book-room-btn" onclick="showClientView('book-room')">
           <span class="nav-icon">⬡</span> Book a Room
         </button>
         <button class="nav-item" id="client-my-docs-btn" onclick="showClientView('my-documents')" style="display:none;">
@@ -1243,6 +1243,16 @@ textarea.form-input { resize: vertical; }
     </div>
 
     <div class="content">
+
+      <!-- Shown only when an admin has toggled into the practitioner preview
+           (never for a real practitioner/member's own account) — makes clear
+           this is a read-only look at the client-facing screens, not a
+           second self-service account for Staff & Admin. Toggled by
+           setupClientView()/setupAdminView(). -->
+      <div id="preview-mode-banner" style="display:none;background:var(--r-gold-light,#f7ecd8);color:var(--r-gold);border-radius:8px;padding:10px 16px;margin-bottom:16px;font-size:12.5px;font-weight:500;">
+        👁 Preview as Practitioner — read-only. This shows what a practitioner sees; booking and billing aren't available to Staff & Admin accounts.
+      </div>
+
 
       <!-- ════ ADMIN VIEWS ════ -->
 
@@ -1682,7 +1692,7 @@ textarea.form-input { resize: vertical; }
             <div style="font-family:'Playfair Display',serif;font-size:22px;color:#fff;" id="client-welcome-name">Dr. Linda Chen</div>
             <div style="font-size:12px;color:var(--r-gold);margin-top:5px;" id="client-welcome-role">Practitioner Member</div>
           </div>
-          <button class="btn btn-primary btn-glow" onclick="showClientView('book-room')">Book a Room →</button>
+          <button class="btn btn-primary btn-glow" id="client-welcome-book-btn" onclick="showClientView('book-room')">Book a Room →</button>
         </div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:24px;">
           <div class="stat-card"><div class="stat-label">Upcoming</div><div class="stat-value" id="my-stat-upcoming">–</div></div>
@@ -4756,12 +4766,20 @@ function switchRole(role) {
   document.getElementById('toggle-client').classList.toggle('active', role === 'client');
   document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
   if (role === 'admin') { setupAdminView(); }
-  else { setupClientView('practitioner'); }
+  // Admins toggling here are never actually a practitioner — 'preview' is a
+  // distinct type from the real 'practitioner'/'member' values setupClientView
+  // gets on a genuine login (see enterAppShell), so it correctly falls through
+  // to hiding the practitioner-only nav items (My Documents, Membership &
+  // Pricing) and Book a Room below, rather than the old hardcoded
+  // setupClientView('practitioner') pretending every admin was one.
+  else { setupClientView('preview'); }
 }
 
 function setupAdminView() {
   document.getElementById('admin-nav').style.display = 'block';
   document.getElementById('client-nav').style.display = 'none';
+  document.getElementById('preview-mode-banner').style.display = 'none';
+  document.getElementById('topbar-cta').style.display = 'inline-flex';
   document.getElementById('topbar-cta').textContent = '+ New Booking';
   document.getElementById('topbar-cta').onclick = () => openModal('new-booking-modal');
   showView('dashboard');
@@ -4770,6 +4788,16 @@ function setupAdminView() {
 function setupClientView(type) {
   document.getElementById('admin-nav').style.display = 'none';
   document.getElementById('client-nav').style.display = 'block';
+  const isPreview = type === 'preview';
+  document.getElementById('preview-mode-banner').style.display = isPreview ? 'block' : 'none';
+  // Book a Room and Membership & Pricing both assume a real membership tier
+  // and Direct Debit mandate — neither exists for a Staff & Admin account
+  // (see api/billing/mandate.js rejecting non-practitioners, and pricing.js
+  // having no rate table entry for 'administrator'), so both are hidden
+  // rather than left to fail silently when an admin is only previewing.
+  document.getElementById('client-book-room-btn').style.display = isPreview ? 'none' : 'flex';
+  document.getElementById('client-welcome-book-btn').style.display = isPreview ? 'none' : 'inline-flex';
+  document.getElementById('topbar-cta').style.display = isPreview ? 'none' : 'inline-flex';
   document.getElementById('topbar-cta').textContent = '+ Book Room';
   document.getElementById('topbar-cta').onclick = () => showClientView('book-room');
   document.getElementById('client-my-docs-btn').style.display = type === 'practitioner' ? 'flex' : 'none';
@@ -4779,9 +4807,11 @@ function setupClientView(type) {
   const displayName = m ? `${m.first_name || ''} ${m.last_name || ''}`.trim() || m.email : '';
   document.getElementById('client-welcome-name').textContent = displayName;
   const welcomeTier = m ? tierLabel(m) : null;
-  document.getElementById('client-welcome-role').textContent = welcomeTier
-    ? `${welcomeTier} ${roleLabel(type, m && m.is_owner)}`
-    : roleLabel(type, m && m.is_owner) + ' Account';
+  document.getElementById('client-welcome-role').textContent = isPreview
+    ? 'Practitioner Preview (read-only)'
+    : welcomeTier
+      ? `${welcomeTier} ${roleLabel(type, m && m.is_owner)}`
+      : roleLabel(type, m && m.is_owner) + ' Account';
 
   showClientView('my-bookings');
 }
