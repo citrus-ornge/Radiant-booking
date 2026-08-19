@@ -4249,6 +4249,12 @@ async function doLogout() {
   await _sb.auth.signOut();
   currentSession = null;
   state.currentMember = null;
+  // Clear any in-progress, unsent invite state (see pendingInviteSlots'
+  // comment) — sessionStorage otherwise survives until the tab itself
+  // closes, which would let a half-finished invite leak into the next
+  // person's session on a shared device if they log in in the same tab.
+  pendingInviteSlots = [];
+  clearPendingInviteSlotsStorage();
   document.getElementById('app-shell').style.display = 'none';
   document.getElementById('onboarding-screen').style.display = 'none';
   const login = document.getElementById('login-screen');
@@ -6494,7 +6500,48 @@ function toggleBulkInvite() {
 // mirroring the pattern used in Manage Member — a Core/Resident invite can
 // offer more than one recurring slot now (e.g. full day Monday + half day
 // Friday) rather than being limited to a single one.
-let pendingInviteSlots = [];
+//
+// Persisted to sessionStorage as each slot is added/removed, and restored
+// here on load. Reported real bug: this used to live only in the plain JS
+// variable, so a mobile tab getting reloaded by the OS (backgrounding to
+// take a screenshot, switching to WhatsApp to send it, then coming back —
+// Chrome on Android will silently discard and reload backgrounded tabs
+// under memory pressure) wiped every slot the admin had already added,
+// with no visible sign anything was wrong — the page looked identical,
+// still on #invite, form fields still showing values via Chrome's own
+// separate form-restore feature, but the underlying array was back to
+// empty. The first slot they'd already added and seen confirmed (with a
+// working Remove button) would vanish, and Send Invitation would then
+// reject the invite for having no slots at all. sessionStorage survives
+// exactly that kind of reload (same tab), which localStorage/an in-memory
+// variable alone don't help with, while still clearing itself once the
+// tab actually closes.
+const INVITE_SLOTS_STORAGE_KEY = 'radiant:pendingInviteSlots';
+let pendingInviteSlots = restorePendingInviteSlots();
+
+function restorePendingInviteSlots() {
+  try {
+    const raw = sessionStorage.getItem(INVITE_SLOTS_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function persistPendingInviteSlots() {
+  try {
+    sessionStorage.setItem(INVITE_SLOTS_STORAGE_KEY, JSON.stringify(pendingInviteSlots));
+  } catch (e) {
+    // Storage can legitimately fail (private browsing, quota) — the slots
+    // still work for the rest of this session via the in-memory array,
+    // they just won't survive a reload. Not worth surfacing to the admin.
+  }
+}
+
+function clearPendingInviteSlotsStorage() {
+  try { sessionStorage.removeItem(INVITE_SLOTS_STORAGE_KEY); } catch (e) { /* see above */ }
+}
 
 function renderPendingInviteSlots() {
   const container = document.getElementById('invite-pending-slots');
@@ -6520,6 +6567,7 @@ function addPendingInviteSlot() {
   const time_end = document.getElementById('invite-reserved-end').value;
   if (!day_of_week || !time_start || !time_end) { showToast('⚠ Pick a day, start time and end time'); return; }
   pendingInviteSlots.push({ day_of_week, room_id, time_start, time_end });
+  persistPendingInviteSlots();
   document.getElementById('invite-reserved-day').value = '';
   document.getElementById('invite-reserved-room').value = '';
   document.getElementById('invite-reserved-start').value = '';
@@ -6529,6 +6577,7 @@ function addPendingInviteSlot() {
 
 function removePendingInviteSlot(index) {
   pendingInviteSlots.splice(index, 1);
+  persistPendingInviteSlots();
   renderPendingInviteSlots();
 }
 
@@ -6573,6 +6622,7 @@ async function sendInviteFromPage() {
     document.getElementById('invite-email').value = '';
     document.getElementById('invite-note').value = '';
     pendingInviteSlots = [];
+    clearPendingInviteSlotsStorage();
     renderPendingInviteSlots();
   } catch (e) {
     showToast('⚠ ' + e.message);
