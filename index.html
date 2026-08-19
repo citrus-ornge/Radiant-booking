@@ -1458,6 +1458,14 @@ textarea.form-input { resize: vertical; }
             </div>
           </div>
           <div class="card">
+            <div class="card-header"><div class="card-title">GoCardless Connection Test</div></div>
+            <div style="padding:16px 22px;">
+              <div style="font-size:12px;color:var(--r-warm-gray);margin-bottom:12px;">Temporary diagnostic — a read-only check (lists 1 customer, creates nothing) using the exact same token/environment settings as Direct Debit setup. If this succeeds, the token and environment are proven correct beyond doubt, and any "Forbidden" error on mandate creation specifically is a write-permission issue on the GoCardless account, not a configuration mistake.</div>
+              <button class="btn btn-outline btn-sm" id="gc-test-btn" onclick="testGoCardlessConnection()">Run test</button>
+              <div id="gc-test-result" style="margin-top:10px;font-size:13px;"></div>
+            </div>
+          </div>
+          <div class="card">
             <div class="card-header"><div class="card-title">Notification Rules</div></div>
             <div style="padding:16px 22px;display:flex;flex-direction:column;gap:10px;">
               <label style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--r-surface2);border-radius:9px;cursor:pointer;">
@@ -3995,6 +4003,27 @@ async function markNotificationsSeen() {
 async function markNotificationsSeenFromPage() {
   await markNotificationsSeen();
   showToast('✓ All marked as read');
+}
+
+async function testGoCardlessConnection() {
+  const btn = document.getElementById('gc-test-btn');
+  const resultEl = document.getElementById('gc-test-result');
+  btn.disabled = true;
+  btn.textContent = 'Testing…';
+  resultEl.innerHTML = '';
+  try {
+    const result = await api('/billing/test-connection');
+    if (result.ok) {
+      resultEl.innerHTML = `<div style="color:var(--r-green);">✓ ${esc(result.message)}</div>`;
+    } else {
+      resultEl.innerHTML = `<div style="color:var(--r-red);">⚠ Failed at stage '${esc(result.stage)}': ${esc(result.error)}${result.request_id ? `<br>request_id: ${esc(result.request_id)}` : ''}</div>`;
+    }
+  } catch (e) {
+    resultEl.innerHTML = `<div style="color:var(--r-red);">⚠ ${esc(e.message)}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Run test';
+  }
 }
 
 async function loadNotificationSettings() {
