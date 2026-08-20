@@ -60,10 +60,23 @@ module.exports = async (req, res) => {
       const { resolveDocumentContent } = require('./_lib/documentTemplate');
       const withStatus = docs.map(d => {
         const sig = sigs.find(s => s.document_id === d.id && s.version_signed === d.version && s.status === 'signed');
+        // Distinct from `sig` above (an exact match on the CURRENT
+        // version): this looks for any signed-but-older-version
+        // signature, so the client can correctly show "you signed an
+        // earlier version, this one needs re-signing" only when that's
+        // actually true. The client previously gated that banner on
+        // signed_at instead — but signed_at is only ever set alongside a
+        // genuine current-version match, meaning it could never actually
+        // distinguish "never signed" from "signed an older version" in
+        // the first place. It only appeared to work by coincidence until
+        // now, because no document had ever been re-versioned after
+        // being signed.
+        const olderSig = !sig && sigs.find(s => s.document_id === d.id && s.status === 'signed');
         return {
           ...d,
           resolved_content: resolveDocumentContent(d.content, targetMember),
           signed: !!sig, signed_at: sig ? sig.signed_at : null, signature_name: sig ? sig.signature_name : null,
+          previous_signature_version: olderSig ? olderSig.version_signed : null,
         };
       });
 

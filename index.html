@@ -5017,6 +5017,21 @@ function showClientView(name, _fromHistory) {
   _activateView(name, clientViews, '#client-nav');
   if (name === 'profile') renderProfilePage();
   if (name === 'notifications') markNotificationsSeen();
+  // Real bug found from actual usage: this view never refreshed on
+  // navigation at all (unlike showView's equivalent admin-side handling
+  // of the same page) — so a document signed via onboarding, or via this
+  // same page a moment earlier, kept showing as "Pending" with a working
+  // "Sign now" button until a full page reload, even though the server
+  // had it recorded as signed correctly the whole time.
+  if (name === 'my-documents') loadMyDocuments('my-documents-page-list');
+  // Same gap as my-documents — all wired into showView (admin) already,
+  // but missing here entirely, so a practitioner/member navigating to any
+  // of these would see whatever was last rendered, not what's actually
+  // current.
+  if (name === 'events') loadEvents();
+  if (name === 'membership-pricing') renderMembershipPricing();
+  if (name === 'directory') loadDirectory();
+  if (name === 'my-bookings') renderMyBookings();
   if (name === 'book-room') {
     clientCalMonth = new Date();
     clientSelectedDates = [];
@@ -5282,7 +5297,7 @@ function openSignDocumentModal(documentId) {
   document.getElementById('sd-body').innerHTML = `
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
       <span class="badge ${doc.category === 'clinical' ? 'badge-blue' : 'badge-gold'}">${esc(doc.category.charAt(0).toUpperCase() + doc.category.slice(1))}</span>
-      ${doc.signed_at ? `<span style="font-size:11.5px;color:var(--r-warm-gray);">You previously signed an earlier version of this document — it's been updated since and needs re-signing.</span>` : ''}
+      ${doc.previous_signature_version ? `<span style="font-size:11.5px;color:var(--r-warm-gray);">You previously signed an earlier version of this document — it's been updated since and needs re-signing.</span>` : ''}
     </div>
     <div class="doc-scroll-box" id="sd-scroll-box" onscroll="checkSignDocScrolled()">${simpleMarkdownToHtml(doc.resolved_content || doc.content)}</div>
     <label style="display:flex;align-items:flex-start;gap:9px;font-size:13px;color:var(--r-warm-gray);margin:14px 0 16px;cursor:pointer;">
