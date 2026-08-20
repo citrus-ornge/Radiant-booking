@@ -3385,7 +3385,9 @@ async function loadTheirDocs(memberId) {
         <div style="font-size:12.5px;">${esc(d.title)}${d.signed ? ` <span style="color:var(--r-warm-gray);">— ${esc(fmtDateTime(d.signed_at))}</span>` : ''}</div>
         <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
           <span class="badge ${d.signed ? 'badge-green' : 'badge-gray'}" style="font-size:10.5px;">${d.signed ? 'Signed' : 'Pending'}</span>
-          ${d.pdf_path ? `<a href="${esc(d.pdf_path)}" target="_blank" rel="noopener" style="font-size:11.5px;color:var(--r-gold-dark);">PDF</a>` : ''}
+          ${d.pdf_path
+            ? `<a href="${esc(d.pdf_path)}" target="_blank" rel="noopener" style="font-size:11.5px;color:var(--r-gold-dark);">PDF</a>`
+            : (d.signed ? `<a href="#" onclick="downloadDocumentPdf('${d.id}','${esc(d.title).replace(/'/g, "\\'")}','${memberId}');return false;" style="font-size:11.5px;color:var(--r-gold-dark);">PDF</a>` : '')}
         </div>
       </div>`).join('');
   } catch (e) {
@@ -5259,6 +5261,38 @@ async function deleteEvent(id) {
   }
 }
 
+// Generates a PDF on demand for a document with no static pdf_path — the
+// Membership Agreement, and any future document whose text is personalised
+// per signer (see api/documents/pdf.js). Can't just be an <a href> like the
+// static PDFs: this endpoint requires an Authorization bearer header, which
+// a plain anchor click can't send, so fetch it as a blob and trigger the
+// download manually instead.
+async function downloadDocumentPdf(documentId, title, memberId) {
+  try {
+    const headers = {};
+    if (currentSession && currentSession.access_token) headers['Authorization'] = 'Bearer ' + currentSession.access_token;
+    let url = `/api/documents/pdf?document_id=${encodeURIComponent(documentId)}`;
+    if (memberId) url += `&member_id=${encodeURIComponent(memberId)}`;
+    const res = await fetch(url, { headers });
+    if (!res.ok) {
+      let msg = `Request failed (${res.status})`;
+      try { const data = await res.json(); msg = data.error || msg; } catch (e) { /* non-JSON error body */ }
+      throw new Error(msg);
+    }
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = `${(title || 'document').replace(/[^a-z0-9]+/gi, '-')}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(objectUrl);
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  }
+}
+
 async function loadMyDocuments(targetId) {
   const el = document.getElementById(targetId || 'my-documents-list');
   if (!el) return;
@@ -5280,7 +5314,9 @@ async function loadMyDocuments(targetId) {
         </div>
         <span class="badge ${d.signed ? 'badge-green' : 'badge-gray'}" style="margin-right:8px;">${d.signed ? 'Signed' : 'Pending'}</span>
         ${!d.signed ? `<button class="btn btn-primary btn-sm" onclick="openSignDocumentModal('${d.id}')">Sign now</button>` : ''}
-        ${d.pdf_path ? `<a class="btn btn-outline btn-sm" href="${esc(d.pdf_path)}" target="_blank" rel="noopener">Download PDF</a>` : ''}
+        ${d.pdf_path
+          ? `<a class="btn btn-outline btn-sm" href="${esc(d.pdf_path)}" target="_blank" rel="noopener">Download PDF</a>`
+          : (d.signed ? `<button class="btn btn-outline btn-sm" onclick="downloadDocumentPdf('${d.id}','${esc(d.title).replace(/'/g, "\\'")}')">Download PDF</button>` : '')}
       </div>`).join('');
   } catch (e) {
     el.innerHTML = `<div style="padding:18px 22px;color:var(--r-red);font-size:13px;">Could not load documents: ${esc(e.message)}</div>`;
