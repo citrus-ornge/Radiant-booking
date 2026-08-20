@@ -93,6 +93,29 @@ module.exports = async (req, res) => {
     const results = [];
 
     for (const oneEmail of emailList) {
+      // Real bug found from actual usage: nothing checked whether this
+      // email already belongs to an active member before creating a new
+      // invite — only whether a PENDING invite existed (see the dedup
+      // check just below, for the Resend case). Re-inviting someone
+      // already accepted (weeks-old test accounts, but also spotted
+      // happening to a real production email during tonight's testing)
+      // created a confusing stray "pending" row sitting alongside their
+      // already-"accepted" one — Dashboard's Pending Invites count and
+      // the Sent Invitations list both show the same person twice, once
+      // as if they'd never joined. members.email has a UNIQUE constraint,
+      // so this could never actually create a second member row if that
+      // stray invite were accepted — it would just fail with a raw
+      // database error instead of a clear message. Caught here instead.
+      const { data: existingMember } = await supabase
+        .from('members')
+        .select('id')
+        .eq('email', oneEmail)
+        .maybeSingle();
+      if (existingMember) {
+        results.push({ email: oneEmail, ok: false, error: 'This email already has an active account — edit their details under Members instead of re-inviting them.' });
+        continue;
+      }
+
       // Real bug found from actual usage: every Resend click called this
       // same endpoint with no de-duplication at all, so it just kept
       // inserting a brand new invite row (with a brand new token) every
