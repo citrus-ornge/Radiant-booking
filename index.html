@@ -1785,7 +1785,12 @@ textarea.form-input { resize: vertical; }
                 </div>
               </div>
               <div class="form-row"><label class="form-label">Duration</label>
-                <select class="form-input" id="client-duration" onchange="refreshClientTimeSlotAvailability();updateClientPricePreview();"><option value="1">1 hour</option><option value="2" selected>2 hours</option><option value="3">3 hours</option><option value="4">Half day (4hrs)</option><option value="8">Full day</option></select>
+                <select class="form-input" id="client-duration" onchange="refreshClientTimeSlotAvailability();toggleClientTopupRow();updateClientPricePreview();"><option value="1">1 hour</option><option value="2" selected>2 hours</option><option value="3">3 hours</option><option value="4">Half day (4hrs)</option><option value="8">Full day</option></select>
+              </div>
+              <div class="form-row" id="client-topup-row" style="display:none;background:var(--r-surface2);border-radius:8px;padding:12px;">
+                <label class="form-label">Attach to Existing Booking <span style="font-weight:400;color:var(--r-warm-gray);">(required for 1-hour top-ups)</span></label>
+                <select class="form-input" id="client-topup-parent" onchange="updateClientPricePreview();"><option value="">Select a booking…</option></select>
+                <p style="font-size:12px;color:var(--r-warm-gray);margin:8px 0 0;">1-hour sessions are top-up only and carry an additional charge.</p>
               </div>
               <div class="form-row" id="client-price-preview" style="display:none;background:var(--r-surface2);border-radius:8px;padding:10px 14px;font-size:13px;"></div>
               <div class="form-row"><label class="form-label">Notes</label><textarea class="form-input" id="client-notes" rows="2" placeholder="Any special requirements…"></textarea></div>
@@ -2835,6 +2840,33 @@ function toggleTopupRow() {
   const now = new Date();
   const eligible = (state.bookings || []).filter(b =>
     b.member && b.member.id === memberId && b.status !== 'cancelled' && new Date(b.end_time) >= now
+  );
+  parentSel.innerHTML = '<option value="">Select a booking…</option>' + eligible.map(b =>
+    `<option value="${b.id}">${esc(b.room ? b.room.name : 'Room')} — ${esc(fmtDateTime(b.start_time))}</option>`
+  ).join('');
+}
+
+// Client-side equivalent of toggleTopupRow — real gap found via UAT
+// (BUG-002): Book a Room let a practitioner pick "1 hour" as a standalone
+// duration and even showed a live price for it, but the server has always
+// rejected a standalone 1-hour booking outright (it must be attached to an
+// existing non-cancelled booking, see api/bookings.js) — this exact
+// "attach to existing booking" control only ever existed in the admin's
+// New Booking modal, never here, so a practitioner had no way to
+// correctly complete one themselves. Same pattern as toggleTopupRow,
+// filtered to the logged-in member's own bookings rather than an
+// admin-selected one.
+function toggleClientTopupRow() {
+  const duration = document.getElementById('client-duration').value;
+  const row = document.getElementById('client-topup-row');
+  const parentSel = document.getElementById('client-topup-parent');
+  const isOneHour = duration === '1';
+  if (row) row.style.display = isOneHour ? 'block' : 'none';
+  if (!isOneHour || !parentSel || !state.currentMember) return;
+
+  const now = new Date();
+  const eligible = (state.bookings || []).filter(b =>
+    b.member && b.member.id === state.currentMember.id && b.status !== 'cancelled' && new Date(b.end_time) >= now
   );
   parentSel.innerHTML = '<option value="">Select a booking…</option>' + eligible.map(b =>
     `<option value="${b.id}">${esc(b.room ? b.room.name : 'Room')} — ${esc(fmtDateTime(b.start_time))}</option>`
@@ -6492,6 +6524,19 @@ async function confirmClientBooking() {
   if (!state.currentMember) { showToast('⚠ Could not identify your account — try signing in again'); return; }
 
   const duration = parseFloat(document.getElementById('client-duration').value);
+  const parentBookingId = duration === 1 ? document.getElementById('client-topup-parent').value : '';
+  if (duration === 1 && !parentBookingId) {
+    showToast('⚠ 1-hour sessions are top-up only — please select the booking to attach it to');
+    return;
+  }
+  // A top-up attaches to ONE specific existing booking — multi-day batch
+  // selection (available on other durations) doesn't make sense here, so
+  // only the first selected date is used if somehow more than one is
+  // still selected.
+  if (duration === 1 && dates.length > 1) {
+    dates.length = 1;
+    showToast('ℹ Top-ups attach to a single booking — only the first selected date will be used');
+  }
   const notes = document.getElementById('client-notes').value;
   const invitingPatient = document.getElementById('client-invite-patient-toggle').checked;
   const patient_email = invitingPatient ? document.getElementById('client-patient-email').value.trim() : '';
@@ -6522,6 +6567,7 @@ async function confirmClientBooking() {
           start_time: start.toISOString(),
           end_time: end.toISOString(),
           notes,
+          parent_booking_id: parentBookingId || undefined,
           patient_email: patient_email || undefined,
           patient_name: patient_name || undefined,
           patient_notes: patient_notes || undefined,
@@ -7100,6 +7146,18 @@ function updateClientPricePreview() {
   if (!room || !tierData) { el.style.display = 'none'; return; }
 
   const durationValue = document.getElementById('client-duration').value;
+  if (durationValue === '1') {
+    // 1-hour is top-up-only (see toggleClientTopupRow/confirmClientBooking)
+    // — the price only means anything once an existing booking is actually
+    // selected to attach it to; showing it unconditionally is exactly what
+    // UAT flagged as misleading (BUG-002).
+    const parentSel = document.getElementById('client-topup-parent');
+    if (!parentSel || !parentSel.value) {
+      el.style.display = 'block';
+      el.innerHTML = `<span style="color:var(--r-warm-gray);">1-hour sessions are top-up only — select an existing booking above to see the price.</span>`;
+      return;
+    }
+  }
   const durationLabel = { '1': '1 Hour', '2': '2 Hours', '4': 'Half Day (50%)' }[durationValue];
   if (!durationLabel) {
     // 3-hour and full-day sessions have no brochure rate at all (same
@@ -7115,7 +7173,9 @@ function updateClientPricePreview() {
   if (!priceStr) { el.style.display = 'none'; return; }
 
   el.style.display = 'block';
-  if (['core', 'resident'].includes(tier)) {
+  if (durationValue === '1') {
+    el.innerHTML = `Top-up price: <strong>${esc(priceStr)}</strong> (always chargeable, in addition to the booking it's attached to)`;
+  } else if (['core', 'resident'].includes(tier)) {
     el.innerHTML = `<strong>${esc(priceStr)}</strong> if this is outside your included recurring slot — free if it matches it (confirmed when you book).`;
   } else {
     el.innerHTML = `Price: <strong>${esc(priceStr)}</strong>`;
