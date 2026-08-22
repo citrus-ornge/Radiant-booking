@@ -83,9 +83,20 @@ module.exports = async (req, res) => {
     // a generic 'pending' was silently rejected by that constraint before,
     // and since this write's error was never checked, it failed with no
     // indication anywhere. Always check errors on writes that matter.)
+    //
+    // Also persists gocardless_billing_request_id now — previously only
+    // logged to audit_log (see the logAudit call just below), not
+    // queryable. Found live: every mandate ever attempted across a month
+    // of testing sat stuck at this exact status forever, with
+    // gocardless_mandate_id never getting set — meaning the mandate
+    // lifecycle webhook has never once been successfully processed in
+    // production. Persisting this id here means a stuck mandate can be
+    // looked up and reconciled directly against GoCardless (see
+    // api/billing/sync-mandate.js) instead of only ever waiting on a
+    // webhook that, empirically, has never actually arrived or processed.
     const { error: statusErr } = await supabase
       .from('members')
-      .update({ mandate_status: 'pending_submission' })
+      .update({ mandate_status: 'pending_submission', gocardless_billing_request_id: billingRequest.id })
       .eq('id', member.id);
     if (statusErr) console.error(`Failed to set mandate_status=pending_submission for member ${member.id}:`, statusErr.message);
 

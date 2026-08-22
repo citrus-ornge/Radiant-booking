@@ -2246,6 +2246,7 @@ textarea.form-input { resize: vertical; }
       <div class="form-row" id="mm-billing-row" style="display:none;background:var(--r-surface2);border-radius:8px;padding:12px 14px;">
         <label class="form-label">Billing</label>
         <div id="mm-billing-status" style="font-size:12.5px;color:var(--r-warm-gray);margin-bottom:8px;">—</div>
+        <button type="button" class="btn btn-outline btn-sm" id="mm-sync-mandate-btn" style="display:none;margin-right:6px;" onclick="syncMemberMandate()">Sync with GoCardless</button>
         <button type="button" class="btn btn-outline btn-sm" id="mm-create-subscription-btn" onclick="createSubscriptionForMember()">Create subscription now</button>
       </div>
       <div class="form-row"><label class="form-label">Phone</label><input class="form-input" id="mm-phone"></div>
@@ -3365,19 +3366,41 @@ function openManageMember(id) {
   document.getElementById('mm-onboarding-row').style.display = (isPractitioner || m.user_type === 'administrator') ? 'block' : 'none';
 
   const billingRowEl = document.getElementById('mm-billing-row');
-  const showBilling = isPractitioner && ['core', 'resident'].includes(m.plan_tier);
+  // Widened from core/resident-only: found live that Flex/Community
+  // practitioners with a mandate on record were completely invisible
+  // here before — admin had no way to even see their Direct Debit status,
+  // let alone fix it, since this row only ever showed for the two tiers
+  // with a monthly subscription. A mandate can exist on any tier.
+  const hasMandateSetup = !!(m.gocardless_mandate_id || m.gocardless_billing_request_id);
+  const showBilling = isPractitioner && (hasMandateSetup || ['core', 'resident'].includes(m.plan_tier));
   billingRowEl.style.display = showBilling ? 'block' : 'none';
   if (showBilling) {
     const statusEl = document.getElementById('mm-billing-status');
     const btnEl = document.getElementById('mm-create-subscription-btn');
+    const syncBtn = document.getElementById('mm-sync-mandate-btn');
+    syncBtn.style.display = hasMandateSetup ? 'inline-flex' : 'none';
+
+    // Found live: mandates were sitting stuck for weeks with no way to
+    // tell Staff & Admin anything other than "not active yet" — this at
+    // least surfaces the real intermediate state GoCardless reports,
+    // rather than a single binary active/not-active.
+    const mandateLabels = {
+      pending_customer_approval: 'Awaiting bank authorisation', pending_submission: 'Processing',
+      submitted: 'Submitted to bank', active: 'Active', cancelled: 'Cancelled', failed: 'Failed',
+      expired: 'Expired', consumed: 'Consumed', blocked: 'Blocked', suspended_by_payer: 'Suspended by payer',
+    };
+    const mandateLine = hasMandateSetup
+      ? `Direct Debit: <strong>${esc(mandateLabels[m.mandate_status] || m.mandate_status || 'Unknown')}</strong>`
+      : 'Direct Debit not started yet.';
+
     if (m.gocardless_subscription_id) {
-      statusEl.innerHTML = `<span style="color:var(--r-green,#4a7c59);">✓ Subscription set up</span> (${esc(m.gocardless_subscription_id)})`;
+      statusEl.innerHTML = `${mandateLine}<br><span style="color:var(--r-green,#4a7c59);">✓ Subscription set up</span> (${esc(m.gocardless_subscription_id)})`;
       btnEl.style.display = 'none';
     } else if (m.mandate_status === 'active') {
-      statusEl.innerHTML = `<span style="color:var(--r-red);">⚠ Mandate active but no subscription</span> — the monthly fee isn't being collected.`;
-      btnEl.style.display = 'inline-flex';
+      statusEl.innerHTML = `${mandateLine}<br><span style="color:var(--r-red);">⚠ Mandate active but no subscription</span> — the monthly fee isn't being collected.`;
+      btnEl.style.display = ['core', 'resident'].includes(m.plan_tier) ? 'inline-flex' : 'none';
     } else {
-      statusEl.textContent = 'Direct Debit not active yet — subscription will be created automatically once it is.';
+      statusEl.innerHTML = mandateLine;
       btnEl.style.display = 'none';
     }
   }
@@ -6707,6 +6730,40 @@ async function createSubscriptionForMember() {
   } finally {
     btn.disabled = false;
     btn.textContent = 'Create subscription now';
+  }
+}
+
+// Manual fallback found necessary live: every mandate ever attempted sat
+// stuck at pending_submission indefinitely, gocardless_mandate_id never
+// set, despite mandates genuinely completing on GoCardless's/the bank's
+// side — the mandate lifecycle webhook has apparently never once
+// successfully processed an 'active' event in production. This queries
+// GoCardless directly rather than waiting on that webhook. Re-opens the
+// Manage modal afterward (via openManageMember, not just loadAppData) so
+// the billing status line reflects the fresh result immediately, not
+// just on next open.
+async function syncMemberMandate() {
+  const memberId = document.getElementById('mm-id').value;
+  if (!memberId) return;
+  const btn = document.getElementById('mm-sync-mandate-btn');
+  btn.disabled = true;
+  btn.textContent = 'Syncing…';
+  try {
+    const result = await api('/billing/sync-mandate', { method: 'POST', body: JSON.stringify({ member_id: memberId }) });
+    if (result.message) {
+      showToast('ℹ ' + result.message);
+    } else if (result.changed) {
+      showToast(`✓ Updated: ${result.previous_status || 'unknown'} → ${result.new_status}`);
+    } else {
+      showToast(`ℹ No change — GoCardless still shows "${result.new_status}"`);
+    }
+    await loadAppData();
+    openManageMember(memberId);
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Sync with GoCardless';
   }
 }
 

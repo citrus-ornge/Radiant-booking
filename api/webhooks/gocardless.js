@@ -2,8 +2,7 @@ const crypto = require('crypto');
 const { getSupabase } = require('../_lib/supabase');
 const { logAudit } = require('../_lib/audit');
 const {
-  sendMandateActiveEmail, sendSessionPaymentConfirmedEmail, sendSessionPaymentFailedEmail,
-  sendSubscriptionStartedEmail, sendSubscriptionPaymentFailedEmail,
+  sendSessionPaymentConfirmedEmail, sendSessionPaymentFailedEmail, sendSubscriptionPaymentFailedEmail,
 } = require('../_lib/email');
 // _lib/gocardless required lazily inside the handler — see mandate.js.
 
@@ -132,6 +131,20 @@ async function handleEvent(supabase, event) {
       cancelled: 'cancelled',
       failed: 'failed',
       expired: 'expired',
+      // These were missing entirely — found while investigating why
+      // mandate_status was never advancing in production: the CHECK
+      // constraint on members.mandate_status didn't allow them either, so
+      // even if GoCardless ever sent one of these actions, mandateStatus
+      // would resolve to undefined here and the whole event would be
+      // silently ignored below. Constraint extended in the same migration
+      // that added gocardless_billing_request_id. Inferred 1:1 from the
+      // Mandate resource's own status field (GoCardless names these
+      // terminal-state actions identically to the status they produce,
+      // same as the already-confirmed active/cancelled/failed/expired
+      // above) rather than guessed from undocumented action names.
+      consumed: 'consumed',
+      blocked: 'blocked',
+      suspended_by_payer: 'suspended_by_payer',
     };
     const mandateStatus = statusMap[action];
     if (!mandateStatus || !links.customer) return;
@@ -160,55 +173,16 @@ async function handleEvent(supabase, event) {
       details: { event_id: event.id },
     });
 
-    const memberName = `${member.first_name || ''} ${member.last_name || ''}`.trim() || member.email;
-
+    // Everything that happens once a mandate is confirmed active (email +
+    // subscription setup) now lives in handleMandateBecameActive, shared
+    // with api/billing/sync-mandate.js — the manual reconciliation tool
+    // built after finding every mandate ever attempted sat stuck forever,
+    // this webhook branch apparently never having successfully processed
+    // an 'active' event in production despite mandates genuinely completing
+    // on GoCardless's/the bank's side.
     if (mandateStatus === 'active') {
-      try {
-        await sendMandateActiveEmail({ to: member.email, memberName });
-      } catch (e) {
-        console.error(`Failed to send mandate-active email to member ${member.id}:`, e.message);
-      }
-    }
-
-    // Core/Resident have a flat monthly membership fee on top of any
-    // per-session charges (confirmed by Radiant) — set up the recurring
-    // subscription the moment their mandate goes active. ensureMembership
-    // Subscription is idempotent and shared with the manual admin recovery
-    // action and the daily safety-net cron, so a failure here isn't the
-    // only chance to get this right.
-    // NOTE: PLAN_TIER_MONTHLY_PENCE amounts are still placeholders pending
-    // confirmation against the brochure (see api/_lib/gocardless.js) — do
-    // not go live on real payment collection until those are confirmed.
-    if (mandateStatus === 'active') {
-      const { ensureMembershipSubscription, PLAN_TIER_MONTHLY_PENCE } = require('../_lib/gocardless');
-      const result = await ensureMembershipSubscription(supabase, member);
-      if (result.created) {
-        await logAudit({
-          actorId: null, actorName: 'GoCardless webhook', action: 'billing.subscription_created',
-          entityType: 'member', entityId: member.id, details: { subscription_id: result.subscriptionId },
-        });
-        try {
-          const tierLabel = member.plan_tier === 'resident' ? 'Resident' : 'Core';
-          await sendSubscriptionStartedEmail({ to: member.email, memberName, tierLabel, amountPence: PLAN_TIER_MONTHLY_PENCE[member.plan_tier] });
-        } catch (e) {
-          console.error(`Failed to send subscription-started email to member ${member.id}:`, e.message);
-        }
-      } else if (result.failed) {
-        // Not just console.error — this is money that would otherwise never
-        // get collected with nobody the wiser. Log it AND tell an admin directly.
-        console.error(`Failed to create membership subscription for member ${member.id}:`, result.error);
-        await logAudit({
-          actorId: null, actorName: 'GoCardless webhook', action: 'billing.subscription_creation_failed',
-          entityType: 'member', entityId: member.id, details: { error: result.error },
-        });
-        const { data: admins } = await supabase.from('members').select('id').eq('user_type', 'administrator').eq('status', 'active');
-        for (const admin of admins || []) {
-          await supabase.from('messages').insert({
-            sender_id: member.id, recipient_id: admin.id,
-            body: `⚠ Failed to set up ${memberName}'s monthly membership subscription after their Direct Debit went active (${result.error}). Their recurring slot fee won't be collected until this is fixed — use 'Create subscription now' in Manage Member, or check the GoCardless dashboard directly.`,
-          });
-        }
-      }
+      const { handleMandateBecameActive } = require('../_lib/gocardless');
+      await handleMandateBecameActive(supabase, member);
     }
     return;
   }

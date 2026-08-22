@@ -157,4 +157,58 @@ async function ensureMembershipSubscription(supabase, member) {
   }
 }
 
-module.exports = { getGoCardlessClient, PLAN_TIER_MONTHLY_PENCE, readRawBody, createOneOffPayment, createMembershipSubscription, customerLinksFor, persistNewCustomerId, ensureMembershipSubscription };
+module.exports = { getGoCardlessClient, PLAN_TIER_MONTHLY_PENCE, readRawBody, createOneOffPayment, createMembershipSubscription, customerLinksFor, persistNewCustomerId, ensureMembershipSubscription, handleMandateBecameActive };
+
+// Everything that should happen the moment a mandate is confirmed active —
+// extracted from api/webhooks/gocardless.js so this exact logic can also
+// run from api/billing/sync-mandate.js. That second caller exists because,
+// found live: every mandate ever attempted across a month of testing sat
+// stuck at pending_submission forever, gocardless_mandate_id never set —
+// the mandate lifecycle webhook has never once been successfully processed
+// in production. Reconciling directly against GoCardless (rather than only
+// ever waiting on that webhook) needed to trigger the exact same emails and
+// subscription setup the webhook would have, not a second, drifting copy
+// of this logic.
+async function handleMandateBecameActive(supabase, member) {
+  const { sendMandateActiveEmail, sendSubscriptionStartedEmail } = require('./email');
+  const { logAudit } = require('./audit');
+  const memberName = `${member.first_name || ''} ${member.last_name || ''}`.trim() || member.email;
+
+  try {
+    await sendMandateActiveEmail({ to: member.email, memberName });
+  } catch (e) {
+    console.error(`Failed to send mandate-active email to member ${member.id}:`, e.message);
+  }
+
+  // Core/Resident have a flat monthly membership fee on top of any
+  // per-session charges (confirmed by Radiant) — set up the recurring
+  // subscription the moment their mandate goes active. Idempotent, so
+  // calling this from both the webhook and a manual sync is safe even if
+  // both somehow ran for the same member.
+  const result = await ensureMembershipSubscription(supabase, member);
+  if (result.created) {
+    await logAudit({
+      actorId: null, actorName: 'GoCardless', action: 'billing.subscription_created',
+      entityType: 'member', entityId: member.id, details: { subscription_id: result.subscriptionId },
+    });
+    try {
+      const tierLabel = member.plan_tier === 'resident' ? 'Resident' : 'Core';
+      await sendSubscriptionStartedEmail({ to: member.email, memberName, tierLabel, amountPence: PLAN_TIER_MONTHLY_PENCE[member.plan_tier] });
+    } catch (e) {
+      console.error(`Failed to send subscription-started email to member ${member.id}:`, e.message);
+    }
+  } else if (result.failed) {
+    console.error(`Failed to create membership subscription for member ${member.id}:`, result.error);
+    await logAudit({
+      actorId: null, actorName: 'GoCardless', action: 'billing.subscription_creation_failed',
+      entityType: 'member', entityId: member.id, details: { error: result.error },
+    });
+    const { data: admins } = await supabase.from('members').select('id').eq('user_type', 'administrator').eq('status', 'active');
+    for (const admin of admins || []) {
+      await supabase.from('messages').insert({
+        sender_id: member.id, recipient_id: admin.id,
+        body: `⚠ Failed to set up ${memberName}'s monthly membership subscription after their Direct Debit went active (${result.error}). Their recurring slot fee won't be collected until this is fixed — use 'Create subscription now' in Manage Member, or check the GoCardless dashboard directly.`,
+      });
+    }
+  }
+}
