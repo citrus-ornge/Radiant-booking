@@ -150,7 +150,7 @@ async function ensureMembershipSubscription(supabase, member) {
     });
     const { error } = await supabase.from('members').update({ gocardless_subscription_id: subscription.id }).eq('id', member.id);
     if (error) return { failed: true, error: `Subscription ${subscription.id} created at GoCardless but failed to save locally: ${error.message}` };
-    return { created: true, subscriptionId: subscription.id };
+    return { created: true, subscriptionId: subscription.id, amountPence: monthlyPence };
   } catch (e) {
     const detail = (e.errors && e.errors.length) ? e.errors.map(x => [x.field, x.message || x.reason].filter(Boolean).join(': ')).join('; ') : e.message;
     return { failed: true, error: detail };
@@ -193,7 +193,15 @@ async function handleMandateBecameActive(supabase, member) {
     });
     try {
       const tierLabel = member.plan_tier === 'resident' ? 'Resident' : 'Core';
-      await sendSubscriptionStartedEmail({ to: member.email, memberName, tierLabel, amountPence: PLAN_TIER_MONTHLY_PENCE[member.plan_tier] });
+      // Real bug found in a proactive audit (22 Aug, after Saad flagged
+      // worry about side effects from tonight's fixes): this used to read
+      // PLAN_TIER_MONTHLY_PENCE[member.plan_tier] directly, ignoring any
+      // custom_monthly_fee_pence override — so a member on a negotiated
+      // special-deal rate would be charged correctly (ensureMembership
+      // Subscription already respected the override) but told the wrong,
+      // standard amount in this email. result.amountPence is the actual
+      // figure that was charged, override or not.
+      await sendSubscriptionStartedEmail({ to: member.email, memberName, tierLabel, amountPence: result.amountPence });
     } catch (e) {
       console.error(`Failed to send subscription-started email to member ${member.id}:`, e.message);
     }

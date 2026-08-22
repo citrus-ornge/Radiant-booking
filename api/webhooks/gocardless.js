@@ -249,7 +249,7 @@ async function handleEvent(supabase, event) {
     if (!links.mandate) return;
     const { data: member, error: memberErr } = await supabase
       .from('members')
-      .select('id, email, first_name, last_name, plan_tier, gocardless_subscription_id')
+      .select('id, email, first_name, last_name, plan_tier, custom_monthly_fee_pence, gocardless_subscription_id')
       .eq('gocardless_mandate_id', links.mandate)
       .not('gocardless_subscription_id', 'is', null)
       .maybeSingle();
@@ -259,9 +259,12 @@ async function handleEvent(supabase, event) {
     const memberName = `${member.first_name || ''} ${member.last_name || ''}`.trim() || member.email;
     // We don't have the payment amount here (it wasn't fetched from
     // GoCardless) — fall back to the tier's monthly figure, which is what
-    // this payment almost certainly is.
+    // this payment almost certainly is. Same bug class caught in the same
+    // audit as the sendSubscriptionStartedEmail fix (22 Aug): a member on
+    // a negotiated custom_monthly_fee_pence deal would have this show the
+    // wrong, standard rate instead of what they're actually charged.
     const { PLAN_TIER_MONTHLY_PENCE } = require('../_lib/gocardless');
-    const amountPence = PLAN_TIER_MONTHLY_PENCE[member.plan_tier] || 0;
+    const amountPence = member.custom_monthly_fee_pence != null ? member.custom_monthly_fee_pence : (PLAN_TIER_MONTHLY_PENCE[member.plan_tier] || 0);
 
     await logAudit({
       actorId: null,
