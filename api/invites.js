@@ -131,13 +131,41 @@ module.exports = async (req, res) => {
 
       let invite, error;
       if (existing) {
+        // Resend must never silently wipe a tier/reserved-slot/fee-override
+        // that was already set on the pending invite. resendInvite() in
+        // index.html only ever sends { email, user_type } — a deliberately
+        // minimal payload for "just resend the same thing" — but this
+        // update used to treat every OMITTED field as an explicit clear
+        // (plan_tier || null, reserved_slots defaulting to [], the fee
+        // override defaulting to null), wiping a Core/Resident invite's
+        // recurring slot and fee override the moment someone clicked
+        // Resend before it was accepted. Fixed by only overwriting a field
+        // when its key was actually present in the request body — checked
+        // via `!== undefined` against req.body directly (not the parsed
+        // `plan_tier`/`reserved_slots` locals above, which default to
+        // falsy/[] regardless of whether the key was sent at all) — and
+        // falling back to the existing row's stored value otherwise.
+        const body = req.body || {};
+        const { data: fullExisting, error: fetchErr } = await supabase
+          .from('invites')
+          .select('plan_tier, reserved_slots, custom_monthly_fee_pence')
+          .eq('id', existing.id)
+          .single();
+        if (fetchErr) { results.push({ email: oneEmail, ok: false, error: fetchErr.message }); continue; }
+
+        const resolvedPlanTier = body.plan_tier !== undefined ? (plan_tier || null) : fullExisting.plan_tier;
+        const resolvedSlots = body.reserved_slots !== undefined
+          ? (lockedTiers.includes(resolvedPlanTier) ? slots : [])
+          : fullExisting.reserved_slots;
+        const resolvedFee = body.custom_monthly_fee_pence !== undefined ? monthlyFeeOverride : fullExisting.custom_monthly_fee_pence;
+
         ({ data: invite, error } = await supabase
           .from('invites')
           .update({
             user_type, personal_note, is_owner: !!is_owner,
-            plan_tier: plan_tier || null,
-            reserved_slots: lockedTiers.includes(plan_tier) ? slots : [],
-            custom_monthly_fee_pence: monthlyFeeOverride,
+            plan_tier: resolvedPlanTier,
+            reserved_slots: resolvedSlots,
+            custom_monthly_fee_pence: resolvedFee,
             invited_at: new Date().toISOString(),
             expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
           })
