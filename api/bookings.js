@@ -37,7 +37,32 @@ module.exports = async (req, res) => {
       `)
       .order('start_time', { ascending: true });
     if (error) return res.status(500).json({ error: error.message });
-    return res.status(200).json({ bookings: data });
+
+    // Real security gap, found via retest (22 Aug) and confirmed directly
+    // against this code: this endpoint authenticated the caller but never
+    // filtered WHAT they could see — every practitioner/member got every
+    // OTHER member's name, email, payment status, and any attached patient
+    // details, for every booking in the system. Precise cause, for the
+    // record: this isn't something the BUG-001 embed fix introduced — it's
+    // been missing here the whole time. It was purely masked by accident,
+    // because BUG-001 made this exact query 500 for everyone, so the
+    // over-broad response never actually reached anyone until that bug
+    // was fixed and the query started succeeding.
+    //
+    // Admins still see everything (All Bookings needs it). Everyone else
+    // gets full detail only for their OWN bookings; other members'
+    // bookings are reduced to just enough to support double-booking
+    // prevention on the calendar (room, time, status) — confirmed via
+    // roomHasClash() that nothing client-side needs more than that for
+    // someone else's booking. No name, email, payment, or patient data
+    // leaves this endpoint for anyone else's booking, for a non-admin.
+    const isAdmin = requester.user_type === 'administrator';
+    const scoped = isAdmin ? data : data.map(b => {
+      const isOwn = b.member && b.member.id === requester.id;
+      if (isOwn) return b;
+      return { id: b.id, start_time: b.start_time, end_time: b.end_time, status: b.status, is_topup: b.is_topup, room: b.room };
+    });
+    return res.status(200).json({ bookings: scoped });
   }
 
   if (req.method === 'POST') {
