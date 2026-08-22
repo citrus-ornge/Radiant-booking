@@ -33,7 +33,7 @@ module.exports = async (req, res) => {
         patient_email, patient_name, patient_notes, patient_invite_sent_at,
         cancelled_at, cancelled_by, cancellation_notice_hours, cancellation_within_notice_window,
         room:rooms ( id, name, emoji, floor ),
-        member:members ( id, first_name, last_name, email, user_type, is_owner, plan_tier )
+        member:members!bookings_member_id_fkey ( id, first_name, last_name, email, user_type, is_owner, plan_tier )
       `)
       .order('start_time', { ascending: true });
     if (error) return res.status(500).json({ error: error.message });
@@ -205,7 +205,7 @@ module.exports = async (req, res) => {
       .select(`
         id, start_time, end_time, status, notes, is_topup, payment_status, amount_pence, parent_booking_id,
         room:rooms ( id, name, emoji, floor ),
-        member:members ( id, first_name, last_name, email, user_type, google_calendar_connected, google_refresh_token )
+        member:members!bookings_member_id_fkey ( id, first_name, last_name, email, user_type, google_calendar_connected, google_refresh_token )
       `)
       .single();
     if (error) return res.status(500).json({ error: error.message });

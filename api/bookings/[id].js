@@ -49,7 +49,7 @@ module.exports = async (req, res) => {
         .select(`
           id, start_time, end_time, patient_email, patient_name, patient_notes,
           room:rooms ( name ),
-          member:members ( first_name, last_name )
+          member:members!bookings_member_id_fkey ( first_name, last_name )
         `)
         .single();
       if (error) return res.status(500).json({ error: error.message });
@@ -110,7 +110,7 @@ module.exports = async (req, res) => {
       // fact to act on instead of having to reconstruct it from memory.
       const { data: forNotice } = await supabase
         .from('bookings')
-        .select('start_time, member:members(plan_tier)')
+        .select('start_time, member:members!bookings_member_id_fkey(plan_tier)')
         .eq('id', id)
         .maybeSingle();
       const noticeHours = forNotice ? (new Date(forNotice.start_time) - new Date()) / 3600000 : null;
@@ -129,7 +129,7 @@ module.exports = async (req, res) => {
       .select(`
         id, start_time, end_time, status, cancelled_at, cancelled_by, cancellation_notice_hours, cancellation_within_notice_window,
         room:rooms ( name ),
-        member:members ( email )
+        member:members!bookings_member_id_fkey ( email )
       `)
       .single();
     if (error) return res.status(500).json({ error: error.message });

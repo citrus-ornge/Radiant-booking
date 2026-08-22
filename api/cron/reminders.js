@@ -21,7 +21,7 @@ module.exports = async (req, res) => {
   const send24h = await isNotificationEnabled('reminder_24h');
   const { data: due24h } = send24h ? await supabase
     .from('bookings')
-    .select('id, start_time, room:rooms(name), member:members(first_name,last_name,email)')
+    .select('id, start_time, room:rooms(name), member:members!bookings_member_id_fkey(first_name,last_name,email)')
     .eq('status', 'confirmed')
     .eq('reminder_24h_sent', false)
     .gte('start_time', in23to25h[0].toISOString())
@@ -47,7 +47,7 @@ module.exports = async (req, res) => {
   const send1h = await isNotificationEnabled('reminder_1h');
   const { data: due1h } = send1h ? await supabase
     .from('bookings')
-    .select('id, start_time, room:rooms(name), member:members(first_name,last_name,email)')
+    .select('id, start_time, room:rooms(name), member:members!bookings_member_id_fkey(first_name,last_name,email)')
     .eq('status', 'confirmed')
     .eq('reminder_1h_sent', false)
     .gte('start_time', in0to1h[0].toISOString())

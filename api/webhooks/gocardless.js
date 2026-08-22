@@ -227,7 +227,7 @@ async function handleEvent(supabase, event) {
     const paymentStatus = statusMap[action];
     if (!paymentStatus) return; // other actions (submitted, paid_out, etc.) don't change our status
 
-    let findQuery = supabase.from('bookings').select('id, member_id, gocardless_payment_id, amount_pence, start_time, room:rooms(name), member:members(email, first_name, last_name)');
+    let findQuery = supabase.from('bookings').select('id, member_id, gocardless_payment_id, amount_pence, start_time, room:rooms(name), member:members!bookings_member_id_fkey(email, first_name, last_name)');
     findQuery = links.billing_request
       ? findQuery.or(`gocardless_payment_id.eq.${links.payment},gocardless_billing_request_id.eq.${links.billing_request}`)
       : findQuery.eq('gocardless_payment_id', links.payment);
