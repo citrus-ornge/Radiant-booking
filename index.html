@@ -4845,8 +4845,23 @@ async function respondToRoomOffer(response) {
   acceptBtn.disabled = true;
   rejectBtn.disabled = true;
   try {
-    const result = await api('/onboarding/room-terms', { method: 'POST', body: JSON.stringify({ response }) });
-    state.currentMember = result.member;
+    await api('/onboarding/room-terms', { method: 'POST', body: JSON.stringify({ response }) });
+    // Real bug found via UAT (BUG-003): this used to trust the POST
+    // response's member object directly (result.member), but that's a
+    // bare `.select('*')` on the members table row — recurring_slots
+    // isn't a native column, it's a separate joined query that only
+    // /api/me attaches. Overwriting state.currentMember with that bare
+    // object wiped recurring_slots (already correctly populated by
+    // showOnboardingRoomTerms's own /me fetch moments earlier) right
+    // before finishOnboarding() -> enterAppShell() -> Book a Room's first
+    // paint, showing "no agreed recurring day set" for someone who
+    // genuinely has one — until any later action re-fetched /me and
+    // silently "fixed" it. Re-fetching /me here, same as
+    // showOnboardingRoomTerms already does, keeps this consistent instead
+    // of trusting a response shape that's missing a field the rest of
+    // this exact flow depends on.
+    const meData = await api('/me');
+    state.currentMember = meData.member;
     if (response === 'accept') {
       document.getElementById('onboarding-step-room-terms').style.display = 'none';
       document.getElementById('onboarding-step-dd-prompt').style.display = 'block';
