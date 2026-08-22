@@ -6711,7 +6711,17 @@ async function resetOnboardingForTesting(stage) {
 }
 
 function toggleInviteOwnerRow(prefix) {
-  const type = document.getElementById(prefix + '-type').value;
+  // Manage Member's user-type select is id="mm-user-type" (see
+  // openManageMember), not "mm-type" like the invite/im prefixes — a
+  // naming mismatch that made getElementById return null every time this
+  // ran, throwing on .value. The modal still opened and password reset
+  // still worked (a JS error in an onclick handler doesn't halt the rest
+  // of the page), but it was a real console error on every single Manage
+  // click, and mm-owner-row (which genuinely exists in the markup) was
+  // never actually being shown or hidden as a result.
+  const typeEl = document.getElementById(prefix + '-type') || document.getElementById(prefix + '-user-type');
+  if (!typeEl) return;
+  const type = typeEl.value;
   const row = document.getElementById(prefix + '-owner-row');
   if (row) row.style.display = type === 'administrator' ? 'block' : 'none';
   if (prefix === 'invite') {
