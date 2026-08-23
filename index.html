@@ -2248,6 +2248,7 @@ textarea.form-input { resize: vertical; }
         <div id="mm-billing-status" style="font-size:12.5px;color:var(--r-warm-gray);margin-bottom:8px;">—</div>
         <button type="button" class="btn btn-outline btn-sm" id="mm-sync-mandate-btn" style="display:none;margin-right:6px;" onclick="syncMemberMandate()">Sync with GoCardless</button>
         <button type="button" class="btn btn-outline btn-sm" id="mm-create-subscription-btn" onclick="createSubscriptionForMember()">Create subscription now</button>
+        <button type="button" class="btn btn-outline btn-sm" id="mm-cancel-subscription-btn" style="display:none;color:var(--r-red);border-color:var(--r-red);" onclick="cancelMemberSubscription()">Cancel subscription</button>
       </div>
       <div class="form-row"><label class="form-label">Phone</label><input class="form-input" id="mm-phone"></div>
       <div class="form-row"><label class="form-label">Qualifications</label><textarea class="form-input" id="mm-qualifications" rows="2"></textarea></div>
@@ -3378,6 +3379,7 @@ function openManageMember(id) {
     const statusEl = document.getElementById('mm-billing-status');
     const btnEl = document.getElementById('mm-create-subscription-btn');
     const syncBtn = document.getElementById('mm-sync-mandate-btn');
+    const cancelSubBtn = document.getElementById('mm-cancel-subscription-btn');
     syncBtn.style.display = hasMandateSetup ? 'inline-flex' : 'none';
 
     // Found live: mandates were sitting stuck for weeks with no way to
@@ -3396,12 +3398,15 @@ function openManageMember(id) {
     if (m.gocardless_subscription_id) {
       statusEl.innerHTML = `${mandateLine}<br><span style="color:var(--r-green,#4a7c59);">✓ Subscription set up</span> (${esc(m.gocardless_subscription_id)})`;
       btnEl.style.display = 'none';
+      cancelSubBtn.style.display = 'inline-flex';
     } else if (m.mandate_status === 'active') {
       statusEl.innerHTML = `${mandateLine}<br><span style="color:var(--r-red);">⚠ Mandate active but no subscription</span> — the monthly fee isn't being collected.`;
       btnEl.style.display = ['core', 'resident'].includes(m.plan_tier) ? 'inline-flex' : 'none';
+      cancelSubBtn.style.display = 'none';
     } else {
       statusEl.innerHTML = mandateLine;
       btnEl.style.display = 'none';
+      cancelSubBtn.style.display = 'none';
     }
   }
   document.getElementById('mm-is-owner').checked = !!m.is_owner;
@@ -6730,6 +6735,32 @@ async function createSubscriptionForMember() {
   } finally {
     btn.disabled = false;
     btn.textContent = 'Create subscription now';
+  }
+}
+
+// Cancels a member's real, live GoCardless subscription — not just our own
+// record of it, which would do nothing to stop a genuine future charge.
+// Built 22 Aug 2026 to stop an actual live subscription (a real bank
+// account, real future charge) that was only ever cancellable by going
+// into GoCardless's dashboard directly. Confirms first given the stakes —
+// this is real money, not a reversible in-app toggle.
+async function cancelMemberSubscription() {
+  const memberId = document.getElementById('mm-id').value;
+  if (!memberId) return;
+  if (!confirm('Cancel this subscription at GoCardless? This stops all future monthly charges immediately and cannot be undone from here — you\'d need to set up a new one to restart billing.')) return;
+  const btn = document.getElementById('mm-cancel-subscription-btn');
+  btn.disabled = true;
+  btn.textContent = 'Cancelling…';
+  try {
+    await api('/billing/cancel-subscription', { method: 'POST', body: JSON.stringify({ member_id: memberId }) });
+    showToast('✓ Subscription cancelled — no further charges will be taken');
+    await loadAppData();
+    openManageMember(memberId);
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Cancel subscription';
   }
 }
 
