@@ -461,6 +461,33 @@ Reply in the Radiant Booking app.
   });
 }
 
+// System-generated alerts to Staff & Admin (subscription/payment failures,
+// a stuck mandate, a declined room offer) — distinct from
+// sendUrgentMessageEmail, which is for one person messaging another.
+// Reusing that template here would misleadingly frame these as if the
+// affected member had personally sent an "urgent message", when really
+// it's the platform itself flagging something needing admin action.
+//
+// Added 22 Aug 2026: every one of these alerts previously only ever
+// appeared in-app (the Messages inbox), same as any other admin alert in
+// the codebase — meaning it relied entirely on someone happening to check
+// it. Team decided all of them should also email, not just show in-app.
+async function sendAdminAlertEmail({ to, adminName, subject, body }) {
+  const resend = getResend();
+  return resend.emails.send({
+    from: FROM_EMAIL,
+    to: [to],
+    subject: `⚠ Radiant Booking: ${subject}`,
+    text: `Hi ${adminName},
+
+${body}
+
+This is also in your Messages inbox in the app.
+
+— Radiant Booking`,
+  });
+}
+
 // Sent when a practitioner invites their own patient to a booking (opt-in,
 // separate from the practitioner's own confirmation) — the patient is an
 // external third party, not a system user, so this is deliberately its
@@ -508,6 +535,7 @@ module.exports = {
   sendWelcomeEmail, sendRotaUpdate, sendLeaveUpdate, sendLeaveApprovalRequest, sendLeaveDecision, sendExitNoticeReminder,
   sendMandateActiveEmail, sendSessionPaymentConfirmedEmail, sendSessionPaymentFailedEmail,
   sendSubscriptionStartedEmail, sendSubscriptionPaymentFailedEmail, sendAccountCreatedEmail, sendUrgentMessageEmail,
+  sendAdminAlertEmail,
   sendPasswordResetEmail,
   sendMagicLinkEmail,
   sendPatientInviteEmail,

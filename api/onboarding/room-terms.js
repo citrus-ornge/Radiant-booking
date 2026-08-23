@@ -71,11 +71,13 @@ module.exports = async (req, res) => {
     .single();
   if (error) return res.status(500).json({ error: error.message });
 
-  const { data: admins } = await supabase.from('members').select('id').eq('user_type', 'administrator').eq('status', 'active');
   const notifyBody = `${memberName} has declined their offered recurring slot(s) (${slotDesc}). Please review and offer a revised day/time/room.`;
-  for (const admin of admins || []) {
-    await supabase.from('messages').insert({ sender_id: member.id, recipient_id: admin.id, body: notifyBody });
-  }
+  const { notifyAdmins } = require('../_lib/notifyAdmins');
+  await notifyAdmins(supabase, {
+    relatedMemberId: member.id,
+    subject: `Room offer declined — ${memberName}`,
+    body: notifyBody,
+  });
 
   await logAudit({
     actorId: member.id, actorName: memberName, action: 'onboarding.room_terms_rejected',

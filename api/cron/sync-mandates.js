@@ -91,13 +91,12 @@ module.exports = async (req, res) => {
             .limit(1);
           if (!alreadyAlerted || alreadyAlerted.length === 0) {
             const memberName = `${member.first_name || ''} ${member.last_name || ''}`.trim() || member.email;
-            const { data: admins } = await supabase.from('members').select('id').eq('user_type', 'administrator').eq('status', 'active');
-            for (const admin of admins || []) {
-              await supabase.from('messages').insert({
-                sender_id: member.id, recipient_id: admin.id,
-                body: `⚠ ${memberName}'s Direct Debit setup has been stuck ("${member.mandate_status}") for ${Math.floor(daysSinceStart)} days — well past GoCardless's normal ~1 business day. Likely they never finished bank authorisation, or entered something wrong. Worth following up with them directly rather than waiting further.`,
-              });
-            }
+            const { notifyAdmins } = require('../_lib/notifyAdmins');
+            await notifyAdmins(supabase, {
+              relatedMemberId: member.id,
+              subject: `Direct Debit setup stuck — ${memberName}`,
+              body: `${memberName}'s Direct Debit setup has been stuck ("${member.mandate_status}") for ${Math.floor(daysSinceStart)} days — well past GoCardless's normal ~1 business day. Likely they never finished bank authorisation, or entered something wrong. Worth following up with them directly rather than waiting further.`,
+            });
             await logAudit({
               actorId: null, actorName: 'GoCardless sync cron', action: 'billing.mandate_stuck_alert',
               entityType: 'member', entityId: member.id,

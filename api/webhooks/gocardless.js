@@ -286,13 +286,12 @@ async function handleEvent(supabase, event) {
         // Per Radiant: the membership fee failing to collect should notify
         // Staff & Admin too, not just the member — unlike a one-off session
         // payment failure, this is recurring revenue actually not landing.
-        const { data: admins } = await supabase.from('members').select('id').eq('user_type', 'administrator').eq('status', 'active');
-        for (const admin of admins || []) {
-          await supabase.from('messages').insert({
-            sender_id: member.id, recipient_id: admin.id,
-            body: `⚠ ${memberName}'s monthly membership fee (£${(amountPence / 100).toFixed(2)}) failed to collect. They've been notified to check their Direct Debit details.`,
-          });
-        }
+        const { notifyAdmins } = require('../_lib/notifyAdmins');
+        await notifyAdmins(supabase, {
+          relatedMemberId: member.id,
+          subject: `Membership fee failed to collect — ${memberName}`,
+          body: `${memberName}'s monthly membership fee (£${(amountPence / 100).toFixed(2)}) failed to collect. They've been notified to check their Direct Debit details.`,
+        });
       }
     } catch (e) {
       console.error(`Failed to send subscription payment ${paymentStatus} notice for member ${member.id}:`, e.message);

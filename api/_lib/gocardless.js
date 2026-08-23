@@ -211,13 +211,12 @@ async function handleMandateBecameActive(supabase, member) {
       actorId: null, actorName: 'GoCardless', action: 'billing.subscription_creation_failed',
       entityType: 'member', entityId: member.id, details: { error: result.error },
     });
-    const { data: admins } = await supabase.from('members').select('id').eq('user_type', 'administrator').eq('status', 'active');
-    for (const admin of admins || []) {
-      await supabase.from('messages').insert({
-        sender_id: member.id, recipient_id: admin.id,
-        body: `⚠ Failed to set up ${memberName}'s monthly membership subscription after their Direct Debit went active (${result.error}). Their recurring slot fee won't be collected until this is fixed — use 'Create subscription now' in Manage Member, or check the GoCardless dashboard directly.`,
-      });
-    }
+    const { notifyAdmins } = require('./notifyAdmins');
+    await notifyAdmins(supabase, {
+      relatedMemberId: member.id,
+      subject: `Subscription setup failed — ${memberName}`,
+      body: `Failed to set up ${memberName}'s monthly membership subscription after their Direct Debit went active (${result.error}). Their recurring slot fee won't be collected until this is fixed — use 'Create subscription now' in Manage Member, or check the GoCardless dashboard directly.`,
+    });
   }
 }
 

@@ -50,13 +50,12 @@ module.exports = async (req, res) => {
     } else if (result.failed) {
       results.failed.push({ member_id: member.id, error: result.error });
       const memberName = `${member.first_name || ''} ${member.last_name || ''}`.trim() || member.id;
-      const { data: admins } = await supabase.from('members').select('id').eq('user_type', 'administrator').eq('status', 'active');
-      for (const admin of admins || []) {
-        await supabase.from('messages').insert({
-          sender_id: member.id, recipient_id: admin.id,
-          body: `⚠ Still couldn't set up ${memberName}'s monthly membership subscription (${result.error}). Their recurring slot fee isn't being collected — please check the GoCardless dashboard or use 'Create subscription now' in Manage Member.`,
-        });
-      }
+      const { notifyAdmins } = require('../_lib/notifyAdmins');
+      await notifyAdmins(supabase, {
+        relatedMemberId: member.id,
+        subject: `Subscription still not set up — ${memberName}`,
+        body: `Still couldn't set up ${memberName}'s monthly membership subscription (${result.error}). Their recurring slot fee isn't being collected — please check the GoCardless dashboard or use 'Create subscription now' in Manage Member.`,
+      });
     } else {
       results.already_ok++;
     }
