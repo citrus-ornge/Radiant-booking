@@ -1,7 +1,7 @@
 const { getSupabase } = require('./_lib/supabase');
 const { sendBookingConfirmation, sendTeamBookingNotice, sendPatientInviteEmail } = require('./_lib/email');
 const { isNotificationEnabled } = require('./_lib/notificationSettings');
-const { createCalendarEvent } = require('./_lib/google');
+const { createCalendarEvent, TEAM_CALENDAR_EMAIL } = require('./_lib/google');
 const { requireAuth } = require('./_lib/auth');
 const { checkRateLimit } = require('./_lib/rateLimit');
 const { calculateSessionChargeInPence, isIncludedInMembershipFee } = require('./_lib/pricing');
@@ -331,6 +331,35 @@ module.exports = async (req, res) => {
       } catch (e) {
         sideEffects.warnings.push(`Calendar sync failed: ${e.message}`);
       }
+    }
+
+    // Also sync to the shared team calendar (TEAM_CALENDAR_EMAIL,
+    // support@radiantfr.com), same pattern already used for staff leave/
+    // rota — every booking should be visible there for reception/admin,
+    // regardless of whether the practitioner who made it has connected
+    // their own calendar. Independent of the sync above: this member's own
+    // calendar failing (or not being connected at all) shouldn't stop the
+    // team calendar from getting it, and vice versa. Requires someone with
+    // access to that inbox to have gone through the normal Connect Google
+    // Calendar flow themselves first (Settings) — silently skipped if not.
+    try {
+      const { data: teamAccount } = await supabase
+        .from('members')
+        .select('google_calendar_connected, google_refresh_token')
+        .eq('email', TEAM_CALENDAR_EMAIL)
+        .maybeSingle();
+      if (teamAccount && teamAccount.google_calendar_connected && teamAccount.google_refresh_token) {
+        const teamEvent = await createCalendarEvent({
+          refreshToken: teamAccount.google_refresh_token,
+          summary: `${room.name} — ${member.first_name} ${member.last_name}`.trim(),
+          description: notes || '',
+          startISO: booking.start_time,
+          endISO: booking.end_time,
+        });
+        await supabase.from('bookings').update({ team_google_event_id: teamEvent.id }).eq('id', booking.id);
+      }
+    } catch (e) {
+      sideEffects.warnings.push(`Team calendar sync failed: ${e.message}`);
     }
 
     // Optional: the practitioner invited their own patient to this booking

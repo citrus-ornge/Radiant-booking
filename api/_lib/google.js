@@ -1,5 +1,12 @@
 const { google } = require('googleapis');
 
+// Already the established convention for a shared/team calendar elsewhere
+// in this codebase (staff leave approvals, rota) — reused here rather than
+// introducing a second, differently-named mechanism for the same thing.
+// Exported from here so new usages (like bookings.js) import it instead of
+// re-declaring their own local copy of the same hardcoded string.
+const TEAM_CALENDAR_EMAIL = 'support@radiantfr.com';
+
 function getOAuthClient() {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
@@ -51,4 +58,4 @@ async function deleteCalendarEvent({ refreshToken, eventId }) {
   await calendar.events.delete({ calendarId: 'primary', eventId });
 }
 
-module.exports = { getAuthUrl, exchangeCodeForTokens, createCalendarEvent, deleteCalendarEvent };
+module.exports = { getAuthUrl, exchangeCodeForTokens, createCalendarEvent, deleteCalendarEvent, TEAM_CALENDAR_EMAIL };
