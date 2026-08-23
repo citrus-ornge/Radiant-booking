@@ -44,6 +44,31 @@ module.exports = async (req, res) => {
   try {
     const { getGoCardlessClient } = require('../_lib/gocardless');
     const client = getGoCardlessClient();
+
+    // Real gap found live (22 Aug): cancelling the subscription resource
+    // stops FUTURE billing cycles, but GoCardless creates each cycle's
+    // Payment as its own separate resource several days before the actual
+    // charge_date — any payment already created for the upcoming cycle at
+    // the moment you cancel is NOT touched by subscriptions.cancel() and
+    // will still go out on schedule unless cancelled individually. Two
+    // real £449 payments for real bank accounts sat right at that gap.
+    // Only payments still in pending_customer_approval or
+    // pending_submission can be cancelled via the API at all — once
+    // GoCardless has actually submitted one to the bank, this can't stop
+    // it and a refund would be the only remaining option.
+    const { payments: linkedPayments } = await client.payments.list({ subscription: member.gocardless_subscription_id });
+    const cancellablePayments = (linkedPayments || []).filter(p => ['pending_customer_approval', 'pending_submission'].includes(p.status));
+    const paymentResults = [];
+    for (const payment of cancellablePayments) {
+      try {
+        await client.payments.cancel(payment.id);
+        paymentResults.push({ payment_id: payment.id, cancelled: true });
+      } catch (e) {
+        paymentResults.push({ payment_id: payment.id, cancelled: false, error: e.message });
+      }
+    }
+    const uncancellable = (linkedPayments || []).filter(p => !['pending_customer_approval', 'pending_submission', 'cancelled'].includes(p.status));
+
     await client.subscriptions.cancel(member.gocardless_subscription_id);
 
     // Cleared, not just flagged — so a genuinely new subscription could be
@@ -59,10 +84,19 @@ module.exports = async (req, res) => {
     await logAudit({
       actorId: requester.id, actorName: `${requester.first_name || ''} ${requester.last_name || ''}`.trim(),
       action: 'billing.subscription_cancelled', entityType: 'member', entityId: member.id,
-      details: { subscription_id: member.gocardless_subscription_id },
+      details: { subscription_id: member.gocardless_subscription_id, payments_cancelled: paymentResults, payments_not_cancellable: uncancellable.map(p => ({ id: p.id, status: p.status })) },
     });
 
-    return res.status(200).json({ ok: true, cancelled_subscription_id: member.gocardless_subscription_id });
+    const warnings = [];
+    if (paymentResults.some(p => !p.cancelled)) warnings.push('One or more linked payments failed to cancel — check the GoCardless dashboard directly.');
+    if (uncancellable.length > 0) warnings.push(`${uncancellable.length} payment(s) already past the point where this can cancel them (e.g. already submitted to the bank) — a refund from the GoCardless dashboard is the only remaining option for those.`);
+
+    return res.status(200).json({
+      ok: true,
+      cancelled_subscription_id: member.gocardless_subscription_id,
+      payments_cancelled: paymentResults.filter(p => p.cancelled).length,
+      warnings,
+    });
   } catch (e) {
     const detail = (e.errors && e.errors.length) ? e.errors.map(x => [x.field, x.message || x.reason].filter(Boolean).join(': ')).join('; ') : e.message;
     return res.status(502).json({ error: `GoCardless cancellation failed: ${detail}` });
