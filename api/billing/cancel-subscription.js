@@ -91,6 +91,23 @@ module.exports = async (req, res) => {
     if (paymentResults.some(p => !p.cancelled)) warnings.push('One or more linked payments failed to cancel — check the GoCardless dashboard directly.');
     if (uncancellable.length > 0) warnings.push(`${uncancellable.length} payment(s) already past the point where this can cancel them (e.g. already submitted to the bank) — a refund from the GoCardless dashboard is the only remaining option for those.`);
 
+    // Real gap found the same night this endpoint was built: a warning
+    // returned in the API response is only ever seen by whoever happened
+    // to click the button, in that exact moment — anyone else on the team
+    // has no way to know a payment needs manual attention in GoCardless.
+    // notifyAdmins() (built for the same reason, same night) gives every
+    // active admin both an in-app message and an email, not just this one
+    // clicking admin a toast.
+    if (warnings.length > 0) {
+      const memberName = `${member.first_name || ''} ${member.last_name || ''}`.trim() || member.email;
+      const { notifyAdmins } = require('../_lib/notifyAdmins');
+      await notifyAdmins(supabase, {
+        relatedMemberId: member.id,
+        subject: `⚠ ${memberName}'s subscription cancellation needs manual follow-up`,
+        body: `Cancelling ${memberName}'s (${member.email}) subscription didn't fully clean up in GoCardless: ${warnings.join(' ')} Check the GoCardless dashboard directly — some payments can only be stopped by a refund once they've been submitted to the bank.`,
+      });
+    }
+
     return res.status(200).json({
       ok: true,
       cancelled_subscription_id: member.gocardless_subscription_id,
