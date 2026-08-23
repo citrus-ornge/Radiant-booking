@@ -55,7 +55,7 @@ module.exports = async (req, res) => {
     if (requester.user_type === 'administrator') {
       const { data, error } = await supabase
         .from('members')
-        .select('id, first_name, last_name, email, phone, user_type, status, google_calendar_connected, created_at, qualifications, indemnity_number, indemnity_expiry, business_name, company_address, company_number, plan_tier, plan_tier_started_at, custom_monthly_fee_pence, onboarding_status, is_owner, directory_tier, bio, website_url, logo_url, social_links, reserved_day_of_week, reserved_time_start, reserved_time_end, reserved_room_id, notifications_last_seen_at, auth_user_id')
+        .select('id, first_name, last_name, email, phone, user_type, status, google_calendar_connected, created_at, qualifications, indemnity_number, indemnity_expiry, business_name, company_address, company_number, plan_tier, plan_tier_started_at, custom_monthly_fee_pence, onboarding_status, is_owner, directory_tier, bio, website_url, logo_url, social_links, reserved_day_of_week, reserved_time_start, reserved_time_end, reserved_room_id, notifications_last_seen_at, auth_user_id, mandate_status, gocardless_mandate_id, gocardless_billing_request_id, gocardless_subscription_id')
         .order('created_at', { ascending: false });
       if (error) return res.status(500).json({ error: error.message });
       return res.status(200).json({ members: data });
