@@ -96,7 +96,7 @@ module.exports = async (req, res) => {
     // webhook that, empirically, has never actually arrived or processed.
     const { error: statusErr } = await supabase
       .from('members')
-      .update({ mandate_status: 'pending_submission', gocardless_billing_request_id: billingRequest.id })
+      .update({ mandate_status: 'pending_submission', gocardless_billing_request_id: billingRequest.id, mandate_setup_started_at: new Date().toISOString() })
       .eq('id', member.id);
     if (statusErr) console.error(`Failed to set mandate_status=pending_submission for member ${member.id}:`, statusErr.message);
 

@@ -157,7 +157,7 @@ async function ensureMembershipSubscription(supabase, member) {
   }
 }
 
-module.exports = { getGoCardlessClient, PLAN_TIER_MONTHLY_PENCE, readRawBody, createOneOffPayment, createMembershipSubscription, customerLinksFor, persistNewCustomerId, ensureMembershipSubscription, handleMandateBecameActive };
+module.exports = { getGoCardlessClient, PLAN_TIER_MONTHLY_PENCE, readRawBody, createOneOffPayment, createMembershipSubscription, customerLinksFor, persistNewCustomerId, ensureMembershipSubscription, handleMandateBecameActive, reconcileMemberMandate };
 
 // Everything that should happen the moment a mandate is confirmed active —
 // extracted from api/webhooks/gocardless.js so this exact logic can also
@@ -219,4 +219,86 @@ async function handleMandateBecameActive(supabase, member) {
       });
     }
   }
+}
+
+// Core reconciliation logic, extracted so the admin "Sync with GoCardless"
+// button and the hourly cron (api/cron/sync-mandates.js) both call the
+// exact same thing rather than risking two copies drifting apart. Queries
+// GoCardless directly for one member's real mandate state and updates our
+// record to match — this exists because the mandate lifecycle webhook has
+// never once been successfully processed in production (found 22 Aug 2026,
+// every mandate ever attempted sat stuck at pending_submission forever).
+// Returns { ok, changed, previous_status, new_status } or
+// { ok, changed: false, billing_request_status, message } when nothing's
+// progressed yet, or throws on a genuine GoCardless/DB error — callers
+// decide how to report that (an HTTP error for the admin endpoint, a
+// logged failure for the cron).
+async function reconcileMemberMandate(supabase, member) {
+  if (!member.gocardless_billing_request_id && !member.gocardless_mandate_id) {
+    return { ok: false, error: 'No Direct Debit setup on record to sync.' };
+  }
+
+  const client = getGoCardlessClient();
+  let mandateId = null;
+  let mandateStatus = null;
+
+  if (member.gocardless_mandate_id) {
+    const mandate = await client.mandates.find(member.gocardless_mandate_id);
+    mandateId = mandate.id;
+    mandateStatus = mandate.status;
+  } else {
+    // No mandate id on record yet — the only lead is the Billing Request
+    // that started the flow. If GoCardless has since linked a mandate to
+    // it (mandate_request_mandate), that's the mandate that was actually
+    // created; if not, the Billing Request itself hasn't progressed and
+    // there's genuinely nothing further to sync yet.
+    const billingRequest = await client.billingRequests.find(member.gocardless_billing_request_id);
+    const linkedMandateId = billingRequest.links && billingRequest.links.mandate_request_mandate;
+    if (!linkedMandateId) {
+      return {
+        ok: true, changed: false,
+        billing_request_status: billingRequest.status,
+        message: `Billing Request still "${billingRequest.status}" — no mandate created from it yet.`,
+      };
+    }
+    const mandate = await client.mandates.find(linkedMandateId);
+    mandateId = mandate.id;
+    mandateStatus = mandate.status;
+  }
+
+  // GoCardless's Mandate.status values map 1:1 onto what members.
+  // mandate_status allows (see the migration that extended its CHECK
+  // constraint alongside this) — no translation needed, just guard against
+  // an unrecognised value rather than writing it blindly if GoCardless
+  // ever adds a new one.
+  const knownStatuses = ['pending_customer_approval', 'pending_submission', 'submitted', 'active', 'cancelled', 'failed', 'expired', 'consumed', 'blocked', 'suspended_by_payer'];
+  if (!knownStatuses.includes(mandateStatus)) {
+    throw new Error(`GoCardless returned an unrecognised mandate status: "${mandateStatus}"`);
+  }
+
+  const previousStatus = member.mandate_status;
+  const wasActive = previousStatus === 'active';
+  const nowActive = mandateStatus === 'active';
+
+  const updates = { mandate_status: mandateStatus };
+  if (mandateId) updates.gocardless_mandate_id = mandateId;
+
+  const { data: updated, error: updateErr } = await supabase
+    .from('members')
+    .update(updates)
+    .eq('id', member.id)
+    .select('*')
+    .single();
+  if (updateErr) throw new Error(updateErr.message);
+
+  // Only run the "just went active" side effects (email + subscription
+  // setup) if this sync is what's newly discovering that — not on every
+  // sync of an already-active mandate. handleMandateBecameActive is
+  // idempotent regardless, but there's no reason to call it or resend the
+  // email needlessly.
+  if (nowActive && !wasActive) {
+    await handleMandateBecameActive(supabase, updated);
+  }
+
+  return { ok: true, changed: previousStatus !== mandateStatus, previous_status: previousStatus, new_status: mandateStatus, mandate_id: mandateId };
 }
