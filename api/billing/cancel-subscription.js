@@ -108,6 +108,22 @@ module.exports = async (req, res) => {
       });
     }
 
+    // The member themselves had no way to know their own billing had
+    // changed at all — Rosie asked directly whether either GoCardless or
+    // the portal notifies them. The portal didn't. This doesn't fire for
+    // tonight's test accounts any differently than it will for a real
+    // practitioner later — deliberately the same path either way, so
+    // there's no separate "test mode" to remember to switch off. Failing
+    // to send this shouldn't block the cancellation itself having already
+    // succeeded — logged, not thrown.
+    try {
+      const { sendSubscriptionCancelledEmail } = require('../_lib/email');
+      const memberName = `${member.first_name || ''} ${member.last_name || ''}`.trim() || member.email;
+      await sendSubscriptionCancelledEmail({ to: member.email, memberName, hasUncancellablePayment: uncancellable.length > 0 });
+    } catch (e) {
+      console.error(`Failed to send subscription-cancelled email to member ${member.id}:`, e.message);
+    }
+
     return res.status(200).json({
       ok: true,
       cancelled_subscription_id: member.gocardless_subscription_id,

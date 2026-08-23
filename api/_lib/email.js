@@ -179,6 +179,24 @@ Please check your bank details are up to date on My Profile. If this keeps happe
   });
 }
 
+async function sendSubscriptionCancelledEmail({ to, memberName, hasUncancellablePayment }) {
+  const resend = getResend();
+  return resend.emails.send({
+    from: FROM_EMAIL,
+    to: [to],
+    subject: `Your monthly membership fee has been cancelled`,
+    text: `Hi ${memberName},
+
+Your recurring monthly membership fee has been cancelled — no further automatic payments will be collected via Direct Debit.
+${hasUncancellablePayment ? `
+One payment that was already submitted to your bank before this cancellation could not be stopped and may still appear — please contact Staff & Admin if you have any questions about it.
+` : ''}
+If this wasn't expected, or you have any questions, please contact Staff & Admin.
+
+— Radiant Booking`,
+  });
+}
+
 async function sendReminder({ to, memberName, roomName, start, hoursBefore }) {
   const resend = getResend();
   const dateStr = new Date(start).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
@@ -534,7 +552,7 @@ module.exports = {
   sendBookingConfirmation, sendTeamBookingNotice, sendCancellationAlert, sendReminder, sendInvite,
   sendWelcomeEmail, sendRotaUpdate, sendLeaveUpdate, sendLeaveApprovalRequest, sendLeaveDecision, sendExitNoticeReminder,
   sendMandateActiveEmail, sendSessionPaymentConfirmedEmail, sendSessionPaymentFailedEmail,
-  sendSubscriptionStartedEmail, sendSubscriptionPaymentFailedEmail, sendAccountCreatedEmail, sendUrgentMessageEmail,
+  sendSubscriptionStartedEmail, sendSubscriptionPaymentFailedEmail, sendSubscriptionCancelledEmail, sendAccountCreatedEmail, sendUrgentMessageEmail,
   sendAdminAlertEmail,
   sendPasswordResetEmail,
   sendMagicLinkEmail,
