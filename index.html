@@ -1724,16 +1724,22 @@ textarea.form-input { resize: vertical; }
           <div class="stat-card"><div class="stat-label">This Month</div><div class="stat-value" id="my-stat-month">–</div></div>
           <div class="stat-card"><div class="stat-label">Total Bookings</div><div class="stat-value" id="my-stat-total">–</div></div>
         </div>
-        <div id="my-payment-due-banner" style="display:none;margin-bottom:20px;"></div>
-        <div id="my-dd-required-banner" style="display:none;margin-bottom:20px;"></div>
-        <div id="my-recurring-slot-card" style="display:none;margin-bottom:20px;"></div>
-        <div id="my-upgrade-banner" style="display:none;margin-bottom:20px;"></div>
-        <div class="card">
+        <!-- Upcoming Sessions moved above the summary cards below (team
+             review, 23 Aug) — each row now shows its own accurate payment
+             status (see the Direct Debit / payment-due fix from the same
+             session), so the specific list of bookings is the thing worth
+             seeing first; the banners underneath are supporting context,
+             not the main content. -->
+        <div class="card" style="margin-bottom:20px;">
           <div class="card-header"><div class="card-title">Upcoming Sessions</div></div>
           <div id="my-bookings-list">
             <div style="padding:18px 22px;color:var(--r-warm-gray);font-size:13px;">Loading…</div>
           </div>
         </div>
+        <div id="my-payment-due-banner" style="display:none;margin-bottom:20px;"></div>
+        <div id="my-dd-required-banner" style="display:none;margin-bottom:20px;"></div>
+        <div id="my-recurring-slot-card" style="display:none;margin-bottom:20px;"></div>
+        <div id="my-upgrade-banner" style="display:none;margin-bottom:20px;"></div>
       </div>
 
       <!-- BOOK A ROOM -->
