@@ -941,12 +941,12 @@ textarea.form-input { resize: vertical; }
     <div id="auth-signin-panel">
       <div class="form-row" style="margin-top:20px;">
         <label class="form-label">Email</label>
-        <input type="email" class="form-input" id="login-email" placeholder="your@email.com">
+        <input type="email" class="form-input" id="login-email" placeholder="your@email.com" autocomplete="username">
       </div>
       <div class="form-row" id="login-password-row" style="margin-bottom:8px;">
         <label class="form-label">Password</label>
         <div style="position:relative;">
-          <input type="password" class="form-input" id="login-password" placeholder="••••••••" style="padding-right:44px;">
+          <input type="password" class="form-input" id="login-password" placeholder="••••••••" style="padding-right:44px;" autocomplete="current-password">
           <button type="button" onclick="togglePasswordVisibility('login-password', this)" aria-label="Show password" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;color:var(--r-warm-gray);font-size:15px;line-height:1;">👁</button>
         </div>
       </div>
@@ -965,7 +965,7 @@ textarea.form-input { resize: vertical; }
       <p style="font-size:13px;color:var(--r-warm-gray);margin:20px 0 16px;">Enter your email and we'll send you a reset link — this only works for accounts that have already been invited and set up.</p>
       <div class="form-row" style="margin-bottom:18px;">
         <label class="form-label">Email</label>
-        <input type="email" class="form-input" id="forgot-email" placeholder="your@email.com">
+        <input type="email" class="form-input" id="forgot-email" placeholder="your@email.com" autocomplete="username">
       </div>
       <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;" id="forgot-btn" onclick="doForgotPassword()">Send Reset Link</button>
       <p style="text-align:center;margin-top:14px;"><a href="#" style="font-size:12px;color:var(--r-warm-gray);" onclick="hideForgotPasswordPanel();return false;">← Back to Sign In</a></p>
@@ -979,7 +979,7 @@ textarea.form-input { resize: vertical; }
       <div class="form-row" style="margin-bottom:18px;">
         <label class="form-label">New Password</label>
         <div style="position:relative;">
-          <input type="password" class="form-input" id="reset-password" placeholder="At least 8 characters, incl. a letter and number" style="padding-right:44px;">
+          <input type="password" class="form-input" id="reset-password" placeholder="At least 8 characters, incl. a letter and number" style="padding-right:44px;" autocomplete="new-password">
           <button type="button" onclick="togglePasswordVisibility('reset-password', this)" aria-label="Show password" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;color:var(--r-warm-gray);font-size:15px;line-height:1;">👁</button>
         </div>
       </div>
@@ -993,12 +993,12 @@ textarea.form-input { resize: vertical; }
       <p style="font-size:13px;color:var(--r-warm-gray);margin:20px 0 16px;">You've been invited to join Radiant as a <strong id="invite-role-label">member</strong>. Set a password to activate your account.</p>
       <div class="form-row">
         <label class="form-label">Email</label>
-        <input type="email" class="form-input" id="signup-email" disabled>
+        <input type="email" class="form-input" id="signup-email" disabled autocomplete="username">
       </div>
       <div class="form-row" style="margin-bottom:24px;">
         <label class="form-label">Create Password</label>
         <div style="position:relative;">
-          <input type="password" class="form-input" id="signup-password" placeholder="At least 8 characters, incl. a letter and number" style="padding-right:44px;">
+          <input type="password" class="form-input" id="signup-password" placeholder="At least 8 characters, incl. a letter and number" style="padding-right:44px;" autocomplete="new-password">
           <button type="button" onclick="togglePasswordVisibility('signup-password', this)" aria-label="Show password" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;color:var(--r-warm-gray);font-size:15px;line-height:1;">👁</button>
         </div>
       </div>
@@ -3771,13 +3771,31 @@ function renderMyBookings() {
     const mon = d.toLocaleDateString('en-GB', { month: 'short' });
     const time = fmtDateTime(b.start_time).split(' · ')[1] || '';
     const needsPayment = b.payment_status === 'pending' && !b.gocardless_payment_id;
+    // Real bug found live: hiding the "Pay now" button when a Direct Debit
+    // charge was already attempted (gocardless_payment_id set) is correct —
+    // showing a redundant button risks a double-charge — but the OLD code
+    // hid the payment note too, so a booking with a real £30 DD charge in
+    // flight looked completely indistinguishable from one that was fully
+    // free. Every pending/failed/unpriced booking now shows SOME status
+    // text; only the button itself stays conditional on whether a charge
+    // attempt already exists.
+    let paymentNote = '';
+    if (b.payment_status === 'pending') {
+      paymentNote = b.gocardless_payment_id
+        ? `<div style="font-size:12px;color:var(--r-warm-gray);margin-top:3px;">£${(b.amount_pence / 100).toFixed(2)} — Direct Debit collecting</div>`
+        : `<div style="font-size:12px;color:var(--r-gold);margin-top:3px;">£${(b.amount_pence / 100).toFixed(2)} payment due</div>`;
+    } else if (b.payment_status === 'failed') {
+      paymentNote = `<div style="font-size:12px;color:var(--r-red);margin-top:3px;">⚠ £${(b.amount_pence / 100).toFixed(2)} payment failed — contact Staff &amp; Admin</div>`;
+    } else if (b.payment_status === 'pending_manual') {
+      paymentNote = `<div style="font-size:12px;color:var(--r-warm-gray);margin-top:3px;">Price to be confirmed — Staff &amp; Admin will follow up</div>`;
+    }
     return `
     <div class="booking-item">
       <div class="date-box"><div class="date-day">${day}</div><div class="date-mon">${mon}</div></div>
       <div style="flex:1;">
         <div style="font-size:13.5px;font-weight:500;">${esc(b.room ? b.room.name : '—')}</div>
         <div style="font-size:12px;color:var(--r-warm-gray);">${time} · ${esc(b.room ? b.room.floor || '' : '')}</div>
-        ${needsPayment ? `<div style="font-size:12px;color:var(--r-gold);margin-top:3px;">£${(b.amount_pence / 100).toFixed(2)} payment due</div>` : ''}
+        ${paymentNote}
         ${b.patient_email ? `<div style="font-size:12px;color:var(--r-warm-gray);margin-top:3px;">👤 ${esc(b.patient_name || b.patient_email)} invited</div>` : ''}
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
