@@ -70,6 +70,18 @@ module.exports = async (req, res) => {
     if (plan_tier && lockedTiers.includes(plan_tier) && slots.length === 0) {
       return res.status(400).json({ error: 'Core and Resident invites need at least one agreed recurring slot' });
     }
+    // Rosie, 23 Aug: "residents and core can only have full or half days".
+    // Same check as api/recurring-slots.js — the client UI computes
+    // time_end from a Half/Full day duration now, but this endpoint had
+    // nothing stopping a direct API call bypassing that.
+    for (const s of slots) {
+      const [startH, startM] = s.time_start.split(':').map(Number);
+      const [endH, endM] = s.time_end.split(':').map(Number);
+      const durationHours = (endH * 60 + endM - (startH * 60 + startM)) / 60;
+      if (![4, 8].includes(durationHours)) {
+        return res.status(400).json({ error: `Core and Resident recurring slots must be exactly a half day (4hrs) or full day (8hrs) — ${s.day_of_week} ${s.time_start}–${s.time_end} isn't` });
+      }
+    }
 
     // Special-deal monthly fee override (team review 19 Aug 2026) — only
     // meaningful for Core/Resident, who are the only tiers with a monthly

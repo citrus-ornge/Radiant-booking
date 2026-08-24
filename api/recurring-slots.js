@@ -44,6 +44,18 @@ module.exports = async (req, res) => {
     if (!member_id || !day_of_week || !time_start || !time_end) {
       return res.status(400).json({ error: 'member_id, day_of_week, time_start and time_end are required' });
     }
+    // Rosie, 23 Aug: "residents and core can only have full or half days".
+    // The client UI now computes time_end from a Half/Full day duration
+    // rather than a free-form end-time picker (a real 6-hour block slipped
+    // through before that), but this endpoint had nothing stopping a
+    // direct API call from setting any arbitrary duration regardless —
+    // checked here too rather than trusting the client alone.
+    const [startH, startM] = time_start.split(':').map(Number);
+    const [endH, endM] = time_end.split(':').map(Number);
+    const durationHours = (endH * 60 + endM - (startH * 60 + startM)) / 60;
+    if (![4, 8].includes(durationHours)) {
+      return res.status(400).json({ error: 'Core and Resident recurring slots must be exactly a half day (4hrs) or full day (8hrs)' });
+    }
     const { data: target, error: targetErr } = await supabase.from('members').select('id, first_name, last_name, plan_tier').eq('id', member_id).maybeSingle();
     if (targetErr) return res.status(500).json({ error: targetErr.message });
     if (!target) return res.status(404).json({ error: 'Member not found' });

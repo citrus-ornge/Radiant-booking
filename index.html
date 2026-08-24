@@ -1438,11 +1438,12 @@ textarea.form-input { resize: vertical; }
                 <div class="form-two" style="margin-top:8px;">
                   <select class="form-input" id="invite-reserved-start">
                     <option value="">Start…</option>
-                    <option value="07:00">07:00</option><option value="08:00">08:00</option><option value="09:00">09:00</option><option value="10:00">10:00</option><option value="11:00">11:00</option><option value="12:00">12:00</option><option value="13:00">13:00</option><option value="14:00">14:00</option><option value="15:00">15:00</option><option value="16:00">16:00</option><option value="17:00">17:00</option><option value="18:00">18:00</option><option value="19:00">19:00</option><option value="20:00">20:00</option>
+                    <option value="07:00">07:00</option><option value="08:00">08:00</option><option value="09:00">09:00</option><option value="10:00">10:00</option><option value="11:00">11:00</option><option value="12:00">12:00</option><option value="13:00">13:00</option><option value="14:00">14:00</option><option value="15:00">15:00</option><option value="16:00">16:00</option>
                   </select>
-                  <select class="form-input" id="invite-reserved-end">
-                    <option value="">End…</option>
-                    <option value="08:00">08:00</option><option value="09:00">09:00</option><option value="10:00">10:00</option><option value="11:00">11:00</option><option value="12:00">12:00</option><option value="13:00">13:00</option><option value="14:00">14:00</option><option value="15:00">15:00</option><option value="16:00">16:00</option><option value="17:00">17:00</option><option value="18:00">18:00</option><option value="19:00">19:00</option><option value="20:00">20:00</option>
+                  <select class="form-input" id="invite-reserved-duration">
+                    <option value="">Duration…</option>
+                    <option value="4">Half day (4hrs)</option>
+                    <option value="8">Full day (8hrs)</option>
                   </select>
                 </div>
                 <button type="button" class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="addPendingInviteSlot()">+ Add this slot</button>
@@ -2135,11 +2136,12 @@ textarea.form-input { resize: vertical; }
         <div class="form-two" style="margin-top:8px;">
           <select class="form-input" id="au-reserved-start">
             <option value="">Start…</option>
-            <option value="07:00">07:00</option><option value="08:00">08:00</option><option value="09:00">09:00</option><option value="10:00">10:00</option><option value="11:00">11:00</option><option value="12:00">12:00</option><option value="13:00">13:00</option><option value="14:00">14:00</option><option value="15:00">15:00</option><option value="16:00">16:00</option><option value="17:00">17:00</option><option value="18:00">18:00</option><option value="19:00">19:00</option><option value="20:00">20:00</option>
+            <option value="07:00">07:00</option><option value="08:00">08:00</option><option value="09:00">09:00</option><option value="10:00">10:00</option><option value="11:00">11:00</option><option value="12:00">12:00</option><option value="13:00">13:00</option><option value="14:00">14:00</option><option value="15:00">15:00</option><option value="16:00">16:00</option>
           </select>
-          <select class="form-input" id="au-reserved-end">
-            <option value="">End…</option>
-            <option value="08:00">08:00</option><option value="09:00">09:00</option><option value="10:00">10:00</option><option value="11:00">11:00</option><option value="12:00">12:00</option><option value="13:00">13:00</option><option value="14:00">14:00</option><option value="15:00">15:00</option><option value="16:00">16:00</option><option value="17:00">17:00</option><option value="18:00">18:00</option><option value="19:00">19:00</option><option value="20:00">20:00</option>
+          <select class="form-input" id="au-reserved-duration">
+            <option value="">Duration…</option>
+            <option value="4">Half day (4hrs)</option>
+            <option value="8">Full day (8hrs)</option>
           </select>
         </div>
         <button type="button" class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="addPendingAddUserSlot()">+ Add this slot</button>
@@ -2220,11 +2222,12 @@ textarea.form-input { resize: vertical; }
         <div class="form-two" style="margin-top:8px;">
           <select class="form-input" id="mm-reserved-start">
             <option value="">Start…</option>
-            <option value="07:00">07:00</option><option value="08:00">08:00</option><option value="09:00">09:00</option><option value="10:00">10:00</option><option value="11:00">11:00</option><option value="12:00">12:00</option><option value="13:00">13:00</option><option value="14:00">14:00</option><option value="15:00">15:00</option><option value="16:00">16:00</option><option value="17:00">17:00</option><option value="18:00">18:00</option><option value="19:00">19:00</option><option value="20:00">20:00</option>
+            <option value="07:00">07:00</option><option value="08:00">08:00</option><option value="09:00">09:00</option><option value="10:00">10:00</option><option value="11:00">11:00</option><option value="12:00">12:00</option><option value="13:00">13:00</option><option value="14:00">14:00</option><option value="15:00">15:00</option><option value="16:00">16:00</option>
           </select>
-          <select class="form-input" id="mm-reserved-end">
-            <option value="">End…</option>
-            <option value="08:00">08:00</option><option value="09:00">09:00</option><option value="10:00">10:00</option><option value="11:00">11:00</option><option value="12:00">12:00</option><option value="13:00">13:00</option><option value="14:00">14:00</option><option value="15:00">15:00</option><option value="16:00">16:00</option><option value="17:00">17:00</option><option value="18:00">18:00</option><option value="19:00">19:00</option><option value="20:00">20:00</option>
+          <select class="form-input" id="mm-reserved-duration">
+            <option value="">Duration…</option>
+            <option value="4">Half day (4hrs)</option>
+            <option value="8">Full day (8hrs)</option>
           </select>
         </div>
         <button type="button" class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="addRecurringSlot()">+ Add this slot</button>
@@ -3501,14 +3504,16 @@ async function addRecurringSlot() {
   const day_of_week = document.getElementById('mm-reserved-day').value;
   const room_id = document.getElementById('mm-reserved-room').value || null;
   const time_start = document.getElementById('mm-reserved-start').value;
-  const time_end = document.getElementById('mm-reserved-end').value;
-  if (!day_of_week || !time_start || !time_end) { showToast('⚠ Pick a day, start time and end time'); return; }
+  const duration = parseInt(document.getElementById('mm-reserved-duration').value, 10);
+  if (!day_of_week || !time_start || !duration) { showToast('⚠ Pick a day, start time and duration'); return; }
+  const time_end = computeSlotEndTime(time_start, duration);
+  if (!time_end) { showToast('⚠ That start time would run past 20:00 for a ' + (duration === 8 ? 'full' : 'half') + ' day — pick an earlier start'); return; }
   try {
     await api('/recurring-slots', { method: 'POST', body: JSON.stringify({ member_id: memberId, day_of_week, time_start, time_end, room_id }) });
     document.getElementById('mm-reserved-day').value = '';
     document.getElementById('mm-reserved-room').value = '';
     document.getElementById('mm-reserved-start').value = '';
-    document.getElementById('mm-reserved-end').value = '';
+    document.getElementById('mm-reserved-duration').value = '';
     await loadRecurringSlotsForModal(memberId);
     showToast('✓ Slot added');
   } catch (e) {
@@ -6999,18 +7004,38 @@ function renderPendingInviteSlots() {
   }).join('');
 }
 
+// Core/Resident recurring slots may only be a half day (4hrs) or full day
+// (8hrs) — Rosie, 23 Aug: "residents and core can only have full or half
+// days". Previously the builder had independent Start and End pickers,
+// which let admin create an arbitrary block (a real one slipped through:
+// 10:00–16:00, a 6-hour session that's neither). Computing end time from
+// start + a fixed duration makes an invalid length impossible to create
+// in the first place, rather than validating after the fact. Still
+// checks the result doesn't run past a sensible closing time (20:00),
+// since a Full day starting at, say, 16:00 would otherwise end at
+// midnight — returns null (with the caller showing a toast) rather than
+// silently allowing that.
+function computeSlotEndTime(startTime, durationHours) {
+  const [h, m] = startTime.split(':').map(Number);
+  const endH = h + durationHours;
+  if (endH > 20) return null;
+  return `${String(endH).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
 function addPendingInviteSlot() {
   const day_of_week = document.getElementById('invite-reserved-day').value;
   const room_id = document.getElementById('invite-reserved-room').value || null;
   const time_start = document.getElementById('invite-reserved-start').value;
-  const time_end = document.getElementById('invite-reserved-end').value;
-  if (!day_of_week || !time_start || !time_end) { showToast('⚠ Pick a day, start time and end time'); return; }
+  const duration = parseInt(document.getElementById('invite-reserved-duration').value, 10);
+  if (!day_of_week || !time_start || !duration) { showToast('⚠ Pick a day, start time and duration'); return; }
+  const time_end = computeSlotEndTime(time_start, duration);
+  if (!time_end) { showToast('⚠ That start time would run past 20:00 for a ' + (duration === 8 ? 'full' : 'half') + ' day — pick an earlier start'); return; }
   pendingInviteSlots.push({ day_of_week, room_id, time_start, time_end });
   persistPendingInviteSlots();
   document.getElementById('invite-reserved-day').value = '';
   document.getElementById('invite-reserved-room').value = '';
   document.getElementById('invite-reserved-start').value = '';
-  document.getElementById('invite-reserved-end').value = '';
+  document.getElementById('invite-reserved-duration').value = '';
   renderPendingInviteSlots();
 }
 
@@ -7126,13 +7151,15 @@ function addPendingAddUserSlot() {
   const day_of_week = document.getElementById('au-reserved-day').value;
   const room_id = document.getElementById('au-reserved-room').value || null;
   const time_start = document.getElementById('au-reserved-start').value;
-  const time_end = document.getElementById('au-reserved-end').value;
-  if (!day_of_week || !time_start || !time_end) { showToast('⚠ Pick a day, start time and end time'); return; }
+  const duration = parseInt(document.getElementById('au-reserved-duration').value, 10);
+  if (!day_of_week || !time_start || !duration) { showToast('⚠ Pick a day, start time and duration'); return; }
+  const time_end = computeSlotEndTime(time_start, duration);
+  if (!time_end) { showToast('⚠ That start time would run past 20:00 for a ' + (duration === 8 ? 'full' : 'half') + ' day — pick an earlier start'); return; }
   pendingAddUserSlots.push({ day_of_week, room_id, time_start, time_end });
   document.getElementById('au-reserved-day').value = '';
   document.getElementById('au-reserved-room').value = '';
   document.getElementById('au-reserved-start').value = '';
-  document.getElementById('au-reserved-end').value = '';
+  document.getElementById('au-reserved-duration').value = '';
   renderPendingAddUserSlots();
 }
 
