@@ -4884,10 +4884,22 @@ async function showOnboardingRoomTerms() {
   const detailsEl = document.getElementById('onboarding-room-offer-details');
   const slots = m.recurring_slots || [];
   const tierLabelText = m && m.plan_tier === 'resident' ? 'Resident' : 'Core';
+  // Real gap found live (23 Aug): this screen showed the room/day/time
+  // being offered but never once mentioned what it actually costs —
+  // someone accepting a recurring slot had no way to know their monthly
+  // fee from this page at all. Reuses PLAN_TIER_MONTHLY_PENCE_DISPLAY
+  // (already built for Invite Users' own fee-override field) rather than
+  // a second copy of the same standard rates.
+  const standardPence = PLAN_TIER_MONTHLY_PENCE_DISPLAY[m.plan_tier];
+  const feePence = m.custom_monthly_fee_pence != null ? m.custom_monthly_fee_pence : standardPence;
+  const feeLine = feePence != null
+    ? `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--r-stone,#e8e4dc);font-weight:600;">£${(feePence / 100).toFixed(2)} / month</div>`
+    : '';
   detailsEl.innerHTML = `
     <div style="font-size:15px;font-weight:600;margin-bottom:10px;">${slots.map(s => `${esc(s.day_of_week)}, ${esc(fmtSlotTime(s.time_start))}–${esc(fmtSlotTime(s.time_end))}`).join('<br>')}</div>
     <div style="color:var(--r-warm-gray);margin-bottom:4px;">${slots.map(s => `Room: ${esc(s.room ? s.room.name : 'To be confirmed')}`).join('<br>')}</div>
     <div style="color:var(--r-warm-gray);">${slots.length > 1 ? 'These slots are' : 'This slot is'} held for you every week as part of your ${esc(tierLabelText)} membership.</div>
+    ${feeLine}
   `;
 }
 
