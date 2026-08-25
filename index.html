@@ -3840,7 +3840,7 @@ async function savePatientInvite() {
   const btn = document.getElementById('pi-submit-btn');
   btn.disabled = true;
   try {
-    const result = await api(`/bookings/${bookingId}`, {
+    const result = await api(`/booking-detail?id=${bookingId}`, {
       method: 'PATCH',
       body: JSON.stringify({ patient_email, patient_name, patient_notes }),
     });
@@ -4326,7 +4326,9 @@ async function disconnectGoogleCalendar() {
 
 async function cancelBooking(id) {
   try {
-    await api(`/bookings/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'cancelled' }) });
+    // Calls a query-param-based endpoint, not the old /bookings/{id}
+    // bracket route — see api/booking-detail.js for exactly why.
+    await api(`/booking-detail?id=${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'cancelled' }) });
     showToast('✓ Booking cancelled — notification sent');
     await loadAppData();
   } catch (e) {
