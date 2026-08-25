@@ -1,9 +1,9 @@
-const { getSupabase } = require('../_lib/supabase');
-const { sendCancellationAlert } = require('../_lib/email');
-const { requireAuth } = require('../_lib/auth');
-const { logAudit } = require('../_lib/audit');
-const { isNotificationEnabled } = require('../_lib/notificationSettings');
-const { generateBookingIcs, bookingIcsUid } = require('../_lib/ics');
+const { getSupabase } = require('./_lib/supabase');
+const { sendCancellationAlert } = require('./_lib/email');
+const { requireAuth } = require('./_lib/auth');
+const { logAudit } = require('./_lib/audit');
+const { isNotificationEnabled } = require('./_lib/notificationSettings');
+const { generateBookingIcs, bookingIcsUid } = require('./_lib/ics');
 
 // Real, unresolved 405 found live on PATCH /api/bookings/{id} (the bracket
 // dynamic route in the api/bookings/ folder): confirmed via direct browser
@@ -19,6 +19,20 @@ const { generateBookingIcs, bookingIcsUid } = require('../_lib/ics');
 // api/bookings.js file the way api/bookings/[id].js's containing folder
 // does — rather than keep chasing why the original route fails.
 module.exports = async (req, res) => {
+  // Wrapping the whole handler: a bare 500 with no body was showing up
+  // live for the very first real invocation of this logic (the original
+  // bracket route never once actually ran in production, so any bug here
+  // was never exposed until now). This surfaces the real error message
+  // and stack instead of a blank 500, rather than guessing again.
+  try {
+    return await handleBookingDetail(req, res);
+  } catch (e) {
+    console.error('Unhandled error in booking-detail:', e);
+    return res.status(500).json({ error: e.message, stack: e.stack });
+  }
+};
+
+async function handleBookingDetail(req, res) {
   const { id } = req.query;
   if (!id) return res.status(400).json({ error: 'id is required' });
   const supabase = getSupabase();
@@ -71,8 +85,8 @@ module.exports = async (req, res) => {
       let patient_invite_sent = false;
       if (updates.patient_email) {
         try {
-          const { generateBookingIcs } = require('../_lib/ics');
-          const { sendPatientInviteEmail } = require('../_lib/email');
+          const { generateBookingIcs } = require('./_lib/ics');
+          const { sendPatientInviteEmail } = require('./_lib/email');
           const patientIcs = generateBookingIcs({
             uid: `patient-${booking.id}@booking.radiantfr.com`,
             summary: `Appointment with ${booking.member.first_name} ${booking.member.last_name} — Radiant`,
@@ -190,4 +204,4 @@ module.exports = async (req, res) => {
   }
 
   res.status(405).json({ error: 'Method not allowed' });
-};
+}
