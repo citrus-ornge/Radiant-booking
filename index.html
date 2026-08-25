@@ -1321,12 +1321,19 @@ textarea.form-input { resize: vertical; }
           <div><div class="page-title">All Bookings</div><div class="gold-line"></div><div class="page-sub">Manage all room reservations</div></div>
           <button class="btn btn-primary" onclick="openModal('new-booking-modal')">+ New Booking</button>
         </div>
-        <div class="tabs">
-          <button class="tab active" onclick="filterBookingsTab('all', this)">All</button>
-          <button class="tab" onclick="filterBookingsTab('confirmed', this)">Confirmed</button>
-          <button class="tab" onclick="filterBookingsTab('pending', this)">Pending</button>
-          <button class="tab" onclick="filterBookingsTab('cancelled', this)">Cancelled</button>
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:0;">
+          <div class="tabs" style="margin-bottom:0;">
+            <button class="tab active" onclick="filterBookingsTab('all', this)">All</button>
+            <button class="tab" onclick="filterBookingsTab('confirmed', this)">Confirmed</button>
+            <button class="tab" onclick="filterBookingsTab('pending', this)">Pending</button>
+            <button class="tab" onclick="filterBookingsTab('cancelled', this)">Cancelled</button>
+          </div>
+          <div class="view-toggle" style="width:auto;padding:0 0 20px;">
+            <button class="toggle-btn active" id="bv-toggle-table" onclick="setBookingsViewMode('table')" style="color:var(--r-charcoal);border-color:rgba(0,0,0,0.14);">Table</button>
+            <button class="toggle-btn" id="bv-toggle-calendar" onclick="setBookingsViewMode('calendar')" style="color:var(--r-charcoal);border-color:rgba(0,0,0,0.14);">Calendar</button>
+          </div>
         </div>
+        <div id="bookings-table-view">
         <div class="card">
           <div class="table-scroll">
           <table>
@@ -1335,6 +1342,25 @@ textarea.form-input { resize: vertical; }
               <tr><td colspan="8" style="text-align:center;color:var(--r-warm-gray);padding:20px;">Loading…</td></tr>
             </tbody>
           </table>
+          </div>
+        </div>
+        </div>
+        <div id="bookings-calendar-view" style="display:none;">
+          <div class="card">
+            <div class="card-header">
+              <div style="display:flex;align-items:center;gap:10px;">
+                <button class="btn btn-ghost btn-sm" onclick="shiftBookingsCalMonth(-1)">←</button>
+                <div class="card-title" id="bv-cal-month-label" style="min-width:150px;text-align:center;">–</div>
+                <button class="btn btn-ghost btn-sm" onclick="shiftBookingsCalMonth(1)">→</button>
+              </div>
+              <div style="font-size:12px;color:var(--r-warm-gray);">Tap a booking to see details</div>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:14px;padding:12px 14px;border-bottom:1px solid var(--r-stone);font-size:11.5px;color:var(--r-warm-gray);">
+              <div style="display:flex;align-items:center;gap:5px;"><span style="width:11px;height:11px;border-radius:3px;background:var(--r-green);display:inline-block;"></span>Confirmed</div>
+              <div style="display:flex;align-items:center;gap:5px;"><span style="width:11px;height:11px;border-radius:3px;background:var(--r-gold);display:inline-block;"></span>Pending payment</div>
+              <div style="display:flex;align-items:center;gap:5px;"><span style="width:11px;height:11px;border-radius:3px;background:var(--r-warm-gray);display:inline-block;"></span>Cancelled</div>
+            </div>
+            <div id="bookings-calendar-grid" style="padding:14px;"></div>
           </div>
         </div>
       </div>
@@ -2744,6 +2770,7 @@ async function loadAppData(isRetry) {
 
   populateBookingModalSelects();
   renderBookingsTable();
+  if (bookingsViewMode === 'calendar') renderBookingsCalendar();
   renderMembersTable();
   renderRoomsGrid();
   renderBookRoomList();
@@ -3199,6 +3226,121 @@ function filterBookingsTab(status, el) {
   el.closest('.tabs').querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
   renderBookingsTable();
+  if (bookingsViewMode === 'calendar') renderBookingsCalendar();
+}
+
+// ── ALL BOOKINGS: CALENDAR VIEW ──
+// Real gap raised live (25 Aug): there was no way for admin to see "who's
+// got what room when" at a glance — All Bookings only ever had a flat
+// table, and the only calendar anywhere in the app was Staff Area's, which
+// is for shifts/leave, a completely separate thing from room bookings.
+// Reuses the exact grid/chip/day-summary pattern already built for Staff
+// Area (including its day-item-detail-modal/day-summary-modal, which are
+// already generic enough) rather than inventing a second version of the
+// same UI.
+let bookingsViewMode = 'table';
+let bookingsCalMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+
+function setBookingsViewMode(mode) {
+  bookingsViewMode = mode;
+  document.getElementById('bv-toggle-table').classList.toggle('active', mode === 'table');
+  document.getElementById('bv-toggle-calendar').classList.toggle('active', mode === 'calendar');
+  document.getElementById('bookings-table-view').style.display = mode === 'table' ? 'block' : 'none';
+  document.getElementById('bookings-calendar-view').style.display = mode === 'calendar' ? 'block' : 'none';
+  if (mode === 'calendar') renderBookingsCalendar();
+}
+
+function shiftBookingsCalMonth(delta) {
+  bookingsCalMonth = new Date(bookingsCalMonth.getFullYear(), bookingsCalMonth.getMonth() + delta, 1);
+  renderBookingsCalendar();
+}
+
+function renderBookingsCalendar() {
+  const grid = document.getElementById('bookings-calendar-grid');
+  if (!grid) return;
+  const year = bookingsCalMonth.getFullYear();
+  const month = bookingsCalMonth.getMonth();
+  document.getElementById('bv-cal-month-label').textContent = bookingsCalMonth.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+
+  const filtered = bookingsTableFilter === 'all'
+    ? state.bookings
+    : bookingsTableFilter === 'pending'
+      ? state.bookings.filter(b => b.payment_status === 'pending')
+      : state.bookings.filter(b => (b.status || '') === bookingsTableFilter);
+
+  const byDate = {};
+  filtered.forEach(b => {
+    const key = toIsoDate(new Date(b.start_time));
+    (byDate[key] = byDate[key] || []).push(b);
+  });
+
+  // Sunday-start, matching every other booking calendar in the app (New
+  // Booking modal, Book a Room) — Staff Area's is Monday-start, but that's
+  // a different domain and its own established convention.
+  const firstDay = new Date(year, month, 1);
+  const startOffset = firstDay.getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const dayHeaders = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => `<div style="text-align:center;font-size:11px;color:var(--r-warm-gray);font-weight:600;padding:4px;">${d}</div>`).join('');
+
+  let cells = '';
+  for (let i = 0; i < startOffset; i++) cells += `<div></div>`;
+  for (let day = 1; day <= daysInMonth; day++) {
+    const d = new Date(year, month, day);
+    const iso = toIsoDate(d);
+    const dayBookings = (byDate[iso] || []).sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+    const isToday = toIsoDate(new Date()) === iso;
+    let chips = '';
+    if (dayBookings.length > 0) {
+      chips = dayBookings.slice(0, 3).map(b => {
+        const color = b.status === 'cancelled' ? 'var(--r-warm-gray)' : (b.payment_status === 'pending' ? 'var(--r-gold)' : 'var(--r-green)');
+        const time = fmtDateTime(b.start_time).split(' · ')[1] || '';
+        const label = `${time} ${b.room ? b.room.name : 'Room'}`;
+        return `<div onclick="event.stopPropagation();showBookingCalDetail('${b.id}')" style="font-size:9.5px;background:${color};color:#fff;border-radius:4px;padding:1px 4px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;">${esc(label)}</div>`;
+      }).join('');
+      if (dayBookings.length > 3) chips += `<div onclick="event.stopPropagation();showBookingCalDaySummary('${iso}')" style="font-size:9px;color:var(--r-warm-gray);cursor:pointer;text-decoration:underline;">+${dayBookings.length - 3} more</div>`;
+    }
+    cells += `
+      <div style="min-height:64px;border-radius:8px;padding:5px;border:1.5px solid var(--r-stone);background:var(--r-surface);">
+        <div style="font-size:11.5px;font-weight:${isToday ? '700' : '500'};color:${isToday ? 'var(--r-gold-dark)' : 'var(--r-charcoal)'};">${day}</div>
+        ${chips}
+      </div>`;
+  }
+
+  grid.innerHTML = `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px;">${dayHeaders}</div><div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;">${cells}</div>`;
+}
+
+function showBookingCalDetail(bookingId) {
+  const b = state.bookings.find(x => x.id === bookingId);
+  if (!b) { showToast('⚠ Booking not found'); return; }
+  document.getElementById('did-title').textContent = b.room ? b.room.name : 'Booking';
+  document.getElementById('did-body').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px;font-size:13.5px;">
+      <div><strong>${b.member ? esc(`${b.member.first_name} ${b.member.last_name}`.trim()) : '—'}</strong></div>
+      <div style="color:var(--r-warm-gray);">${esc(fmtDateTime(b.start_time))} – ${esc(fmtDateTime(b.end_time).split(' · ')[1] || '')} · ${esc(durationLabel(b.start_time, b.end_time))}</div>
+      <div>Status: ${statusBadge(b.status)}${cancellationDetail(b)}</div>
+      <div>Payment: ${paymentBadge(b)}</div>
+    </div>`;
+  const canNotify = b.status === 'confirmed' && new Date(b.start_time).toDateString() === new Date().toDateString() && b.member;
+  document.getElementById('did-footer').innerHTML = `
+    <button class="btn btn-outline" onclick="closeModal('day-item-detail-modal')">Close</button>
+    ${canNotify ? `<button class="btn btn-outline" onclick="closeModal('day-item-detail-modal');notifyPatientArrived('${b.id}')">🔔 Patient arrived</button>` : ''}
+    ${b.status !== 'cancelled' ? `<button class="btn btn-outline" style="border-color:var(--r-red);color:var(--r-red);" onclick="closeModal('day-item-detail-modal');cancelBooking('${b.id}')">Cancel Booking</button>` : ''}`;
+  openModal('day-item-detail-modal');
+}
+
+function showBookingCalDaySummary(iso) {
+  const dateStr = new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  document.getElementById('ds-title').textContent = dateStr;
+  const dayBookings = state.bookings
+    .filter(b => toIsoDate(new Date(b.start_time)) === iso)
+    .sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+  document.getElementById('ds-body').innerHTML = dayBookings.map(b => {
+    const time = fmtDateTime(b.start_time).split(' · ')[1] || '';
+    const who = b.member ? `${b.member.first_name} ${b.member.last_name}`.trim() : '—';
+    return `<div style="padding:10px 22px;border-bottom:1px solid var(--r-stone);cursor:pointer;font-size:13.5px;" onclick="closeModal('day-summary-modal');showBookingCalDetail('${b.id}')">${esc(time)} · ${esc(b.room ? b.room.name : 'Room')} — ${esc(who)}</div>`;
+  }).join('');
+  openModal('day-summary-modal');
 }
 
 function renderBookingsTable() {
