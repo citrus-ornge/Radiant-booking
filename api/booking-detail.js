@@ -138,7 +138,7 @@ async function handleBookingDetail(req, res) {
       // fact to act on instead of having to reconstruct it from memory.
       const { data: forNotice } = await supabase
         .from('bookings')
-        .select('start_time, member:members!bookings_member_id_fkey(plan_tier)')
+        .select('start_time, payment_status, amount_pence, gocardless_payment_id, member:members!bookings_member_id_fkey(plan_tier, first_name, last_name, email)')
         .eq('id', id)
         .maybeSingle();
       const noticeHours = forNotice ? (new Date(forNotice.start_time) - new Date()) / 3600000 : null;
@@ -148,6 +148,45 @@ async function handleBookingDetail(req, res) {
       updates.cancellation_within_notice_window = (forNotice && forNotice.member && forNotice.member.plan_tier === 'flex' && noticeHours != null)
         ? noticeHours >= 168
         : null;
+
+      // Real gap found live (25 Aug): cancelling a booking never touched
+      // its own linked GoCardless payment at all — a booking with a real
+      // Direct Debit charge already attempted (payment_status='pending',
+      // gocardless_payment_id set) stayed exactly like that after
+      // cancelling, meaning GoCardless would still collect the charge for
+      // a booking that no longer existed. Same fix already built for
+      // subscription cancellation (api/billing/cancel-subscription.js) —
+      // only pending_customer_approval/pending_submission payments can
+      // actually be cancelled via the API; anything already submitted to
+      // the bank needs a manual refund instead, which is exactly why this
+      // notifies admins rather than silently leaving it.
+      if (forNotice && forNotice.payment_status === 'pending' && forNotice.gocardless_payment_id) {
+        try {
+          const { getGoCardlessClient } = require('./_lib/gocardless');
+          const client = getGoCardlessClient();
+          const livePayment = await client.payments.find(forNotice.gocardless_payment_id);
+          if (['pending_customer_approval', 'pending_submission'].includes(livePayment.status)) {
+            await client.payments.cancel(forNotice.gocardless_payment_id);
+            updates.payment_status = 'not_required';
+          } else {
+            const { notifyAdmins } = require('./_lib/notifyAdmins');
+            const memberName = forNotice.member ? `${forNotice.member.first_name || ''} ${forNotice.member.last_name || ''}`.trim() || forNotice.member.email : 'A member';
+            await notifyAdmins(supabase, {
+              relatedMemberId: existing.member_id,
+              subject: `⚠ Cancelled booking has an uncancellable payment — manual refund needed`,
+              body: `${memberName}'s booking was cancelled, but its ${forNotice.amount_pence != null ? `£${(forNotice.amount_pence / 100).toFixed(2)}` : ''} payment (${forNotice.gocardless_payment_id}) is already "${livePayment.status}" in GoCardless and can't be cancelled via the API. A refund from the GoCardless dashboard is the only remaining option.`,
+            });
+          }
+        } catch (e) {
+          console.error(`Failed to cancel linked payment for booking ${id}:`, e.message);
+          const { notifyAdmins } = require('./_lib/notifyAdmins');
+          await notifyAdmins(supabase, {
+            relatedMemberId: existing.member_id,
+            subject: `⚠ Cancelled booking's linked payment failed to cancel`,
+            body: `A booking was cancelled but its linked GoCardless payment (${forNotice.gocardless_payment_id}) failed to cancel: ${e.message}. Check the GoCardless dashboard directly.`,
+          });
+        }
+      }
     }
 
     const { data: booking, error } = await supabase
