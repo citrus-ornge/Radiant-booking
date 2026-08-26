@@ -1471,7 +1471,7 @@ textarea.form-input { resize: vertical; }
                     <option value="">Start…</option>
                     <option value="07:00">07:00</option><option value="08:00">08:00</option><option value="09:00">09:00</option><option value="10:00">10:00</option><option value="11:00">11:00</option><option value="12:00">12:00</option><option value="13:00">13:00</option><option value="14:00">14:00</option><option value="15:00">15:00</option><option value="16:00">16:00</option>
                   </select>
-                  <select class="form-input" id="invite-reserved-duration">
+                  <select class="form-input" id="invite-reserved-duration" onchange="updateSlotStartOptions('invite')">
                     <option value="">Duration…</option>
                     <option value="4">Half day (4hrs)</option>
                     <option value="8">Full day (8hrs)</option>
@@ -2170,7 +2170,7 @@ textarea.form-input { resize: vertical; }
             <option value="">Start…</option>
             <option value="07:00">07:00</option><option value="08:00">08:00</option><option value="09:00">09:00</option><option value="10:00">10:00</option><option value="11:00">11:00</option><option value="12:00">12:00</option><option value="13:00">13:00</option><option value="14:00">14:00</option><option value="15:00">15:00</option><option value="16:00">16:00</option>
           </select>
-          <select class="form-input" id="au-reserved-duration">
+          <select class="form-input" id="au-reserved-duration" onchange="updateSlotStartOptions('au')">
             <option value="">Duration…</option>
             <option value="4">Half day (4hrs)</option>
             <option value="8">Full day (8hrs)</option>
@@ -2256,7 +2256,7 @@ textarea.form-input { resize: vertical; }
             <option value="">Start…</option>
             <option value="07:00">07:00</option><option value="08:00">08:00</option><option value="09:00">09:00</option><option value="10:00">10:00</option><option value="11:00">11:00</option><option value="12:00">12:00</option><option value="13:00">13:00</option><option value="14:00">14:00</option><option value="15:00">15:00</option><option value="16:00">16:00</option>
           </select>
-          <select class="form-input" id="mm-reserved-duration">
+          <select class="form-input" id="mm-reserved-duration" onchange="updateSlotStartOptions('mm')">
             <option value="">Duration…</option>
             <option value="4">Half day (4hrs)</option>
             <option value="8">Full day (8hrs)</option>
@@ -7373,6 +7373,35 @@ function computeSlotEndTime(startTime, durationHours) {
   const endH = h + durationHours;
   if (endH > 20) return null;
   return `${String(endH).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+// Real clinic hours (8am–6pm), team review 26 Aug: "a full day is anytime
+// from 8am - 6pm. Half days are anytime from 8am - 1pm or 1pm - 6pm" —
+// display-only, exactly as asked ("only change to display not maths"):
+// the underlying half/full-day duration rule and per-slot fixed rates are
+// completely unchanged, this just constrains which start times are even
+// offered for a given duration, so an invalid combination (e.g. a full
+// day starting at 11am, running past 6pm) can't be picked in the first
+// place — same philosophy as the half/full-day fix itself.
+const VALID_SLOT_STARTS = {
+  4: ['08:00', '09:00', '13:00', '14:00'],   // half day: fits within 8–1 or 1–6
+  8: ['08:00', '09:00', '10:00'],             // full day: fits within 8–6
+};
+
+function updateSlotStartOptions(prefix) {
+  const durationEl = document.getElementById(`${prefix}-reserved-duration`);
+  const startEl = document.getElementById(`${prefix}-reserved-start`);
+  if (!durationEl || !startEl) return;
+  const duration = parseInt(durationEl.value, 10);
+  const validStarts = VALID_SLOT_STARTS[duration];
+  const previousValue = startEl.value;
+  if (!validStarts) {
+    // No duration chosen (yet) — leave the full generic list in place
+    // rather than showing nothing, so the field isn't ever empty/disabled.
+    return;
+  }
+  startEl.innerHTML = '<option value="">Start…</option>' + validStarts.map(t => `<option value="${t}">${t}</option>`).join('');
+  startEl.value = validStarts.includes(previousValue) ? previousValue : '';
 }
 
 function addPendingInviteSlot() {
