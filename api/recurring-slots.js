@@ -31,7 +31,7 @@ module.exports = async (req, res) => {
     }
     const { data, error } = await supabase
       .from('member_recurring_slots')
-      .select('id, day_of_week, time_start, time_end, room_id, room:rooms(id, name)')
+      .select('id, day_of_week, time_start, time_end, room_id, interval_weeks, anchor_date, room:rooms(id, name)')
       .eq('member_id', memberId)
       .order('day_of_week');
     if (error) return res.status(500).json({ error: error.message });
@@ -40,7 +40,7 @@ module.exports = async (req, res) => {
 
   if (req.method === 'POST') {
     if (!isAdmin) return res.status(403).json({ error: 'Only Staff & Admin can set recurring slots' });
-    const { member_id, day_of_week, time_start, time_end, room_id } = req.body || {};
+    const { member_id, day_of_week, time_start, time_end, room_id, interval_weeks, anchor_date } = req.body || {};
     if (!member_id || !day_of_week || !time_start || !time_end) {
       return res.status(400).json({ error: 'member_id, day_of_week, time_start and time_end are required' });
     }
@@ -56,14 +56,37 @@ module.exports = async (req, res) => {
     if (![4, 8].includes(durationHours)) {
       return res.status(400).json({ error: 'Core and Resident recurring slots must be exactly a half day (4hrs) or full day (8hrs)' });
     }
+
+    // Team review 26 Aug 2026: slots can recur every N weeks (weekly=1,
+    // fortnightly=2, every 3rd week=3, etc.), not just every single week.
+    // Fixed sanity cap at 12 (matches the DB check constraint) — a real
+    // number field beyond that stops being a realistic recurring
+    // membership pattern and is almost certainly a data-entry mistake.
+    const intervalWeeksNum = interval_weeks != null ? parseInt(interval_weeks, 10) : 1;
+    if (!Number.isInteger(intervalWeeksNum) || intervalWeeksNum < 1 || intervalWeeksNum > 12) {
+      return res.status(400).json({ error: 'interval_weeks must be a whole number between 1 and 12' });
+    }
+    let anchorDateValue = null;
+    if (intervalWeeksNum > 1) {
+      if (!anchor_date) {
+        return res.status(400).json({ error: 'anchor_date (the first occurrence) is required for a slot that repeats every ' + intervalWeeksNum + ' weeks' });
+      }
+      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const anchorDayName = dayNames[new Date(anchor_date + 'T00:00:00Z').getUTCDay()];
+      if (anchorDayName !== day_of_week) {
+        return res.status(400).json({ error: `anchor_date (${anchor_date}) falls on a ${anchorDayName}, not ${day_of_week} — pick the actual first ${day_of_week} this slot starts from` });
+      }
+      anchorDateValue = anchor_date;
+    }
+
     const { data: target, error: targetErr } = await supabase.from('members').select('id, first_name, last_name, plan_tier').eq('id', member_id).maybeSingle();
     if (targetErr) return res.status(500).json({ error: targetErr.message });
     if (!target) return res.status(404).json({ error: 'Member not found' });
 
     const { data: slot, error } = await supabase
       .from('member_recurring_slots')
-      .insert({ member_id, day_of_week, time_start, time_end, room_id: room_id || null })
-      .select('id, day_of_week, time_start, time_end, room_id, room:rooms(id, name)')
+      .insert({ member_id, day_of_week, time_start, time_end, room_id: room_id || null, interval_weeks: intervalWeeksNum, anchor_date: anchorDateValue })
+      .select('id, day_of_week, time_start, time_end, room_id, interval_weeks, anchor_date, room:rooms(id, name)')
       .single();
     if (error) return res.status(500).json({ error: error.message });
 
@@ -73,7 +96,7 @@ module.exports = async (req, res) => {
       action: 'recurring_slot.added',
       entityType: 'member',
       entityId: member_id,
-      details: { day_of_week, time_start, time_end, room_id, target_name: `${target.first_name || ''} ${target.last_name || ''}`.trim() },
+      details: { day_of_week, time_start, time_end, room_id, interval_weeks: intervalWeeksNum, anchor_date: anchorDateValue, target_name: `${target.first_name || ''} ${target.last_name || ''}`.trim() },
     });
 
     return res.status(200).json({ slot });

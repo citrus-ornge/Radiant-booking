@@ -34,7 +34,27 @@ function calculateSessionChargeInPence(planTier, durationMinutes, pricingCategor
   return bracket[idx];
 }
 
-module.exports = { calculateSessionChargeInPence, RATES_PENCE_BY_DURATION_MINUTES, isIncludedInMembershipFee };
+module.exports = { calculateSessionChargeInPence, RATES_PENCE_BY_DURATION_MINUTES, isIncludedInMembershipFee, isSlotOccurrenceIncluded };
+
+// Whether a given calendar date is actually an "occurrence" of a recurring
+// slot — team review 26 Aug 2026: practitioners can agree a slot that
+// repeats every N weeks (weekly=1, fortnightly=2, every 3rd week=3, etc.),
+// not just every single week. anchor_date is the slot's agreed first
+// occurrence (always on the same day_of_week as the slot itself); a later
+// date counts only if the whole number of weeks since that anchor is an
+// exact multiple of interval_weeks. interval_weeks===1 (the original,
+// still-default case) always returns true regardless of anchor_date,
+// matching the exact old "every single week" behaviour for any slot that
+// hasn't set a different interval.
+function isSlotOccurrenceIncluded(slot, dateOrISOString) {
+  if (!slot.interval_weeks || slot.interval_weeks <= 1) return true;
+  if (!slot.anchor_date) return true; // shouldn't happen given validation, but don't wrongly exclude on missing data
+  const anchor = new Date(slot.anchor_date + 'T00:00:00Z');
+  const target = new Date(dateOrISOString);
+  const msPerWeek = 7 * 24 * 3600 * 1000;
+  const weeksBetween = Math.round((target - anchor) / msPerWeek);
+  return ((weeksBetween % slot.interval_weeks) + slot.interval_weeks) % slot.interval_weeks === 0;
+}
 
 // Whether a Core/Resident booking is covered by their flat monthly fee
 // (one of their included recurring slots — they can have more than one,
@@ -55,6 +75,11 @@ async function isIncludedInMembershipFee(supabase, member, slots, { room_id, sta
 
   const matchingSlot = slots.find(s => s.room_id === room_id && s.day_of_week === dayName && timeOfDay >= s.time_start && timeOfDay < s.time_end);
   if (!matchingSlot) return false;
+  // Even/odd-week (or every-3rd/4th-week) slots aren't included on a week
+  // that isn't actually one of their agreed occurrences — those weeks are
+  // a genuine chargeable extra, exactly like booking outside the slot
+  // entirely.
+  if (!isSlotOccurrenceIncluded(matchingSlot, start_time)) return false;
 
   // Monday-start week boundary containing this booking.
   const weekStart = new Date(start);

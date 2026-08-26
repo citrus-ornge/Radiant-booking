@@ -15,7 +15,7 @@ module.exports = async (req, res) => {
       const supabase = getSupabase();
       const { data: slots } = await supabase
         .from('member_recurring_slots')
-        .select('id, day_of_week, time_start, time_end, room_id, room:rooms(id, name)')
+        .select('id, day_of_week, time_start, time_end, room_id, interval_weeks, anchor_date, room:rooms(id, name)')
         .eq('member_id', member.id)
         .order('day_of_week');
       member.recurring_slots = slots || [];

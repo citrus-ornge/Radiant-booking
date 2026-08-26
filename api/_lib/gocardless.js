@@ -78,7 +78,7 @@ async function calculateScheduleBasedMonthlyFeePence(supabase, member) {
 
   const { data: slots, error } = await supabase
     .from('member_recurring_slots')
-    .select('time_start, time_end, room:rooms(pricing_category)')
+    .select('time_start, time_end, interval_weeks, room:rooms(pricing_category)')
     .eq('member_id', member.id);
   if (error || !slots || slots.length === 0) {
     // Fallback for the edge case of a Core/Resident member with no
@@ -95,7 +95,10 @@ async function calculateScheduleBasedMonthlyFeePence(supabase, member) {
     const durationHours = (endH * 60 + endM - (startH * 60 + startM)) / 60;
     const lengthKey = durationHours >= 8 ? 'full' : 'half'; // matches the half/full-day-only rule already enforced at slot creation (api/recurring-slots.js, api/invites.js)
     const categoryKey = (slot.room && slot.room.pricing_category === 'consultation') ? 'consultation' : 'clinical_wellness';
-    weeklyTotalPence += rates[lengthKey][categoryKey];
+    // Team review 26 Aug 2026: "yes — half price" for a fortnightly slot,
+    // generalised to every N weeks — a slot used a third as often (every
+    // 3rd week) costs a third of the weekly rate, straightforwardly.
+    weeklyTotalPence += rates[lengthKey][categoryKey] / (slot.interval_weeks || 1);
   }
   return Math.round(weeklyTotalPence * WEEKS_PER_MONTH);
 }
@@ -136,7 +139,7 @@ async function calculateOutstandingBalanceAtCancellation(supabase, member) {
     } else {
       const { data: slots } = await supabase
         .from('member_recurring_slots')
-        .select('time_start, time_end, room:rooms(pricing_category)')
+        .select('time_start, time_end, interval_weeks, room:rooms(pricing_category)')
         .eq('member_id', member.id);
       const rates = WEEKLY_SLOT_RATES_PENCE[member.plan_tier];
       weeklyEquivalentPence = 0;
@@ -146,7 +149,7 @@ async function calculateOutstandingBalanceAtCancellation(supabase, member) {
         const durationHours = (endH * 60 + endM - (startH * 60 + startM)) / 60;
         const lengthKey = durationHours >= 8 ? 'full' : 'half';
         const categoryKey = (slot.room && slot.room.pricing_category === 'consultation') ? 'consultation' : 'clinical_wellness';
-        weeklyEquivalentPence += rates[lengthKey][categoryKey];
+        weeklyEquivalentPence += rates[lengthKey][categoryKey] / (slot.interval_weeks || 1);
       }
     }
 

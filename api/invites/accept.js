@@ -88,6 +88,8 @@ module.exports = async (req, res) => {
           time_start: s.time_start,
           time_end: s.time_end,
           room_id: s.room_id || null,
+          interval_weeks: s.interval_weeks || 1,
+          anchor_date: s.anchor_date || null,
         }))
       );
     }

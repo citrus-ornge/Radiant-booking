@@ -81,6 +81,25 @@ module.exports = async (req, res) => {
       if (![4, 8].includes(durationHours)) {
         return res.status(400).json({ error: `Core and Resident recurring slots must be exactly a half day (4hrs) or full day (8hrs) — ${s.day_of_week} ${s.time_start}–${s.time_end} isn't` });
       }
+      // Team review 26 Aug 2026: slots can recur every N weeks (weekly=1,
+      // fortnightly=2, every 3rd week=3, etc.) — same validation as
+      // api/recurring-slots.js.
+      s.interval_weeks = s.interval_weeks != null ? parseInt(s.interval_weeks, 10) : 1;
+      if (!Number.isInteger(s.interval_weeks) || s.interval_weeks < 1 || s.interval_weeks > 12) {
+        return res.status(400).json({ error: `interval_weeks for ${s.day_of_week} must be a whole number between 1 and 12` });
+      }
+      if (s.interval_weeks > 1) {
+        if (!s.anchor_date) {
+          return res.status(400).json({ error: `anchor_date (the first occurrence) is required for the ${s.day_of_week} slot, which repeats every ${s.interval_weeks} weeks` });
+        }
+        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const anchorDayName = dayNames[new Date(s.anchor_date + 'T00:00:00Z').getUTCDay()];
+        if (anchorDayName !== s.day_of_week) {
+          return res.status(400).json({ error: `anchor_date (${s.anchor_date}) for the ${s.day_of_week} slot falls on a ${anchorDayName} — pick the actual first ${s.day_of_week} it starts from` });
+        }
+      } else {
+        s.anchor_date = null;
+      }
     }
 
     // Special-deal monthly fee override (team review 19 Aug 2026) — only

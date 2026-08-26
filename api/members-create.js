@@ -51,6 +51,39 @@ module.exports = async (req, res) => {
   if (lockedTiers.includes(tier) && slots.length === 0) {
     return res.status(400).json({ error: 'Core and Resident need at least one agreed recurring slot' });
   }
+  // Rosie, 23 Aug: "residents and core can only have full or half days" —
+  // genuine gap found live 26 Aug: this endpoint (Add User's direct
+  // member-creation path) never had this check applied at all, unlike
+  // api/recurring-slots.js and api/invites.js. Closed here at the same
+  // time as adding interval_weeks validation below, since a direct API
+  // call to this endpoint specifically could otherwise bypass it entirely.
+  for (const s of slots) {
+    const [startH, startM] = s.time_start.split(':').map(Number);
+    const [endH, endM] = s.time_end.split(':').map(Number);
+    const durationHours = (endH * 60 + endM - (startH * 60 + startM)) / 60;
+    if (![4, 8].includes(durationHours)) {
+      return res.status(400).json({ error: `Core and Resident recurring slots must be exactly a half day (4hrs) or full day (8hrs) — ${s.day_of_week} ${s.time_start}–${s.time_end} isn't` });
+    }
+    // Team review 26 Aug 2026: slots can recur every N weeks (weekly=1,
+    // fortnightly=2, every 3rd week=3, etc.) — same validation as
+    // api/recurring-slots.js and api/invites.js.
+    s.interval_weeks = s.interval_weeks != null ? parseInt(s.interval_weeks, 10) : 1;
+    if (!Number.isInteger(s.interval_weeks) || s.interval_weeks < 1 || s.interval_weeks > 12) {
+      return res.status(400).json({ error: `interval_weeks for ${s.day_of_week} must be a whole number between 1 and 12` });
+    }
+    if (s.interval_weeks > 1) {
+      if (!s.anchor_date) {
+        return res.status(400).json({ error: `anchor_date (the first occurrence) is required for the ${s.day_of_week} slot, which repeats every ${s.interval_weeks} weeks` });
+      }
+      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const anchorDayName = dayNames[new Date(s.anchor_date + 'T00:00:00Z').getUTCDay()];
+      if (anchorDayName !== s.day_of_week) {
+        return res.status(400).json({ error: `anchor_date (${s.anchor_date}) for the ${s.day_of_week} slot falls on a ${anchorDayName} — pick the actual first ${s.day_of_week} it starts from` });
+      }
+    } else {
+      s.anchor_date = null;
+    }
+  }
 
   // Check for an existing member row first (fast, cheap). The real
   // guarantee against a duplicate account comes from createUser() itself
@@ -99,7 +132,7 @@ module.exports = async (req, res) => {
 
   if (slots.length > 0) {
     await supabase.from('member_recurring_slots').insert(
-      slots.map(s => ({ member_id: member.id, day_of_week: s.day_of_week, time_start: s.time_start, time_end: s.time_end, room_id: s.room_id || null }))
+      slots.map(s => ({ member_id: member.id, day_of_week: s.day_of_week, time_start: s.time_start, time_end: s.time_end, room_id: s.room_id || null, interval_weeks: s.interval_weeks || 1, anchor_date: s.anchor_date || null }))
     );
   }
 

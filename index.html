@@ -1477,6 +1477,16 @@ textarea.form-input { resize: vertical; }
                     <option value="8">Full day</option>
                   </select>
                 </div>
+                <div class="form-two" style="margin-top:8px;">
+                  <div>
+                    <label class="form-label" style="font-size:10.5px;">Repeats every (weeks)</label>
+                    <input type="number" class="form-input" id="invite-reserved-interval" min="1" max="12" value="1" onchange="toggleSlotAnchorRow('invite')">
+                  </div>
+                  <div id="invite-reserved-anchor-row" style="display:none;">
+                    <label class="form-label" style="font-size:10.5px;">First occurrence</label>
+                    <input type="date" class="form-input" id="invite-reserved-anchor">
+                  </div>
+                </div>
                 <button type="button" class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="addPendingInviteSlot()">+ Add this slot</button>
               </div>
               <div class="form-row"><label class="form-label">Personal Note (optional)</label><textarea class="form-input" id="invite-note" rows="3" placeholder="Add a welcome message…"></textarea></div>
@@ -2176,6 +2186,16 @@ textarea.form-input { resize: vertical; }
             <option value="8">Full day</option>
           </select>
         </div>
+        <div class="form-two" style="margin-top:8px;">
+          <div>
+            <label class="form-label" style="font-size:10.5px;">Repeats every (weeks)</label>
+            <input type="number" class="form-input" id="au-reserved-interval" min="1" max="12" value="1" onchange="toggleSlotAnchorRow('au')">
+          </div>
+          <div id="au-reserved-anchor-row" style="display:none;">
+            <label class="form-label" style="font-size:10.5px;">First occurrence</label>
+            <input type="date" class="form-input" id="au-reserved-anchor">
+          </div>
+        </div>
         <button type="button" class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="addPendingAddUserSlot()">+ Add this slot</button>
       </div>
     </div>
@@ -2261,6 +2281,16 @@ textarea.form-input { resize: vertical; }
             <option value="4">Half day</option>
             <option value="8">Full day</option>
           </select>
+        </div>
+        <div class="form-two" style="margin-top:8px;">
+          <div>
+            <label class="form-label" style="font-size:10.5px;">Repeats every (weeks)</label>
+            <input type="number" class="form-input" id="mm-reserved-interval" min="1" max="12" value="1" onchange="toggleSlotAnchorRow('mm')">
+          </div>
+          <div id="mm-reserved-anchor-row" style="display:none;">
+            <label class="form-label" style="font-size:10.5px;">First occurrence</label>
+            <input type="date" class="form-input" id="mm-reserved-anchor">
+          </div>
         </div>
         <button type="button" class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="addRecurringSlot()">+ Add this slot</button>
       </div>
@@ -2961,7 +2991,12 @@ function bookingWindowRuleForMember(m) {
     const max = new Date(today.getTime() + 30 * 24 * 3600e3);
     return {
       allow: d => d >= today && d <= max,
-      included: d => agreedDayIdxs.has(d.getDay()),
+      // Team review 26 Aug 2026: a slot can recur every N weeks (weekly=1,
+      // fortnightly=2, etc.), not just every single week — a date only
+      // counts as included if at least one of that day's slots actually
+      // has this date as one of its real occurrences (isSlotOccurrenceIncluded,
+      // mirrors the server-side version in api/_lib/pricing.js exactly).
+      included: d => slots.some(s => dayNames.indexOf(s.day_of_week) === d.getDay() && isSlotOccurrenceIncluded(s, d)),
       multi: false,
       note: agreedDayNames.length > 0
         ? `${m.plan_tier === 'core' ? 'Core' : 'Resident'}: ${agreedDayNames.join(', ')} included free — any other day within 30 days is booked as a paid extra`
@@ -3219,6 +3254,20 @@ function nextTierUp(planTier) {
 // (e.g. full day Monday + half day Friday) — shared formatting so every
 // place that shows them (My Bookings, Profile, onboarding) stays consistent.
 function fmtSlotTime(t) { return t ? t.slice(0, 5) : ''; }
+
+// Client-side mirror of isSlotOccurrenceIncluded in api/_lib/pricing.js —
+// must stay in sync. Whether a given calendar date is actually an
+// occurrence of a recurring slot that repeats every N weeks (weekly=1,
+// fortnightly=2, every 3rd week=3, etc.) rather than every single week.
+function isSlotOccurrenceIncluded(slot, date) {
+  if (!slot.interval_weeks || slot.interval_weeks <= 1) return true;
+  if (!slot.anchor_date) return true;
+  const anchor = new Date(slot.anchor_date + 'T00:00:00Z');
+  const target = new Date(date);
+  const msPerWeek = 7 * 24 * 3600 * 1000;
+  const weeksBetween = Math.round((target - anchor) / msPerWeek);
+  return ((weeksBetween % slot.interval_weeks) + slot.interval_weeks) % slot.interval_weeks === 0;
+}
 // Display only — "Half day"/"Full day" instead of the literal time range,
 // everywhere a recurring slot is shown to anyone. The real start_time/
 // end_time are still stored and used for actual scheduling exactly as
@@ -3229,8 +3278,15 @@ function slotDurationLabel(timeStart, timeEnd) {
   const hours = (endH * 60 + endM - (startH * 60 + startM)) / 60;
   return hours >= 8 ? 'Full day' : 'Half day';
 }
+// Team review 26 Aug 2026: shown alongside slotDurationLabel wherever a
+// slot appears — blank for the common weekly case (interval_weeks<=1),
+// so this is purely additive and doesn't change how an ordinary weekly
+// slot reads.
+function slotFrequencyLabel(s) {
+  return (s.interval_weeks && s.interval_weeks > 1) ? ` (every ${s.interval_weeks} weeks)` : '';
+}
 function slotOneLineHtml(s) {
-  return `${esc(s.day_of_week)}, ${esc(slotDurationLabel(s.time_start, s.time_end))}${s.room ? ' · ' + esc(s.room.name) : ''}`;
+  return `${esc(s.day_of_week)}, ${esc(slotDurationLabel(s.time_start, s.time_end) + slotFrequencyLabel(s))}${s.room ? ' · ' + esc(s.room.name) : ''}`;
 }
 function slotsListHtml(slots) {
   return slots.map(s => `<div style="padding:3px 0;">${slotOneLineHtml(s)}</div>`).join('');
@@ -3656,7 +3712,7 @@ async function loadRecurringSlotsForModal(memberId) {
       ? '<div style="font-size:12px;color:var(--r-warm-gray);">No slots set yet — add one below.</div>'
       : slots.map(s => `
         <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--r-border);font-size:13px;">
-          <span>${esc(s.day_of_week)}, ${esc(slotDurationLabel(s.time_start, s.time_end))}${s.room ? ' · ' + esc(s.room.name) : ''}</span>
+          <span>${esc(s.day_of_week)}, ${esc(slotDurationLabel(s.time_start, s.time_end) + slotFrequencyLabel(s))}${s.room ? ' · ' + esc(s.room.name) : ''}</span>
           <button type="button" class="btn btn-danger btn-sm" onclick="deleteRecurringSlot('${s.id}', '${memberId}')">Remove</button>
         </div>`).join('');
   } catch (e) {
@@ -3673,12 +3729,15 @@ async function addRecurringSlot() {
   if (!day_of_week || !time_start || !duration) { showToast('⚠ Pick a day, start time and duration'); return; }
   const time_end = computeSlotEndTime(time_start, duration);
   if (!time_end) { showToast('⚠ That start time would run past 20:00 for a ' + (duration === 8 ? 'full' : 'half') + ' day — pick an earlier start'); return; }
+  const intervalResult = readAndValidateSlotInterval('mm', day_of_week);
+  if (!intervalResult) return;
   try {
-    await api('/recurring-slots', { method: 'POST', body: JSON.stringify({ member_id: memberId, day_of_week, time_start, time_end, room_id }) });
+    await api('/recurring-slots', { method: 'POST', body: JSON.stringify({ member_id: memberId, day_of_week, time_start, time_end, room_id, interval_weeks: intervalResult.interval_weeks, anchor_date: intervalResult.anchor_date }) });
     document.getElementById('mm-reserved-day').value = '';
     document.getElementById('mm-reserved-room').value = '';
     document.getElementById('mm-reserved-start').value = '';
     document.getElementById('mm-reserved-duration').value = '';
+    resetSlotIntervalFields('mm');
     await loadRecurringSlotsForModal(memberId);
     showToast('✓ Slot added');
   } catch (e) {
@@ -5166,7 +5225,7 @@ async function showOnboardingRoomTerms() {
     ? `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--r-stone,#e8e4dc);font-weight:600;">£${(feePence / 100).toFixed(2)} / month</div>`
     : '';
   detailsEl.innerHTML = `
-    <div style="font-size:15px;font-weight:600;margin-bottom:10px;">${slots.map(s => `${esc(s.day_of_week)}, ${esc(slotDurationLabel(s.time_start, s.time_end))}`).join('<br>')}</div>
+    <div style="font-size:15px;font-weight:600;margin-bottom:10px;">${slots.map(s => `${esc(s.day_of_week)}, ${esc(slotDurationLabel(s.time_start, s.time_end) + slotFrequencyLabel(s))}`).join('<br>')}</div>
     <div style="color:var(--r-warm-gray);margin-bottom:4px;">${slots.map(s => `Room: ${esc(s.room ? s.room.name : 'To be confirmed')}`).join('<br>')}</div>
     <div style="color:var(--r-warm-gray);">${slots.length > 1 ? 'These slots are' : 'This slot is'} held for you every week as part of your ${esc(tierLabelText)} membership.</div>
     ${feeLine}
@@ -7241,7 +7300,7 @@ function updateInviteStandardFeeDisplay() {
     const lengthKey = durationHours >= 8 ? 'full' : 'half';
     const room = state.rooms.find(r => r.id === slot.room_id);
     const categoryKey = (room && room.pricing_category === 'consultation') ? 'consultation' : 'clinical_wellness';
-    weeklyTotalPence += rates[lengthKey][categoryKey];
+    weeklyTotalPence += rates[lengthKey][categoryKey] / (slot.interval_weeks || 1);
   }
   const monthlyPence = Math.round(weeklyTotalPence * WEEKS_PER_MONTH_DISPLAY);
   fieldEl.value = `£${(monthlyPence / 100).toFixed(2)} / month`;
@@ -7360,7 +7419,7 @@ function renderPendingInviteSlots() {
     const room = state.rooms.find(r => r.id === s.room_id);
     return `
     <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--r-border);font-size:13px;">
-      <span>${esc(s.day_of_week)}, ${esc(slotDurationLabel(s.time_start, s.time_end))}${room ? ' · ' + esc(room.name) : ''}</span>
+      <span>${esc(s.day_of_week)}, ${esc(slotDurationLabel(s.time_start, s.time_end) + slotFrequencyLabel(s))}${room ? ' · ' + esc(room.name) : ''}</span>
       <button type="button" class="btn btn-danger btn-sm" onclick="removePendingInviteSlot(${i})">Remove</button>
     </div>`;
   }).join('');
@@ -7416,6 +7475,57 @@ function updateSlotStartOptions(prefix) {
   startEl.value = validStarts.includes(previousValue) ? previousValue : '';
 }
 
+// Team review 26 Aug 2026: a slot can repeat every N weeks, not just
+// every single week — the "First occurrence" date only matters (and is
+// only required) once N > 1, so it stays hidden for the default weekly
+// case rather than cluttering the form for the common case.
+function toggleSlotAnchorRow(prefix) {
+  const intervalEl = document.getElementById(`${prefix}-reserved-interval`);
+  const row = document.getElementById(`${prefix}-reserved-anchor-row`);
+  if (!intervalEl || !row) return;
+  const interval = parseInt(intervalEl.value, 10) || 1;
+  row.style.display = interval > 1 ? 'block' : 'none';
+}
+
+// Shared by all three recurring-slot builders (Invite Users, Add User,
+// Manage Member) — mirrors the exact validation each server endpoint
+// applies (api/recurring-slots.js, api/invites.js, api/members-create.js),
+// so a mistake here shows a clear inline error immediately rather than
+// only surfacing after a round-trip to the server. Returns null (having
+// already shown the relevant toast) if invalid.
+function readAndValidateSlotInterval(prefix, day_of_week) {
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const intervalEl = document.getElementById(`${prefix}-reserved-interval`);
+  const anchorEl = document.getElementById(`${prefix}-reserved-anchor`);
+  const interval_weeks = intervalEl && intervalEl.value ? parseInt(intervalEl.value, 10) : 1;
+  if (!Number.isInteger(interval_weeks) || interval_weeks < 1 || interval_weeks > 12) {
+    showToast('⚠ "Repeats every" must be a whole number between 1 and 12 weeks');
+    return null;
+  }
+  let anchor_date = null;
+  if (interval_weeks > 1) {
+    anchor_date = anchorEl ? anchorEl.value : '';
+    if (!anchor_date) {
+      showToast(`⚠ Pick the first occurrence date for a slot that repeats every ${interval_weeks} weeks`);
+      return null;
+    }
+    const anchorDayName = dayNames[new Date(anchor_date + 'T00:00:00Z').getUTCDay()];
+    if (anchorDayName !== day_of_week) {
+      showToast(`⚠ ${anchor_date} is a ${anchorDayName}, not a ${day_of_week} — pick the actual first ${day_of_week} this slot starts from`);
+      return null;
+    }
+  }
+  return { interval_weeks, anchor_date };
+}
+
+function resetSlotIntervalFields(prefix) {
+  const intervalEl = document.getElementById(`${prefix}-reserved-interval`);
+  const anchorEl = document.getElementById(`${prefix}-reserved-anchor`);
+  if (intervalEl) intervalEl.value = '1';
+  if (anchorEl) anchorEl.value = '';
+  toggleSlotAnchorRow(prefix);
+}
+
 function addPendingInviteSlot() {
   const day_of_week = document.getElementById('invite-reserved-day').value;
   const room_id = document.getElementById('invite-reserved-room').value || null;
@@ -7424,12 +7534,15 @@ function addPendingInviteSlot() {
   if (!day_of_week || !time_start || !duration) { showToast('⚠ Pick a day, start time and duration'); return; }
   const time_end = computeSlotEndTime(time_start, duration);
   if (!time_end) { showToast('⚠ That start time would run past 20:00 for a ' + (duration === 8 ? 'full' : 'half') + ' day — pick an earlier start'); return; }
-  pendingInviteSlots.push({ day_of_week, room_id, time_start, time_end });
+  const intervalResult = readAndValidateSlotInterval('invite', day_of_week);
+  if (!intervalResult) return;
+  pendingInviteSlots.push({ day_of_week, room_id, time_start, time_end, interval_weeks: intervalResult.interval_weeks, anchor_date: intervalResult.anchor_date });
   persistPendingInviteSlots();
   document.getElementById('invite-reserved-day').value = '';
   document.getElementById('invite-reserved-room').value = '';
   document.getElementById('invite-reserved-start').value = '';
   document.getElementById('invite-reserved-duration').value = '';
+  resetSlotIntervalFields('invite');
   renderPendingInviteSlots();
 }
 
@@ -7535,7 +7648,7 @@ function renderPendingAddUserSlots() {
     const room = state.rooms.find(r => r.id === s.room_id);
     return `
     <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--r-border);font-size:13px;">
-      <span>${esc(s.day_of_week)}, ${esc(slotDurationLabel(s.time_start, s.time_end))}${room ? ' · ' + esc(room.name) : ''}</span>
+      <span>${esc(s.day_of_week)}, ${esc(slotDurationLabel(s.time_start, s.time_end) + slotFrequencyLabel(s))}${room ? ' · ' + esc(room.name) : ''}</span>
       <button type="button" class="btn btn-danger btn-sm" onclick="removePendingAddUserSlot(${i})">Remove</button>
     </div>`;
   }).join('');
@@ -7549,11 +7662,14 @@ function addPendingAddUserSlot() {
   if (!day_of_week || !time_start || !duration) { showToast('⚠ Pick a day, start time and duration'); return; }
   const time_end = computeSlotEndTime(time_start, duration);
   if (!time_end) { showToast('⚠ That start time would run past 20:00 for a ' + (duration === 8 ? 'full' : 'half') + ' day — pick an earlier start'); return; }
-  pendingAddUserSlots.push({ day_of_week, room_id, time_start, time_end });
+  const intervalResult = readAndValidateSlotInterval('au', day_of_week);
+  if (!intervalResult) return;
+  pendingAddUserSlots.push({ day_of_week, room_id, time_start, time_end, interval_weeks: intervalResult.interval_weeks, anchor_date: intervalResult.anchor_date });
   document.getElementById('au-reserved-day').value = '';
   document.getElementById('au-reserved-room').value = '';
   document.getElementById('au-reserved-start').value = '';
   document.getElementById('au-reserved-duration').value = '';
+  resetSlotIntervalFields('au');
   renderPendingAddUserSlots();
 }
 
