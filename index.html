@@ -1043,6 +1043,11 @@ textarea.form-input { resize: vertical; }
           <div class="form-row"><label class="form-label">Professional Indemnity No.</label><input class="form-input" id="ob-indemnity-number"></div>
           <div class="form-row"><label class="form-label">Indemnity Expiry</label><input type="date" class="form-input" id="ob-indemnity-expiry"></div>
         </div>
+        <div class="form-row" style="background:var(--r-surface2);border-radius:8px;padding:12px 14px;">
+          <label class="form-label" style="margin-bottom:4px;">Compliance Documents <span style="color:var(--r-red);">(required to continue)</span></label>
+          <p style="font-size:12px;color:var(--r-warm-gray);margin:0 0 10px;">Proof of ID and your insurance/indemnity certificate — both required before you can move on to the next step.</p>
+          <div id="ob-compliance-docs-status" style="display:flex;flex-direction:column;gap:10px;"></div>
+        </div>
         <div class="form-row"><label class="form-label">Business Name <span style="font-weight:400;color:var(--r-warm-gray);">(optional — if you trade under a different name)</span></label><input class="form-input" id="ob-business-name" placeholder="e.g. Jane Smith Aesthetics Ltd"></div>
         <div class="form-two">
           <div class="form-row"><label class="form-label">Company Number <span style="font-weight:400;color:var(--r-warm-gray);">(if applicable)</span></label><input class="form-input" id="ob-company-number" placeholder="Only if registered as a limited company"></div>
@@ -4861,13 +4866,72 @@ function startOnboarding() {
   if (m.onboarding_status === 'booking_pending') {
     renderOnboardingProgress(2);
     showOnboardingRoomTerms();
-  } else if (m.first_name && m.last_name) {
+  } else if (m.first_name && m.last_name && !(isPractitioner && m.missing_mandatory_compliance_docs)) {
+    // Practitioners specifically can't skip past the profile step this way
+    // if compliance docs are still missing (team review 26 Aug 2026: "make
+    // so screen doesn't move on until documents uploaded") — otherwise
+    // someone who saved their name in an earlier session, then came back
+    // without ever uploading, would bypass the gate entirely.
     document.getElementById('onboarding-step-profile').style.display = 'none';
     renderOnboardingProgress(1);
     loadOnboardingDocuments();
   } else {
     document.getElementById('onboarding-step-profile').style.display = 'block';
     renderOnboardingProgress(0);
+    if (isPractitioner) renderOnboardingComplianceDocsStatus(m.id);
+  }
+}
+
+// Onboarding-time compliance doc upload (team review 26 Aug 2026) — same
+// upload endpoint used by My Profile's own Compliance Documents section,
+// just surfaced here too, right next to the indemnity number/expiry
+// fields being entered on this same step. Renders each of the two
+// mandatory types as either "already uploaded" or a file input + button;
+// re-called after each successful upload so the status updates live
+// without needing to leave the step.
+async function renderOnboardingComplianceDocsStatus(memberId) {
+  const container = document.getElementById('ob-compliance-docs-status');
+  if (!container) return;
+  container.innerHTML = '<div style="font-size:12px;color:var(--r-warm-gray);">Checking…</div>';
+  try {
+    const result = await api(`/member-documents?member_id=${memberId}`);
+    const docs = result.documents || [];
+    const uploaded = { id_proof: docs.find(d => d.document_type === 'id_proof'), insurance: docs.find(d => d.document_type === 'insurance') };
+    const rowHtml = (type, label) => {
+      const doc = uploaded[type];
+      if (doc) {
+        return `<div style="display:flex;align-items:center;gap:8px;font-size:13px;"><span style="color:var(--r-green,#3D6B4F);">✓</span> <strong>${esc(label)}</strong> — ${esc(doc.file_name)}</div>`;
+      }
+      return `
+        <div>
+          <div style="font-size:13px;font-weight:500;margin-bottom:4px;">${esc(label)} <span style="color:var(--r-red);">— not yet uploaded</span></div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <input type="file" class="form-input" id="ob-file-${type}" style="flex:1;min-width:180px;" accept=".pdf,.jpg,.jpeg,.png,.heic,.webp">
+            <button type="button" class="btn btn-outline btn-sm" onclick="uploadOnboardingComplianceDoc('${type}','${memberId}')">Upload</button>
+          </div>
+        </div>`;
+    };
+    container.innerHTML = rowHtml('id_proof', 'Proof of ID') + rowHtml('insurance', 'Insurance / Indemnity Certificate');
+  } catch (e) {
+    container.innerHTML = `<div style="font-size:12px;color:var(--r-red);">⚠ ${esc(e.message)}</div>`;
+  }
+}
+
+async function uploadOnboardingComplianceDoc(documentType, memberId) {
+  const fileInput = document.getElementById(`ob-file-${documentType}`);
+  const file = fileInput && fileInput.files[0];
+  if (!file) { showToast('⚠ Choose a file first'); return; }
+  if (file.size > 8 * 1024 * 1024) { showToast('⚠ File is too large (max 8MB) — try a smaller scan or photo'); return; }
+  try {
+    const file_base64 = await fileToBase64(file);
+    await api('/member-documents', {
+      method: 'POST',
+      body: JSON.stringify({ member_id: memberId, document_type: documentType, file_name: file.name, file_base64 }),
+    });
+    showToast('✓ Uploaded');
+    await renderOnboardingComplianceDocsStatus(memberId);
+  } catch (e) {
+    showToast('⚠ ' + e.message);
   }
 }
 
@@ -4890,6 +4954,21 @@ async function submitOnboardingProfile() {
   try {
     const result = await api(`/members`, { method: 'PATCH', body: JSON.stringify({ id: state.currentMember.id, ...updates }) });
     state.currentMember = result.member;
+
+    // Team review 26 Aug 2026: "make so screen doesn't move on until
+    // documents uploaded" — the generic members PATCH response above
+    // doesn't compute missing_mandatory_compliance_docs (only /api/me
+    // does), so re-fetch that specifically to check before advancing.
+    if (state.currentMember.user_type === 'practitioner') {
+      const meData = await api('/me');
+      state.currentMember = meData.member;
+      if (meData.member.missing_mandatory_compliance_docs) {
+        showToast('⚠ Please upload both proof of ID and your insurance/indemnity certificate before continuing');
+        renderOnboardingComplianceDocsStatus(state.currentMember.id);
+        return;
+      }
+    }
+
     document.getElementById('onboarding-step-profile').style.display = 'none';
     document.getElementById('onboarding-step-documents').style.display = 'block';
     renderOnboardingProgress(1);
