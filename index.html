@@ -2291,6 +2291,7 @@ textarea.form-input { resize: vertical; }
         <button type="button" class="btn btn-outline btn-sm" id="mm-create-subscription-btn" onclick="createSubscriptionForMember()">Create subscription now</button>
         <button type="button" class="btn btn-outline btn-sm" id="mm-cancel-subscription-btn" style="display:none;color:var(--r-red);border-color:var(--r-red);" onclick="cancelMemberSubscription()">Cancel subscription</button>
       </div>
+      <div class="form-row" id="mm-outstanding-balance-row" style="display:none;background:var(--r-gold-light,#f7ecd8);border-radius:8px;padding:12px 14px;"></div>
       <div class="form-row"><label class="form-label">Phone</label><input class="form-input" id="mm-phone"></div>
       <div class="form-row"><label class="form-label">Qualifications</label><textarea class="form-input" id="mm-qualifications" rows="2"></textarea></div>
       <div class="form-row">
@@ -3500,6 +3501,12 @@ function openManageMember(id) {
   const resetBtn = document.getElementById('mm-password-reset-btn');
   resetBtn.disabled = false;
   resetBtn.textContent = 'Send password reset';
+
+  // Only ever populated by cancelMemberSubscription() within the same
+  // session — reset here so a stale balance from a DIFFERENT member's
+  // earlier cancellation can't linger into this one.
+  document.getElementById('mm-outstanding-balance-row').style.display = 'none';
+  document.getElementById('mm-outstanding-balance-row').innerHTML = '';
 
   const isPractitionerMM = m.user_type === 'practitioner';
   document.getElementById('mm-compliance-docs-row').style.display = isPractitionerMM ? 'block' : 'none';
@@ -7041,15 +7048,61 @@ async function cancelMemberSubscription() {
   btn.disabled = true;
   btn.textContent = 'Cancelling…';
   try {
-    await api('/billing/cancel-subscription', { method: 'POST', body: JSON.stringify({ member_id: memberId }) });
+    const result = await api('/billing/cancel-subscription', { method: 'POST', body: JSON.stringify({ member_id: memberId }) });
     showToast('✓ Subscription cancelled — no further charges will be taken');
     await loadAppData();
-    openManageMember(memberId);
+    // Deliberately not calling openManageMember() again here — that would
+    // re-render the whole modal fresh and wipe out the outstanding-balance
+    // breakdown below before anyone saw it. Just refreshes the underlying
+    // data in the background instead.
+    renderOutstandingBalanceRow(memberId, result.outstanding_balance);
   } catch (e) {
     showToast('⚠ ' + e.message);
   } finally {
     btn.disabled = false;
     btn.textContent = 'Cancel subscription';
+  }
+}
+
+// Team review 26 Aug 2026: "on practitioner cancellation we collect any
+// underpayment... calculate it and show admin the amount, admin clicks to
+// actually collect it. Everything outstanding on the account, combined
+// into one figure." Shown once, right after a subscription cancellation —
+// deliberately calculation-only until this specific button is clicked;
+// nothing here charges anyone automatically.
+function renderOutstandingBalanceRow(memberId, balance) {
+  const row = document.getElementById('mm-outstanding-balance-row');
+  if (!row) return;
+  if (!balance || balance.total_pence <= 0) {
+    row.style.display = 'block';
+    row.innerHTML = `<div style="font-size:13px;color:var(--r-warm-gray);">No outstanding balance found on cancellation — nothing further to collect.</div>`;
+    return;
+  }
+  const fmt = p => `£${(p / 100).toFixed(2)}`;
+  const parts = [];
+  if (balance.averaging_shortfall_pence > 0) parts.push(`${fmt(balance.averaging_shortfall_pence)} monthly-fee shortfall`);
+  if (balance.other_unpaid_pence > 0) parts.push(`${fmt(balance.other_unpaid_pence)} from unpaid bookings`);
+  row.style.display = 'block';
+  row.innerHTML = `
+    <div style="font-size:13.5px;font-weight:600;margin-bottom:4px;">Outstanding balance: ${fmt(balance.total_pence)}</div>
+    <div style="font-size:12px;color:var(--r-warm-gray);margin-bottom:10px;">${esc(parts.join(' + '))}</div>
+    <button type="button" class="btn btn-primary btn-sm" id="mm-collect-balance-btn" onclick="collectFinalBalance('${memberId}')">Collect ${fmt(balance.total_pence)} now</button>
+  `;
+}
+
+async function collectFinalBalance(memberId) {
+  if (!confirm('Charge this amount now via Direct Debit? This creates a real one-off payment against their mandate.')) return;
+  const btn = document.getElementById('mm-collect-balance-btn');
+  btn.disabled = true;
+  btn.textContent = 'Collecting…';
+  try {
+    const result = await api('/billing/collect-final-balance', { method: 'POST', body: JSON.stringify({ member_id: memberId }) });
+    showToast(`✓ £${(result.amount_pence / 100).toFixed(2)} payment initiated`);
+    document.getElementById('mm-outstanding-balance-row').innerHTML = `<div style="font-size:13px;color:var(--r-green,#3D6B4F);">✓ £${(result.amount_pence / 100).toFixed(2)} payment initiated — will show as pending/confirmed in GoCardless shortly.</div>`;
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+    btn.disabled = false;
+    btn.textContent = 'Collect now';
   }
 }
 

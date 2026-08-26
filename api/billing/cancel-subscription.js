@@ -32,7 +32,7 @@ module.exports = async (req, res) => {
 
   const { data: member, error: memberErr } = await supabase
     .from('members')
-    .select('id, first_name, last_name, email, gocardless_subscription_id')
+    .select('id, first_name, last_name, email, plan_tier, plan_tier_started_at, custom_monthly_fee_pence, gocardless_subscription_id')
     .eq('id', member_id)
     .maybeSingle();
   if (memberErr) return res.status(500).json({ error: memberErr.message });
@@ -124,11 +124,28 @@ module.exports = async (req, res) => {
       console.error(`Failed to send subscription-cancelled email to member ${member.id}:`, e.message);
     }
 
+    // Team review 26 Aug 2026: "on practitioner cancellation we collect
+    // any underpayment... everything outstanding on the account, combined
+    // into one figure" — calculated here (using the member object as
+    // fetched above, which still has the real subscription id even though
+    // the DB row was just nulled) and returned for admin to review, not
+    // charged automatically (team review: "admin clicks to actually
+    // collect it" — see api/billing/collect-final-balance.js). A failure
+    // here shouldn't undo the cancellation that already succeeded above.
+    let outstandingBalance = null;
+    try {
+      const { calculateOutstandingBalanceAtCancellation } = require('../_lib/gocardless');
+      outstandingBalance = await calculateOutstandingBalanceAtCancellation(supabase, member);
+    } catch (e) {
+      console.error(`Failed to calculate outstanding balance for member ${member.id}:`, e.message);
+    }
+
     return res.status(200).json({
       ok: true,
       cancelled_subscription_id: member.gocardless_subscription_id,
       payments_cancelled: paymentResults.filter(p => p.cancelled).length,
       warnings,
+      outstanding_balance: outstandingBalance,
     });
   } catch (e) {
     const detail = (e.errors && e.errors.length) ? e.errors.map(x => [x.field, x.message || x.reason].filter(Boolean).join(': ')).join('; ') : e.message;

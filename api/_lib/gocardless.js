@@ -33,12 +33,155 @@ function getGoCardlessClient() {
 // per-session charges the moment their mandate went active. Found and
 // fixed during the pre-launch UI/UX review, before any real Flex mandate
 // had gone active.
+//
+// SUPERSEDED for Core/Resident by calculateScheduleBasedMonthlyFeePence()
+// below (team review 26 Aug 2026 — a flat £249/£449 regardless of the
+// agreed schedule was wrong; the fee should scale with what was actually
+// agreed). Left defined here only as the last-resort fallback for the
+// edge case of a Core/Resident member with literally zero recurring slots
+// on record — should never happen in practice (a slot is required at
+// invite time), but a fallback beats a $NaN subscription amount.
 const PLAN_TIER_MONTHLY_PENCE = {
   community: null, // pay-as-you-go, no recurring subscription
   flex: null,       // pay-as-you-go per session, no recurring subscription
   core: 24900,
   resident: 44900,
 };
+
+// Per-slot weekly rates, in pence, mirrored from the same brochure figures
+// already shown on Membership & Pricing (index.html's TIER_DATA) — that
+// page's "Half Day (50%)" row is the half-day/week rate, and "1 Day/Week"
+// is the full-day/week rate (confirmed earlier: 1 Day/Week is always
+// exactly double Half Day, e.g. Resident Clinical £80 = 2×£40, matching
+// "a fixed rate per half-day slot and a separate rate per full-day slot,
+// added up" — team review 26 Aug 2026). Kept here, not derived from
+// TIER_DATA, since that lives in client-shipped index.html and the actual
+// GoCardless subscription amount must never trust anything client-side.
+const WEEKLY_SLOT_RATES_PENCE = {
+  core:     { half: { clinical_wellness: 4250, consultation: 3500 }, full: { clinical_wellness: 8500, consultation: 7000 } },
+  resident: { half: { clinical_wellness: 4000, consultation: 3250 }, full: { clinical_wellness: 8000, consultation: 6500 } },
+};
+const WEEKS_PER_MONTH = 52 / 12; // 4.3333... — the standard, mathematically fair weekly-to-monthly conversion (a flat ×4 would quietly undercharge every year, since 52 weeks don't divide evenly into 12 months of exactly 4 weeks each).
+
+// The real, schedule-based monthly fee for a Core/Resident member — team
+// review 26 Aug 2026: "residents and core can only have full or half
+// days... a fixed rate per half-day slot and a separate rate per full-day
+// slot, added up" for the MONTHLY charge specifically (not the earlier,
+// separate half/full-day booking-length rule already enforced at slot
+// creation time). Fetches the member's actual agreed slots directly
+// rather than trusting anything already attached to the passed `member`
+// object, since recurring_slots is only ever attached by /api/me for the
+// logged-in user's own record — callers like the webhook or cron pass a
+// bare members-table row without it.
+async function calculateScheduleBasedMonthlyFeePence(supabase, member) {
+  if (!['core', 'resident'].includes(member.plan_tier)) return null;
+
+  const { data: slots, error } = await supabase
+    .from('member_recurring_slots')
+    .select('time_start, time_end, room:rooms(pricing_category)')
+    .eq('member_id', member.id);
+  if (error || !slots || slots.length === 0) {
+    // Fallback for the edge case of a Core/Resident member with no
+    // recurring slot on record at all (shouldn't happen — one is required
+    // at invite time — but a flat fallback beats a zero/NaN subscription).
+    return PLAN_TIER_MONTHLY_PENCE[member.plan_tier];
+  }
+
+  const rates = WEEKLY_SLOT_RATES_PENCE[member.plan_tier];
+  let weeklyTotalPence = 0;
+  for (const slot of slots) {
+    const [startH, startM] = slot.time_start.split(':').map(Number);
+    const [endH, endM] = slot.time_end.split(':').map(Number);
+    const durationHours = (endH * 60 + endM - (startH * 60 + startM)) / 60;
+    const lengthKey = durationHours >= 8 ? 'full' : 'half'; // matches the half/full-day-only rule already enforced at slot creation (api/recurring-slots.js, api/invites.js)
+    const categoryKey = (slot.room && slot.room.pricing_category === 'consultation') ? 'consultation' : 'clinical_wellness';
+    weeklyTotalPence += rates[lengthKey][categoryKey];
+  }
+  return Math.round(weeklyTotalPence * WEEKS_PER_MONTH);
+}
+
+// Full outstanding-balance calculation at cancellation (team review 26
+// Aug 2026: "on practitioner cancellation we collect any underpayment...
+// everything outstanding on the account, combined into one figure").
+// Two genuinely different things added together:
+//
+// 1. The monthly-averaging shortfall — only meaningful because the real
+//    monthly charge is a flat weekly-rate average (WEEKS_PER_MONTH above),
+//    not a literal count of that month's actual session dates. Someone
+//    who leaves partway through a billing cycle may have used slightly
+//    more (or less) than they've been charged for so far; this compares
+//    what they SHOULD have paid by now (weekly rate × weeks elapsed since
+//    plan_tier_started_at, or their custom override pro-rated the same
+//    way) against what GoCardless has actually collected via their
+//    subscription to date. Only ever returns a POSITIVE shortfall — if
+//    the maths comes out negative (they've technically overpaid), that's
+//    a refund question for a human to decide on, not something this
+//    automatically nets off.
+// 2. Any other genuinely unpaid booking on the account — a failed or
+//    still-pending session charge that has nothing to do with the
+//    membership fee itself (team review: "everything outstanding on the
+//    account, combined into one figure", not just the averaging part).
+//
+// Deliberately calculation-only — never creates a charge itself. Admin
+// reviews the number in Manage Member and clicks to actually collect it
+// (team review: "calculate it and show admin the amount, admin clicks to
+// actually collect it") — see api/billing/collect-final-balance.js.
+async function calculateOutstandingBalanceAtCancellation(supabase, member) {
+  const breakdown = { averaging_shortfall_pence: 0, other_unpaid_pence: 0 };
+
+  if (['core', 'resident'].includes(member.plan_tier) && member.plan_tier_started_at) {
+    let weeklyEquivalentPence;
+    if (member.custom_monthly_fee_pence != null) {
+      weeklyEquivalentPence = member.custom_monthly_fee_pence / WEEKS_PER_MONTH;
+    } else {
+      const { data: slots } = await supabase
+        .from('member_recurring_slots')
+        .select('time_start, time_end, room:rooms(pricing_category)')
+        .eq('member_id', member.id);
+      const rates = WEEKLY_SLOT_RATES_PENCE[member.plan_tier];
+      weeklyEquivalentPence = 0;
+      for (const slot of slots || []) {
+        const [startH, startM] = slot.time_start.split(':').map(Number);
+        const [endH, endM] = slot.time_end.split(':').map(Number);
+        const durationHours = (endH * 60 + endM - (startH * 60 + startM)) / 60;
+        const lengthKey = durationHours >= 8 ? 'full' : 'half';
+        const categoryKey = (slot.room && slot.room.pricing_category === 'consultation') ? 'consultation' : 'clinical_wellness';
+        weeklyEquivalentPence += rates[lengthKey][categoryKey];
+      }
+    }
+
+    const weeksElapsed = (new Date() - new Date(member.plan_tier_started_at)) / (7 * 24 * 3600 * 1000);
+    const expectedToDatePence = weeklyEquivalentPence * weeksElapsed;
+
+    let actuallyCollectedPence = 0;
+    if (member.gocardless_subscription_id) {
+      try {
+        const client = getGoCardlessClient();
+        const { payments } = await client.payments.list({ subscription: member.gocardless_subscription_id });
+        actuallyCollectedPence = (payments || [])
+          .filter(p => ['confirmed', 'paid_out'].includes(p.status))
+          .reduce((sum, p) => sum + Number(p.amount), 0);
+      } catch (e) {
+        // If GoCardless can't be reached, safer to show no shortfall than
+        // a wrong one built on missing data — admin can retry later.
+        actuallyCollectedPence = expectedToDatePence;
+      }
+    }
+
+    breakdown.averaging_shortfall_pence = Math.max(0, Math.round(expectedToDatePence - actuallyCollectedPence));
+  }
+
+  const { data: unpaidBookings } = await supabase
+    .from('bookings')
+    .select('amount_pence')
+    .eq('member_id', member.id)
+    .in('payment_status', ['pending', 'failed'])
+    .neq('status', 'cancelled');
+  breakdown.other_unpaid_pence = (unpaidBookings || []).reduce((sum, b) => sum + (b.amount_pence || 0), 0);
+
+  breakdown.total_pence = breakdown.averaging_shortfall_pence + breakdown.other_unpaid_pence;
+  return breakdown;
+}
 
 // Reads the raw, unparsed request body as a string. Needed for webhook
 // signature verification, which must hash the exact bytes GoCardless sent —
@@ -134,8 +277,8 @@ async function ensureMembershipSubscription(supabase, member) {
   // custom_monthly_fee_pence lets Staff & Admin override the standard tier
   // rate for a specific member — special negotiated deals (team review 19
   // Aug 2026: "one or two people have special deals"). Falls back to the
-  // standard rate when not set.
-  const monthlyPence = member.custom_monthly_fee_pence != null ? member.custom_monthly_fee_pence : PLAN_TIER_MONTHLY_PENCE[member.plan_tier];
+  // real schedule-based rate (not a flat tier rate) when not set.
+  const monthlyPence = member.custom_monthly_fee_pence != null ? member.custom_monthly_fee_pence : await calculateScheduleBasedMonthlyFeePence(supabase, member);
   if (!monthlyPence) return { skipped: true, reason: 'not_eligible_tier' };
   if (member.mandate_status !== 'active' || !member.gocardless_mandate_id) return { skipped: true, reason: 'no_active_mandate' };
   if (member.gocardless_subscription_id) return { skipped: true, reason: 'already_has_subscription' };
@@ -157,7 +300,7 @@ async function ensureMembershipSubscription(supabase, member) {
   }
 }
 
-module.exports = { getGoCardlessClient, PLAN_TIER_MONTHLY_PENCE, readRawBody, createOneOffPayment, createMembershipSubscription, customerLinksFor, persistNewCustomerId, ensureMembershipSubscription, handleMandateBecameActive, reconcileMemberMandate };
+module.exports = { getGoCardlessClient, PLAN_TIER_MONTHLY_PENCE, readRawBody, createOneOffPayment, createMembershipSubscription, customerLinksFor, persistNewCustomerId, ensureMembershipSubscription, handleMandateBecameActive, reconcileMemberMandate, calculateScheduleBasedMonthlyFeePence, calculateOutstandingBalanceAtCancellation };
 
 // Everything that should happen the moment a mandate is confirmed active —
 // extracted from api/webhooks/gocardless.js so this exact logic can also
