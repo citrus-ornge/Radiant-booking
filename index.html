@@ -7187,6 +7187,57 @@ function toggleInviteOwnerRow(prefix) {
 // time.
 const PLAN_TIER_MONTHLY_PENCE_DISPLAY = { core: 24900, resident: 44900 };
 
+// Superseded by updateInviteStandardFeeDisplay() below for the actual
+// Invite Users display (team review 26 Aug 2026 — the fee must reflect
+// the real agreed schedule, not a flat tier rate). Kept only as the
+// fallback shown before any slot has been added yet, so the field isn't
+// simply blank.
+//
+// Mirrors WEEKLY_SLOT_RATES_PENCE / WEEKS_PER_MONTH in
+// api/_lib/gocardless.js exactly — this is DISPLAY ONLY; the real
+// GoCardless subscription amount always comes from the server-side
+// calculation, never from anything computed here.
+const WEEKLY_SLOT_RATES_PENCE_DISPLAY = {
+  core:     { half: { clinical_wellness: 4250, consultation: 3500 }, full: { clinical_wellness: 8500, consultation: 7000 } },
+  resident: { half: { clinical_wellness: 4000, consultation: 3250 }, full: { clinical_wellness: 8000, consultation: 6500 } },
+};
+const WEEKS_PER_MONTH_DISPLAY = 52 / 12;
+
+// Recomputes the "Standard rate" field from whatever slots have actually
+// been added to pendingInviteSlots so far — real gap found live (26 Aug):
+// this previously stayed a flat £249/£449 no matter how many slots were
+// added, which is exactly the flat-rate-regardless-of-schedule problem
+// already fixed for the real billing amount and the onboarding Room Offer
+// screen, just never carried over to this one display too. Called both
+// when the tier changes and every time a slot is added/removed, so it
+// stays live rather than needing a manual refresh.
+function updateInviteStandardFeeDisplay() {
+  const tier = document.getElementById('invite-tier').value;
+  const fieldEl = document.getElementById('invite-fee-standard');
+  if (!fieldEl || !['core', 'resident'].includes(tier)) return;
+
+  if (pendingInviteSlots.length === 0) {
+    const flatFallback = PLAN_TIER_MONTHLY_PENCE_DISPLAY[tier];
+    fieldEl.value = flatFallback != null ? `£${(flatFallback / 100).toFixed(2)} / month (add a slot below for the real rate)` : '—';
+    return;
+  }
+
+  const rates = WEEKLY_SLOT_RATES_PENCE_DISPLAY[tier];
+  let weeklyTotalPence = 0;
+  for (const slot of pendingInviteSlots) {
+    const [startH, startM] = slot.time_start.split(':').map(Number);
+    const [endH, endM] = slot.time_end.split(':').map(Number);
+    const durationHours = (endH * 60 + endM - (startH * 60 + startM)) / 60;
+    const lengthKey = durationHours >= 8 ? 'full' : 'half';
+    const room = state.rooms.find(r => r.id === slot.room_id);
+    const categoryKey = (room && room.pricing_category === 'consultation') ? 'consultation' : 'clinical_wellness';
+    weeklyTotalPence += rates[lengthKey][categoryKey];
+  }
+  const monthlyPence = Math.round(weeklyTotalPence * WEEKS_PER_MONTH_DISPLAY);
+  fieldEl.value = `£${(monthlyPence / 100).toFixed(2)} / month`;
+}
+
+
 function toggleInviteReservedRow() {
   const bulk = document.getElementById('invite-bulk-toggle').checked;
   const tier = document.getElementById('invite-tier').value;
@@ -7207,8 +7258,7 @@ function toggleInviteReservedRow() {
   if (feeRow) {
     feeRow.style.display = showReserved ? 'block' : 'none';
     if (showReserved) {
-      const standardPence = PLAN_TIER_MONTHLY_PENCE_DISPLAY[tier];
-      document.getElementById('invite-fee-standard').value = standardPence != null ? `£${(standardPence / 100).toFixed(2)} / month` : '—';
+      updateInviteStandardFeeDisplay();
       document.getElementById('invite-fee-override').value = '';
     }
   }
@@ -7293,6 +7343,7 @@ function renderPendingInviteSlots() {
   if (!container) return;
   if (pendingInviteSlots.length === 0) {
     container.innerHTML = '<div style="font-size:12px;color:var(--r-warm-gray);">No slots added yet.</div>';
+    updateInviteStandardFeeDisplay();
     return;
   }
   container.innerHTML = pendingInviteSlots.map((s, i) => {
@@ -7303,6 +7354,7 @@ function renderPendingInviteSlots() {
       <button type="button" class="btn btn-danger btn-sm" onclick="removePendingInviteSlot(${i})">Remove</button>
     </div>`;
   }).join('');
+  updateInviteStandardFeeDisplay();
 }
 
 // Core/Resident recurring slots may only be a half day (4hrs) or full day
