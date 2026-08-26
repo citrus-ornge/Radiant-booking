@@ -68,6 +68,19 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'Invalid document_type' });
     }
 
+    // Checked BEFORE this upload lands, specifically so the "thank you,
+    // documents complete" email (sent further down) fires exactly once —
+    // at the moment the set first becomes complete, not on every
+    // individual upload thereafter (e.g. someone re-uploading an expired
+    // insurance certificate a year later shouldn't re-trigger it).
+    const { data: existingMandatoryDocs } = await supabase
+      .from('member_documents')
+      .select('document_type')
+      .eq('member_id', member_id)
+      .in('document_type', ['id_proof', 'insurance']);
+    const existingTypes = new Set((existingMandatoryDocs || []).map(d => d.document_type));
+    const wasAlreadyComplete = existingTypes.has('id_proof') && existingTypes.has('insurance');
+
     const buffer = Buffer.from(file_base64, 'base64');
     if (buffer.length > MAX_FILE_SIZE_BYTES) {
       return res.status(413).json({ error: `File is too large (max ${Math.round(MAX_FILE_SIZE_BYTES / 1024 / 1024)}MB). Try a smaller scan or photo.` });
@@ -102,6 +115,31 @@ module.exports = async (req, res) => {
       entityId: member_id,
       details: { document_type, file_name },
     });
+
+    // Fires exactly once, the moment id_proof + insurance both become
+    // present (see wasAlreadyComplete above) — not for practitioners who
+    // were already complete before this specific upload (e.g. adding a
+    // qualification certificate afterwards shouldn't re-trigger it).
+    if (!wasAlreadyComplete && ['id_proof', 'insurance'].includes(document_type)) {
+      const isNowComplete = document_type === 'id_proof'
+        ? existingTypes.has('insurance')
+        : existingTypes.has('id_proof');
+      if (isNowComplete) {
+        try {
+          const { data: memberRow } = await supabase.from('members').select('first_name, last_name, email').eq('id', member_id).maybeSingle();
+          if (memberRow && memberRow.email) {
+            const { sendComplianceDocsReceivedEmail } = require('./_lib/email');
+            await sendComplianceDocsReceivedEmail({
+              to: memberRow.email,
+              memberName: `${memberRow.first_name || ''} ${memberRow.last_name || ''}`.trim() || memberRow.email,
+            });
+          }
+          await supabase.from('members').update({ compliance_docs_reminder_last_sent_at: null }).eq('id', member_id);
+        } catch (e) {
+          // Don't fail the upload itself over the confirmation email failing
+        }
+      }
+    }
 
     return res.status(201).json({ document: doc });
   }

@@ -22,6 +22,25 @@ module.exports = async (req, res) => {
     } else {
       member.recurring_slots = [];
     }
+
+    // Mandatory compliance docs (team review 26 Aug 2026: "ID and docs is
+    // mandatory (insurance)"). Practitioner-only — decided against any hard
+    // block (onboarding or Direct Debit) and went with a persistent
+    // reminder instead, so this is purely informational: the client uses
+    // it to show/hide a banner, nothing here prevents anything.
+    if (member.user_type === 'practitioner') {
+      const supabase = getSupabase();
+      const { data: docs } = await supabase
+        .from('member_documents')
+        .select('document_type')
+        .eq('member_id', member.id)
+        .in('document_type', ['id_proof', 'insurance']);
+      const types = new Set((docs || []).map(d => d.document_type));
+      member.missing_mandatory_compliance_docs = !(types.has('id_proof') && types.has('insurance'));
+    } else {
+      member.missing_mandatory_compliance_docs = false;
+    }
+
     res.status(200).json({ member });
   } catch (e) {
     res.status(e.status || 500).json({ error: e.message });

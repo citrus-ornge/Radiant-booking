@@ -376,6 +376,37 @@ async function sendLeaveDecision({ to, staffName, leaveDate, code, approved, rea
   return resend.emails.send({ from: FROM_EMAIL, to: Array.isArray(to) ? to : [to], subject: `${codeLabel} request ${approved ? 'approved' : 'declined'}: ${dateStr}`, text: body });
 }
 
+// Compliance docs (team review 26 Aug 2026): "ID and docs is mandatory
+// (insurance)... must have way to ensure uploaded" — decided against any
+// hard block (onboarding or Direct Debit) and went with a persistent
+// reminder instead: a daily email to the practitioner AND admins,
+// starting 48 hours after they join, until both proof of ID and
+// insurance/indemnity are on file. See api/cron/compliance-reminders.js.
+async function sendComplianceDocsReminderEmail({ to, memberName }) {
+  const resend = getResend();
+  return resend.emails.send({
+    from: FROM_EMAIL,
+    to: [to],
+    subject: `Action needed: upload your ID and insurance documents`,
+    text: `Hi ${memberName},\n\nYour practitioner account is missing one or both mandatory compliance documents — proof of ID and your professional indemnity insurance certificate.\n\nYou can upload these any time from My Profile, under "Compliance Documents". This is a required part of your membership, so please get these uploaded as soon as you're able to.\n\n— Radiant Booking`,
+  });
+}
+
+// Sent once, at the exact moment both mandatory documents are on file —
+// not on every individual upload (someone might upload ID today and
+// insurance next week; this fires after whichever upload completes the
+// set), so the reminder cadence above has a clear, confirmable end point
+// rather than trailing off ambiguously.
+async function sendComplianceDocsReceivedEmail({ to, memberName }) {
+  const resend = getResend();
+  return resend.emails.send({
+    from: FROM_EMAIL,
+    to: [to],
+    subject: `Thanks — your compliance documents are all set`,
+    text: `Hi ${memberName},\n\nThanks — we've received both your proof of ID and insurance/indemnity certificate. Your compliance documents are complete, and there's nothing further needed from you on this.\n\n— Radiant Booking`,
+  });
+}
+
 async function sendExitNoticeReminder({ to, memberName, planTier, noticeDays, cycleEndDate, noticeDeadlineDate }) {
   const resend = getResend();
   const tierLabel = TIER_LABELS[planTier] || planTier;
@@ -557,4 +588,6 @@ module.exports = {
   sendPasswordResetEmail,
   sendMagicLinkEmail,
   sendPatientInviteEmail,
+  sendComplianceDocsReminderEmail,
+  sendComplianceDocsReceivedEmail,
 };

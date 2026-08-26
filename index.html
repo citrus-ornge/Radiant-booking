@@ -1765,6 +1765,7 @@ textarea.form-input { resize: vertical; }
         </div>
         <div id="my-payment-due-banner" style="display:none;margin-bottom:20px;"></div>
         <div id="my-dd-required-banner" style="display:none;margin-bottom:20px;"></div>
+        <div id="my-compliance-docs-banner" style="display:none;margin-bottom:20px;"></div>
         <div id="my-recurring-slot-card" style="display:none;margin-bottom:20px;"></div>
         <div id="my-upgrade-banner" style="display:none;margin-bottom:20px;"></div>
       </div>
@@ -3902,6 +3903,30 @@ function renderMyBookings() {
       ddBannerEl.style.display = 'none';
     }
   }
+
+  // Compliance docs (team review 26 Aug 2026) — persistent reminder only,
+  // no hard block anywhere (decided against gating onboarding or Direct
+  // Debit). Practitioner-only; missing_mandatory_compliance_docs is
+  // computed server-side by /api/me.
+  const complianceBannerEl = document.getElementById('my-compliance-docs-banner');
+  if (complianceBannerEl) {
+    if (m.user_type === 'practitioner' && m.missing_mandatory_compliance_docs) {
+      complianceBannerEl.style.display = 'block';
+      complianceBannerEl.innerHTML = `
+        <div class="card" style="border-color:var(--r-gold);background:var(--r-gold-light,#f7ecd8);">
+          <div style="padding:16px 22px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;">
+            <div>
+              <div style="font-size:13.5px;font-weight:600;">⚠ Compliance documents needed</div>
+              <div style="font-size:12px;color:var(--r-warm-gray);margin-top:2px;">Proof of ID and your insurance/indemnity certificate are required — you'll get a reminder email until these are uploaded.</div>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="showClientView('profile')">Upload now</button>
+          </div>
+        </div>`;
+    } else {
+      complianceBannerEl.style.display = 'none';
+    }
+  }
+
   const now = new Date();
   const upcoming = mine.filter(b => b.status !== 'cancelled' && new Date(b.start_time) >= now).sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
   const thisMonth = mine.filter(b => {
