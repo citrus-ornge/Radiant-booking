@@ -3219,8 +3219,18 @@ function nextTierUp(planTier) {
 // (e.g. full day Monday + half day Friday) — shared formatting so every
 // place that shows them (My Bookings, Profile, onboarding) stays consistent.
 function fmtSlotTime(t) { return t ? t.slice(0, 5) : ''; }
+// Display only — "Half day"/"Full day" instead of the literal time range,
+// everywhere a recurring slot is shown to anyone. The real start_time/
+// end_time are still stored and used for actual scheduling exactly as
+// before; this is purely what's shown on screen.
+function slotDurationLabel(timeStart, timeEnd) {
+  const [startH, startM] = fmtSlotTime(timeStart).split(':').map(Number);
+  const [endH, endM] = fmtSlotTime(timeEnd).split(':').map(Number);
+  const hours = (endH * 60 + endM - (startH * 60 + startM)) / 60;
+  return hours >= 8 ? 'Full day' : 'Half day';
+}
 function slotOneLineHtml(s) {
-  return `${esc(s.day_of_week)}, ${esc(fmtSlotTime(s.time_start))}–${esc(fmtSlotTime(s.time_end))}${s.room ? ' · ' + esc(s.room.name) : ''}`;
+  return `${esc(s.day_of_week)}, ${esc(slotDurationLabel(s.time_start, s.time_end))}${s.room ? ' · ' + esc(s.room.name) : ''}`;
 }
 function slotsListHtml(slots) {
   return slots.map(s => `<div style="padding:3px 0;">${slotOneLineHtml(s)}</div>`).join('');
@@ -3646,7 +3656,7 @@ async function loadRecurringSlotsForModal(memberId) {
       ? '<div style="font-size:12px;color:var(--r-warm-gray);">No slots set yet — add one below.</div>'
       : slots.map(s => `
         <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--r-border);font-size:13px;">
-          <span>${esc(s.day_of_week)}, ${esc(fmtSlotTime(s.time_start))}–${esc(fmtSlotTime(s.time_end))}${s.room ? ' · ' + esc(s.room.name) : ''}</span>
+          <span>${esc(s.day_of_week)}, ${esc(slotDurationLabel(s.time_start, s.time_end))}${s.room ? ' · ' + esc(s.room.name) : ''}</span>
           <button type="button" class="btn btn-danger btn-sm" onclick="deleteRecurringSlot('${s.id}', '${memberId}')">Remove</button>
         </div>`).join('');
   } catch (e) {
@@ -5156,7 +5166,7 @@ async function showOnboardingRoomTerms() {
     ? `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--r-stone,#e8e4dc);font-weight:600;">£${(feePence / 100).toFixed(2)} / month</div>`
     : '';
   detailsEl.innerHTML = `
-    <div style="font-size:15px;font-weight:600;margin-bottom:10px;">${slots.map(s => `${esc(s.day_of_week)}, ${esc(fmtSlotTime(s.time_start))}–${esc(fmtSlotTime(s.time_end))}`).join('<br>')}</div>
+    <div style="font-size:15px;font-weight:600;margin-bottom:10px;">${slots.map(s => `${esc(s.day_of_week)}, ${esc(slotDurationLabel(s.time_start, s.time_end))}`).join('<br>')}</div>
     <div style="color:var(--r-warm-gray);margin-bottom:4px;">${slots.map(s => `Room: ${esc(s.room ? s.room.name : 'To be confirmed')}`).join('<br>')}</div>
     <div style="color:var(--r-warm-gray);">${slots.length > 1 ? 'These slots are' : 'This slot is'} held for you every week as part of your ${esc(tierLabelText)} membership.</div>
     ${feeLine}
@@ -7350,7 +7360,7 @@ function renderPendingInviteSlots() {
     const room = state.rooms.find(r => r.id === s.room_id);
     return `
     <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--r-border);font-size:13px;">
-      <span>${esc(s.day_of_week)}, ${esc(s.time_start)}–${esc(s.time_end)}${room ? ' · ' + esc(room.name) : ''}</span>
+      <span>${esc(s.day_of_week)}, ${esc(slotDurationLabel(s.time_start, s.time_end))}${room ? ' · ' + esc(room.name) : ''}</span>
       <button type="button" class="btn btn-danger btn-sm" onclick="removePendingInviteSlot(${i})">Remove</button>
     </div>`;
   }).join('');
@@ -7525,7 +7535,7 @@ function renderPendingAddUserSlots() {
     const room = state.rooms.find(r => r.id === s.room_id);
     return `
     <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--r-border);font-size:13px;">
-      <span>${esc(s.day_of_week)}, ${esc(s.time_start)}–${esc(s.time_end)}${room ? ' · ' + esc(room.name) : ''}</span>
+      <span>${esc(s.day_of_week)}, ${esc(slotDurationLabel(s.time_start, s.time_end))}${room ? ' · ' + esc(room.name) : ''}</span>
       <button type="button" class="btn btn-danger btn-sm" onclick="removePendingAddUserSlot(${i})">Remove</button>
     </div>`;
   }).join('');
