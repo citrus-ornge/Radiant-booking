@@ -5308,6 +5308,16 @@ function showOnboardingDone() {
   const ddNote = ddInProgress
     ? 'Direct Debit submitted and being processed by your bank — usually active within about 1 business day.'
     : 'Direct Debit still needs setting up. You can do this any time from My Profile.';
+  // Team review 26 Aug 2026: mention the compliance-doc requirement here
+  // too, "so it's visible right when someone finishes signing up" — but
+  // by this point onboarding's own hard block (added the same day) has
+  // already required both documents before anyone can reach this screen
+  // at all, so this reads as a confirmation of something already done,
+  // not a reminder to do something — a warning here would be confusing
+  // and wrong, since it's genuinely already complete for anyone seeing it.
+  const complianceNote = m && m.user_type === 'practitioner'
+    ? '<div style="margin-top:10px;"><span style="color:var(--r-green,#3D6B4F);">✓</span> Your compliance documents (proof of ID and insurance/indemnity) are on file.</div>'
+    : '';
 
   if (m && m.user_type === 'practitioner' && ['core', 'resident'].includes(m.plan_tier)) {
     infoEl.style.display = 'block';
@@ -5315,12 +5325,19 @@ function showOnboardingDone() {
     const slotHtml = slots.length > 0
       ? `<strong>Your reserved session${slots.length > 1 ? 's' : ''}</strong><br>${slots.map(s => slotOneLineHtml(s)).join('<br>')}<br><span style="color:var(--r-warm-gray);">Held for you every week as part of your ${esc(m.plan_tier === 'resident' ? 'Resident' : 'Core')} membership.</span>`
       : `<strong>Your reserved session</strong><br><span style="color:var(--r-warm-gray);">As a ${esc(m.plan_tier === 'resident' ? 'Resident' : 'Core')} member, you'll have fixed recurring room slot(s). Staff & Admin will confirm the day(s), time(s) and room(s) with you shortly.</span>`;
-    infoEl.innerHTML = ddOutstanding
+    infoEl.innerHTML = (ddOutstanding
       ? slotHtml + `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--r-border);color:var(--r-gold-dark,#8a6a1f);"><strong>${ddInProgress ? '⏳ Provisionally held, being processed' : '⚠ Provisionally held, not yet fully confirmed'}</strong> — ${ddNote}</div>`
-      : slotHtml;
+      : slotHtml) + complianceNote;
   } else if (ddOutstanding) {
     infoEl.style.display = 'block';
-    infoEl.innerHTML = `<span style="color:var(--r-gold-dark,#8a6a1f);"><strong>${ddInProgress ? '⏳ Direct Debit being processed' : '⚠ Direct Debit not yet set up'}</strong> — ${ddNote}</span>`;
+    infoEl.innerHTML = `<span style="color:var(--r-gold-dark,#8a6a1f);"><strong>${ddInProgress ? '⏳ Direct Debit being processed' : '⚠ Direct Debit not yet set up'}</strong> — ${ddNote}</span>` + complianceNote;
+  } else if (complianceNote) {
+    // Any other practitioner (e.g. Flex/Community with Direct Debit
+    // already active) previously saw nothing at all on this screen —
+    // still worth confirming their compliance documents specifically,
+    // rather than only ever mentioning it alongside a slot or DD notice.
+    infoEl.style.display = 'block';
+    infoEl.innerHTML = complianceNote;
   } else {
     infoEl.style.display = 'none';
   }
