@@ -2713,7 +2713,7 @@ let currentRole = 'admin'; // derived from the real member's user_type after log
 let currentSession = null;
 
 // ── LIVE APP STATE (populated from the real API) ──
-const state = { rooms: [], members: [], bookings: [], invites: [], currentMember: null, pendingLeaveRequests: [] };
+const state = { rooms: [], members: [], bookings: [], invites: [], currentMember: null, pendingLeaveRequests: [], myActivityEvents: [], conversations: [] };
 
 // ── API HELPERS ──
 // Escapes user-controllable text before it's interpolated into innerHTML,
@@ -2777,8 +2777,9 @@ async function loadAppData(isRetry) {
     isAdmin ? api('/invites') : Promise.resolve({ invites: state.invites }),
     isAdmin ? api('/staff/leave') : Promise.resolve({ leave: [] }),
     api('/me'),
+    api('/audit-log'), api('/messages'),
   ]);
-  const [roomsR, membersR, bookingsR, invitesR, leaveR, meR] = results;
+  const [roomsR, membersR, bookingsR, invitesR, leaveR, meR, auditR, messagesR] = results;
   const failures = [];
 
   if (roomsR.status === 'fulfilled') state.rooms = roomsR.value.rooms || [];
@@ -2794,6 +2795,16 @@ async function loadAppData(isRetry) {
 
   if (invitesR.status === 'fulfilled') state.invites = invitesR.value.invites || [];
   else if (isAdmin) failures.push('invites');
+
+  // Team review 26 Aug 2026: "seems odd for users to have activities on
+  // their accounts and not show in notifications" — /api/audit-log now
+  // returns a self-scoped subset (entity_type='member', entity_id=self)
+  // for non-admins, so this is safe to fetch unconditionally without
+  // leaking anyone else's activity. Not pushed to `failures` on error —
+  // a missing activity feed shouldn't be treated as seriously as missing
+  // bookings/members.
+  state.myActivityEvents = auditR.status === 'fulfilled' ? (auditR.value.entries || []) : [];
+  state.conversations = messagesR.status === 'fulfilled' ? (messagesR.value.conversations || []) : [];
 
   // Refresh currentMember from /api/me — a full, self-only record (all
   // columns) — never from the shared /members list, which for non-admins
@@ -4426,6 +4437,56 @@ function buildNotificationEvents() {
   (state.pendingLeaveRequests || []).forEach(l => {
     events.push({ ts: l.created_at, title: `⏳ Holiday approval needed: ${l.staff_name}`, sub: `${fmtDateTime(l.leave_date).split(' · ')[0]} · tap to review in Staff Area`, dotColor: 'var(--r-gold)' });
   });
+  // Team review 26 Aug 2026: "seems odd for users to have activities on
+  // their accounts and not show in notifications" — billing, document,
+  // and onboarding events, previously only visible via the admin-only
+  // Audit Log page, now also surface here. Deliberately excludes
+  // routine/self-directed actions (member.updated, password reset sent)
+  // to keep this genuinely signal-worthy rather than noisy — a
+  // practitioner saving their own profile doesn't need telling they just
+  // did that.
+  const NOTIFICATION_WORTHY_ACTIONS = new Set([
+    'member_document.uploaded', 'member_document.deleted',
+    'onboarding.room_terms_accepted', 'onboarding.room_terms_rejected',
+    'recurring_slot.added', 'recurring_slot.removed',
+    'billing.mandate_active', 'billing.mandate_cancelled', 'billing.mandate_failed', 'billing.mandate_expired',
+    'billing.subscription_created', 'billing.subscription_created_manually', 'billing.subscription_cancelled',
+    'billing.subscription_payment_paid', 'billing.subscription_payment_failed',
+    'billing.instant_pay_fulfilled', 'billing.payment_paid', 'billing.payment_failed',
+    'billing.final_balance_collected',
+  ]);
+  (state.myActivityEvents || []).forEach(e => {
+    if (!NOTIFICATION_WORTHY_ACTIONS.has(e.action)) return;
+    // For admins, /api/audit-log deliberately returns the full platform
+    // log (for the separate Audit Log page) rather than a self-scoped
+    // subset — but this specific feed should always be "about me", for
+    // everyone, or an admin's Alerts would turn into a firehose of every
+    // practitioner's billing/document activity rather than their own.
+    if (!state.currentMember || e.entity_id !== state.currentMember.id) return;
+    const isBilling = e.action.startsWith('billing.');
+    const isFailure = e.action.includes('failed');
+    events.push({
+      ts: e.created_at,
+      title: `${isFailure ? '⚠ ' : (isBilling ? '💳 ' : '')}${AUDIT_ACTION_LABEL[e.action] || e.action}`,
+      sub: formatAuditDetails(e.details) || 'On your account',
+      dotColor: isFailure ? 'var(--r-red)' : (isBilling ? 'var(--r-green)' : null),
+    });
+  });
+  // Unread messages — these already have their own separate unread-badge
+  // and chime system (checkForNewMessages), but never appeared in this
+  // unified feed at all until now, which was the most visible of the
+  // gaps raised.
+  (state.conversations || []).forEach(c => {
+    if (!c.unread || c.unread === 0) return;
+    const other = (state.members || []).find(m => m.id === c.other_id);
+    const otherName = other ? `${other.first_name || ''} ${other.last_name || ''}`.trim() || other.email : 'Someone';
+    events.push({
+      ts: c.last_at || new Date().toISOString(),
+      title: `✉ ${c.unread > 1 ? `${c.unread} new messages` : 'New message'} from ${otherName}`,
+      sub: c.last_message || '',
+      dotColor: 'var(--r-gold)',
+    });
+  });
   // Note: a "recurring slot agreed" activity item used to live here, reading
   // members.reserved_day_of_week. Removed — that column is no longer
   // written to (recurring slots are now member_recurring_slots, which can
@@ -5884,6 +5945,48 @@ function formatAuditDetails(details) {
   return keys.length > 0 ? keys.map(k => `${k}: ${details[k]}`).join(' · ') : '';
 }
 
+// Extracted as a shared constant (team review 26 Aug 2026) — used by both
+// the admin Audit Log page and the new Alerts/notifications integration
+// below, so both surfaces describe the same events with the same wording
+// rather than maintaining two separate copies.
+const AUDIT_ACTION_LABEL = {
+  'member.updated': 'Updated member', 'member.deleted': 'Deleted member', 'member.created_directly': 'Added user directly', 'member.password_reset_sent': 'Sent password reset',
+  'member_document.uploaded': 'Uploaded compliance document', 'member_document.deleted': 'Removed compliance document',
+  'booking.cancelled': 'Cancelled booking', 'booking.updated': 'Updated booking', 'booking.patient_details_updated': 'Updated patient invite',
+  'invite.sent': 'Sent invite', 'invite.resent': 'Resent invite', 'room.created': 'Added room', 'room.updated': 'Updated room',
+  'document.created': 'Created document', 'document.updated': 'Updated document', 'document.deactivated': 'Removed document',
+  'event.created': 'Created event', 'event.deleted': 'Deleted event',
+  'notification_settings.updated': 'Updated notification settings',
+  // Onboarding
+  'onboarding.reset_for_testing': 'Reset onboarding (testing)',
+  'onboarding.room_terms_accepted': 'Accepted room offer',
+  'onboarding.room_terms_rejected': 'Declined room offer',
+  'recurring_slot.added': 'Added recurring slot',
+  'recurring_slot.removed': 'Removed recurring slot',
+  // Direct Debit
+  'billing.mandate_setup_started': 'Started Direct Debit setup',
+  'billing.mandate_pending_customer_approval': 'Direct Debit awaiting bank approval',
+  'billing.mandate_pending_submission': 'Direct Debit submitted to bank',
+  'billing.mandate_submitted': 'Direct Debit submitted to bank',
+  'billing.mandate_active': 'Direct Debit activated',
+  'billing.mandate_cancelled': 'Direct Debit cancelled',
+  'billing.mandate_failed': 'Direct Debit setup failed',
+  'billing.mandate_expired': 'Direct Debit expired',
+  // Subscription (flat monthly membership fee)
+  'billing.subscription_created': 'Membership subscription created',
+  'billing.subscription_created_manually': 'Membership subscription created (manual)',
+  'billing.subscription_creation_failed': 'Membership subscription creation failed',
+  'billing.subscription_payment_paid': 'Membership fee collected',
+  'billing.subscription_payment_failed': 'Membership fee failed to collect',
+  'billing.subscription_cancelled': 'Membership subscription cancelled',
+  'billing.final_balance_collected': 'Final balance collected',
+  // Session / booking payments
+  'billing.instant_pay_started': 'Started instant payment',
+  'billing.instant_pay_fulfilled': 'Instant payment confirmed',
+  'billing.payment_paid': 'Session payment confirmed',
+  'billing.payment_failed': 'Session payment failed',
+};
+
 async function loadAuditLog() {
   const tbody = document.getElementById('audit-log-table');
   try {
@@ -5893,46 +5996,11 @@ async function loadAuditLog() {
       tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--r-warm-gray);padding:20px;">No activity recorded yet.</td></tr>`;
       return;
     }
-    const actionLabel = {
-      'member.updated': 'Updated member', 'member.deleted': 'Deleted member', 'member.created_directly': 'Added user directly', 'member.password_reset_sent': 'Sent password reset',
-      'member_document.uploaded': 'Uploaded compliance document', 'member_document.deleted': 'Removed compliance document',
-      'booking.cancelled': 'Cancelled booking', 'booking.updated': 'Updated booking', 'booking.patient_details_updated': 'Updated patient invite',
-      'invite.sent': 'Sent invite', 'invite.resent': 'Resent invite', 'room.created': 'Added room', 'room.updated': 'Updated room',
-      'document.created': 'Created document', 'document.updated': 'Updated document', 'document.deactivated': 'Removed document',
-      'event.created': 'Created event', 'event.deleted': 'Deleted event',
-      'notification_settings.updated': 'Updated notification settings',
-      // Onboarding
-      'onboarding.reset_for_testing': 'Reset onboarding (testing)',
-      'onboarding.room_terms_accepted': 'Accepted room offer',
-      'onboarding.room_terms_rejected': 'Declined room offer',
-      'recurring_slot.added': 'Added recurring slot',
-      'recurring_slot.removed': 'Removed recurring slot',
-      // Direct Debit
-      'billing.mandate_setup_started': 'Started Direct Debit setup',
-      'billing.mandate_pending_customer_approval': 'Direct Debit awaiting bank approval',
-      'billing.mandate_pending_submission': 'Direct Debit submitted to bank',
-      'billing.mandate_submitted': 'Direct Debit submitted to bank',
-      'billing.mandate_active': 'Direct Debit activated',
-      'billing.mandate_cancelled': 'Direct Debit cancelled',
-      'billing.mandate_failed': 'Direct Debit setup failed',
-      'billing.mandate_expired': 'Direct Debit expired',
-      // Subscription (flat monthly membership fee)
-      'billing.subscription_created': 'Membership subscription created',
-      'billing.subscription_created_manually': 'Membership subscription created (manual)',
-      'billing.subscription_creation_failed': 'Membership subscription creation failed',
-      'billing.subscription_payment_paid': 'Membership fee collected',
-      'billing.subscription_payment_failed': 'Membership fee failed to collect',
-      // Session / booking payments
-      'billing.instant_pay_started': 'Started instant payment',
-      'billing.instant_pay_fulfilled': 'Instant payment confirmed',
-      'billing.payment_paid': 'Session payment confirmed',
-      'billing.payment_failed': 'Session payment failed',
-    };
     tbody.innerHTML = entries.map(e => `
       <tr>
         <td style="white-space:nowrap;color:var(--r-warm-gray);">${esc(timeAgo(e.created_at))}</td>
         <td>${esc(e.actor_name || 'System')}</td>
-        <td>${esc(actionLabel[e.action] || e.action)}</td>
+        <td>${esc(AUDIT_ACTION_LABEL[e.action] || e.action)}</td>
         <td style="color:var(--r-warm-gray);font-size:12px;">${esc(formatAuditDetails(e.details))}</td>
       </tr>`).join('');
   } catch (e) {
