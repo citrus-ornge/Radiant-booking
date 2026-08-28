@@ -41,11 +41,11 @@ a { color: #8A7550; }
   <p class="updated">Last updated: 30 July 2026</p>
 
   <div class="draft-notice">
-    <strong>Draft for review.</strong> This is a working template pending confirmation from Radiant's team — data retention periods and the contact details below are placeholders and should be confirmed before this is submitted as the final version for Google OAuth verification.
+    <strong>Draft for review.</strong> Company and contact details below are confirmed. One thing still needs a decision from Radiant's team before this is final: the exact data retention period.
   </div>
 
   <h2>Who we are</h2>
-  <p>Radiant Medical Aesthetics ("Radiant", "we", "us") operates this booking platform for the use of our practitioners, members and staff. Radiant is the data controller for the personal data processed here.</p>
+  <p>Radiant Medical Aesthetics &amp; Wellness ("Radiant", "we", "us") operates this booking platform for the use of our practitioners, members and staff. This service is operated by <strong>Radiant Facial Rejuvenation Limited</strong>, a company registered in England and Wales (company number 07975591), registered office 88 High Street, Heathfield, England, TN21 8JD. Radiant is the data controller for the personal data processed here.</p>
 
   <h2>What we collect</h2>
   <p>Account details (name, email, phone), professional details for practitioners (qualifications, indemnity insurance number and expiry), booking records (room, date, time, notes), and — only if you choose to connect it — a link to your Google Calendar for syncing bookings.</p>
@@ -66,7 +66,7 @@ a { color: #8A7550; }
   <p>You can access, download or delete your personal data at any time from your Profile page ("Download my data" and "Delete my account"). You also have the right to ask us to correct inaccurate data, object to certain processing, or complain to the UK Information Commissioner's Office (ico.org.uk) if you believe your data has been mishandled.</p>
 
   <h2>Contact</h2>
-  <p><em>[TBC — placeholder]</em> For any questions about this policy or your data, contact Radiant at <em>[privacy contact email to be confirmed]</em>.</p>
+  <p>For any questions about this policy or your data, contact Radiant at <a href="mailto:support@radiantfr.com">support@radiantfr.com</a>.</p>
 </div>
 </body>
 </html>`);
