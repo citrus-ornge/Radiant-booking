@@ -1116,8 +1116,34 @@ textarea.form-input { resize: vertical; }
   </div>
 </div>
 
+<!-- Privacy Policy acknowledgement gate — team review 26 Aug 2026. A
+     small, standalone one-time checkbox + audit trail, deliberately built
+     as its own isolated screen rather than folded into onboarding's
+     document-signing flow ("building things inside probably is more
+     complex and prone to affect other code" — correct instinct). Shown
+     once, to anyone (new or existing) who hasn't yet ticked it, checked
+     as its own independent branch in bootstrapSession() — genuinely
+     mandatory, not skippable/dismissible like the DD gate above, since
+     this is a compliance acknowledgement rather than a billing reminder. -->
+<div id="privacy-ack-screen" style="display:none;position:fixed;inset:0;z-index:210;background:var(--r-cream);overflow-y:auto;">
+  <div style="max-width:560px;margin:0 auto;padding:60px 24px;text-align:center;">
+    <div style="width:56px;height:56px;border-radius:50%;background:var(--r-gold-light,#f7ecd8);color:var(--r-gold);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:26px;">🔒</div>
+    <div class="page-title" style="font-size:20px;">Before You Continue</div>
+    <p class="page-sub" style="margin:8px 0 24px;">Please confirm you've read our <a href="/api/privacy" target="_blank" rel="noopener" style="color:var(--r-gold-dark);text-decoration:underline;">Privacy Policy</a>, covering how your account and booking data is used.</p>
+    <div style="max-width:420px;margin:0 auto;">
+      <label style="display:flex;align-items:flex-start;gap:10px;text-align:left;font-size:13.5px;margin-bottom:20px;cursor:pointer;">
+        <input type="checkbox" id="privacy-ack-checkbox" style="margin-top:2px;">
+        <span>I confirm I've read and understood the Privacy Policy</span>
+      </label>
+      <button class="btn btn-primary" id="privacy-ack-continue-btn" onclick="submitPrivacyAcknowledgement()" style="width:100%;justify-content:center;padding:12px;">Continue</button>
+      <p id="privacy-ack-error" style="font-size:12.5px;color:var(--r-red);margin-top:10px;display:none;">Please tick the box to continue.</p>
+    </div>
+  </div>
+</div>
+
 <!-- ══════════════════ APP SHELL ══════════════════ -->
 <div class="app" id="app-shell" style="display:none;">
+
 
   <!-- SIDEBAR -->
   <div class="sidebar" id="sidebar">
@@ -4903,6 +4929,17 @@ async function bootstrapSession(session) {
 
   if (needsOnboarding) {
     startOnboarding();
+  } else if (!meData.member.privacy_policy_acknowledged_at) {
+    // Team review 26 Aug 2026 — deliberately checked before the DD gate:
+    // this is a one-time compliance acknowledgement, not a dismissible
+    // billing reminder, so it isn't capped at N attempts the way
+    // checkDDGateOnLogin is. Applies to everyone (new or existing) who
+    // hasn't ticked it yet, regardless of onboarding_status — this is
+    // exactly why it's checked as its own independent branch here rather
+    // than folded into onboarding itself, which only ever runs once per
+    // account and would never catch existing staff who completed
+    // onboarding before this existed.
+    showPrivacyAckGate();
   } else if (checkDDGateOnLogin(meData.member)) {
     showDDGate();
   } else {
@@ -4939,6 +4976,46 @@ async function dismissDDGate() {
   } catch (e) { /* don't block entry over this failing to save */ }
   document.getElementById('dd-gate-screen').style.display = 'none';
   enterAppShell();
+}
+
+// Privacy Policy acknowledgement gate (team review 26 Aug 2026) —
+// deliberately its own small, isolated screen and endpoint rather than
+// folded into onboarding's document-signing flow or the generic members
+// PATCH, per explicit instruction: "building things inside probably is
+// more complex and prone to affect other code". Genuinely mandatory
+// (unlike the DD gate above) — no dismiss/skip option, since this is a
+// one-time compliance acknowledgement, not a recurring billing reminder.
+function showPrivacyAckGate() {
+  document.getElementById('privacy-ack-checkbox').checked = false;
+  document.getElementById('privacy-ack-error').style.display = 'none';
+  document.getElementById('privacy-ack-screen').style.display = 'block';
+}
+
+async function submitPrivacyAcknowledgement() {
+  if (!document.getElementById('privacy-ack-checkbox').checked) {
+    document.getElementById('privacy-ack-error').style.display = 'block';
+    return;
+  }
+  const btn = document.getElementById('privacy-ack-continue-btn');
+  btn.disabled = true;
+  btn.textContent = 'Continuing…';
+  try {
+    const result = await api('/acknowledge-privacy-policy', { method: 'POST' });
+    state.currentMember = result.member;
+    document.getElementById('privacy-ack-screen').style.display = 'none';
+    // Still respects the DD gate below it, exactly as a normal login
+    // would — this only replaces where onboarding used to lead straight
+    // there, it doesn't skip that check entirely.
+    if (checkDDGateOnLogin(state.currentMember)) {
+      showDDGate();
+    } else {
+      enterAppShell();
+    }
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+    btn.disabled = false;
+    btn.textContent = 'Continue';
+  }
 }
 
 function enterAppShell() {
@@ -5980,6 +6057,7 @@ const AUDIT_ACTION_LABEL = {
   'billing.subscription_payment_failed': 'Membership fee failed to collect',
   'billing.subscription_cancelled': 'Membership subscription cancelled',
   'billing.final_balance_collected': 'Final balance collected',
+  'privacy_policy.acknowledged': 'Acknowledged Privacy Policy',
   // Session / booking payments
   'billing.instant_pay_started': 'Started instant payment',
   'billing.instant_pay_fulfilled': 'Instant payment confirmed',
