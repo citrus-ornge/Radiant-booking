@@ -4919,27 +4919,17 @@ async function bootstrapSession(session) {
 
   document.getElementById('login-screen').style.display = 'none';
 
-  const needsOnboarding = ['practitioner', 'member', 'administrator'].includes(meData.member.user_type)
-    && meData.member.onboarding_status !== 'completed'
-    // A rejected room offer leaves onboarding_status at 'booking_pending' on
-    // purpose (so a revised offer re-enters this same step later), but it
-    // shouldn't trap the member out of the app in the meantime — only an
-    // offer that's still genuinely unanswered should block entry.
-    && !(meData.member.onboarding_status === 'booking_pending' && meData.member.room_terms_rejected_at);
+  const needsOnboarding = memberNeedsOnboarding(meData.member);
 
-  if (needsOnboarding) {
-    startOnboarding();
-  } else if (!meData.member.privacy_policy_acknowledged_at) {
-    // Team review 26 Aug 2026 — deliberately checked before the DD gate:
-    // this is a one-time compliance acknowledgement, not a dismissible
-    // billing reminder, so it isn't capped at N attempts the way
-    // checkDDGateOnLogin is. Applies to everyone (new or existing) who
-    // hasn't ticked it yet, regardless of onboarding_status — this is
-    // exactly why it's checked as its own independent branch here rather
-    // than folded into onboarding itself, which only ever runs once per
-    // account and would never catch existing staff who completed
-    // onboarding before this existed.
+  // Checked first, before onboarding — team review 26 Aug 2026: "once we
+  // take an email address we should opt them in" — a brand-new person's
+  // data starts being actively collected from the very first onboarding
+  // screen (name, phone, signed documents), so the acknowledgement needs
+  // to happen at the true first moment, not after all of that.
+  if (!meData.member.privacy_policy_acknowledged_at) {
     showPrivacyAckGate();
+  } else if (needsOnboarding) {
+    startOnboarding();
   } else if (checkDDGateOnLogin(meData.member)) {
     showDDGate();
   } else {
@@ -4991,6 +4981,20 @@ function showPrivacyAckGate() {
   document.getElementById('privacy-ack-screen').style.display = 'block';
 }
 
+// Extracted so both bootstrapSession() and submitPrivacyAcknowledgement()
+// (which needs to re-check this after the ack gate closes, for a
+// brand-new user who hasn't onboarded yet) compute this identically
+// rather than duplicating the same logic in two places.
+function memberNeedsOnboarding(member) {
+  return ['practitioner', 'member', 'administrator'].includes(member.user_type)
+    && member.onboarding_status !== 'completed'
+    // A rejected room offer leaves onboarding_status at 'booking_pending' on
+    // purpose (so a revised offer re-enters this same step later), but it
+    // shouldn't trap the member out of the app in the meantime — only an
+    // offer that's still genuinely unanswered should block entry.
+    && !(member.onboarding_status === 'booking_pending' && member.room_terms_rejected_at);
+}
+
 async function submitPrivacyAcknowledgement() {
   if (!document.getElementById('privacy-ack-checkbox').checked) {
     document.getElementById('privacy-ack-error').style.display = 'block';
@@ -5003,10 +5007,12 @@ async function submitPrivacyAcknowledgement() {
     const result = await api('/acknowledge-privacy-policy', { method: 'POST' });
     state.currentMember = result.member;
     document.getElementById('privacy-ack-screen').style.display = 'none';
-    // Still respects the DD gate below it, exactly as a normal login
-    // would — this only replaces where onboarding used to lead straight
-    // there, it doesn't skip that check entirely.
-    if (checkDDGateOnLogin(state.currentMember)) {
+    // Now proceeds through the exact same remaining checks a normal
+    // bootstrapSession() would — a brand-new user goes on to onboarding,
+    // a returning one goes on to the DD gate or straight into the app.
+    if (memberNeedsOnboarding(state.currentMember)) {
+      startOnboarding();
+    } else if (checkDDGateOnLogin(state.currentMember)) {
       showDDGate();
     } else {
       enterAppShell();
