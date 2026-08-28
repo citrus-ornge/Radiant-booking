@@ -41,7 +41,7 @@ a { color: #8A7550; }
   <p class="updated">Last updated: 30 July 2026</p>
 
   <div class="draft-notice">
-    <strong>Draft for review.</strong> Company and contact details below are confirmed. One thing still needs a decision from Radiant's team before this is final: the exact data retention period.
+    <strong>Confirmed 26 Aug 2026.</strong> Company, contact, and retention details below are finalized and ready for submission. Retention period (6 years) may be revisited later if needed.
   </div>
 
   <h2>Who we are</h2>
@@ -60,7 +60,7 @@ a { color: #8A7550; }
   <p>If you connect Google Calendar, Radiant requests only the <code>calendar.events</code> scope — permission to create, update and remove calendar events for your own bookings. We never read, modify or share any other calendar data, and disconnecting at any time (My Profile → Calendar) immediately revokes this access.</p>
 
   <h2>How long we keep it</h2>
-  <p><em>[TBC — placeholder pending confirmation]</em> We intend to retain your account data for as long as your account is active, and for a limited period afterwards where needed for legitimate business or legal purposes (for example, professional indemnity records required for compliance). When you delete your account, your profile and bookings are removed immediately; any retention beyond that for compliance reasons will be clearly explained separately.</p>
+  <p>We retain account and booking data for up to <strong>6 years</strong> from when it was created, in line with standard UK business record-keeping practice (the Limitation Act 1980's 6-year limitation period for contract claims, and Companies Act 2006 requirements for financial records). When you delete your account, your profile and active bookings are removed from the platform immediately; certain records (for example, billing history and professional indemnity records) may be retained separately for the remainder of that 6-year period where needed for legal or compliance purposes. This retention period may be reviewed and updated in future.</p>
 
   <h2>Your rights</h2>
   <p>You can access, download or delete your personal data at any time from your Profile page ("Download my data" and "Delete my account"). You also have the right to ask us to correct inaccurate data, object to certain processing, or complain to the UK Information Commissioner's Office (ico.org.uk) if you believe your data has been mishandled.</p>
