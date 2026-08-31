@@ -84,7 +84,7 @@ module.exports = async (req, res) => {
         amount: String(booking.amount_pence),
         currency: 'GBP',
         scheme: 'faster_payments',
-        description: `${booking.room ? booking.room.name : 'Room'} booking — ${new Date(booking.start_time).toLocaleDateString('en-GB')}`,
+        description: `${booking.room ? booking.room.name : 'Room'} booking — ${new Date(booking.start_time).toLocaleDateString('en-GB', { timeZone: 'Europe/London' })}`,
       },
     };
     const links = customerLinksFor(member);

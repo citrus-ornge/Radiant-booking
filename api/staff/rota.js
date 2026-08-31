@@ -53,7 +53,7 @@ async function notifyBulk(rows, removed, memberByShift) {
   if (!member) return;
   const dates = rows.map(r => new Date(r.shift_date));
   const sorted = [...dates].sort((a, b) => a - b);
-  const fmt = d => d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const fmt = d => d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/London' });
   const rangeText = rows.length === 1 ? fmt(sorted[0]) : `${fmt(sorted[0])} to ${fmt(sorted[sorted.length - 1])} (${rows.length} day${rows.length > 1 ? 's' : ''})`;
   const recipients = [...new Set([member.email, 'support@radiantfr.com', 'karen@radiantfr.com'])];
   try {

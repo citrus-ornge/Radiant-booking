@@ -33,7 +33,7 @@ function resolveDocumentContent(content, member) {
     // membership agreement, "start date" means the date it's actually
     // being agreed, which for both read and sign happens in the same
     // sitting in practice.
-    agreement_start_date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
+    agreement_start_date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/London' }),
   };
 
   let result = content;

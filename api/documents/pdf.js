@@ -122,7 +122,7 @@ module.exports = async (req, res) => {
   doc.font('Helvetica-Bold').fontSize(9.5).fillColor(DARK).text('Signed electronically', LEFT, undefined);
   doc.font('Helvetica').fontSize(9).fillColor(GREY);
   doc.text(`Name typed at signing: ${sig.signature_name}`, LEFT, undefined);
-  doc.text(`Signed: ${new Date(sig.signed_at).toLocaleString('en-GB', { dateStyle: 'long', timeStyle: 'short' })}`, LEFT, undefined);
+  doc.text(`Signed: ${new Date(sig.signed_at).toLocaleString('en-GB', { dateStyle: 'long', timeStyle: 'short', timeZone: 'Europe/London' })}`, LEFT, undefined);
   if (sig.ip_address) doc.text(`IP address recorded: ${sig.ip_address}`, LEFT, undefined);
 
   doc.end();

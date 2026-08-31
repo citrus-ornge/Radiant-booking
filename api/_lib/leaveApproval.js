@@ -25,8 +25,7 @@ async function syncOneCalendar(supabase, entry, account, eventIdField, staffDisp
 
 function fmtRange(rows, dateField) {
   const dates = rows.map(r => new Date(r[dateField])).sort((a, b) => a - b);
-  const fmt = d => d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-  return rows.length === 1 ? fmt(dates[0]) : `${fmt(dates[0])} to ${fmt(dates[dates.length - 1])} (${rows.length} day${rows.length > 1 ? 's' : ''})`;
+  const fmt = d => d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/London' });
 }
 
 async function approveLeaveBatch(supabase, token, approverId) {

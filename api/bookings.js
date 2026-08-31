@@ -256,7 +256,7 @@ module.exports = async (req, res) => {
         const payment = await createOneOffPayment(client, {
           mandateId: tierMember.gocardless_mandate_id,
           amountPence,
-          description: `${booking.room ? booking.room.name : 'Room'} booking — ${new Date(start_time).toLocaleDateString('en-GB')}`,
+          description: `${booking.room ? booking.room.name : 'Room'} booking — ${new Date(start_time).toLocaleDateString('en-GB', { timeZone: 'Europe/London' })}`,
           idempotencyKey: booking.id,
         });
         await supabase.from('bookings').update({ gocardless_payment_id: payment.id }).eq('id', booking.id);

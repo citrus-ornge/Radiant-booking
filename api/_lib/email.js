@@ -12,8 +12,8 @@ const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'Radiant Booking <booking@bo
 
 async function sendBookingConfirmation({ to, memberName, roomName, start, end, icsContent }) {
   const resend = getResend();
-  const dateStr = new Date(start).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
-  const endStr = new Date(end).toLocaleString('en-GB', { timeStyle: 'short' });
+  const dateStr = new Date(start).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/London' });
+  const endStr = new Date(end).toLocaleString('en-GB', { timeStyle: 'short', timeZone: 'Europe/London' });
   return resend.emails.send({
     from: FROM_EMAIL,
     to: [to],
@@ -45,8 +45,8 @@ Thanks for being part of what makes Radiant a great place to work. See you then!
 
 async function sendTeamBookingNotice({ memberName, roomName, start, end, icsContent }) {
   const resend = getResend();
-  const dateStr = new Date(start).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
-  const endStr = new Date(end).toLocaleString('en-GB', { timeStyle: 'short' });
+  const dateStr = new Date(start).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/London' });
+  const endStr = new Date(end).toLocaleString('en-GB', { timeStyle: 'short', timeZone: 'Europe/London' });
   return resend.emails.send({
     from: FROM_EMAIL,
     to: ['support@radiantfr.com'],
@@ -67,7 +67,7 @@ ${dateStr} – ${endStr}
 
 async function sendCancellationAlert({ to, roomName, start, icsContent }) {
   const resend = getResend();
-  const dateStr = new Date(start).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+  const dateStr = new Date(start).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/London' });
   return resend.emails.send({
     from: FROM_EMAIL,
     to: [to],
@@ -105,7 +105,7 @@ You can review or update your bank details any time from My Profile.
 
 async function sendSessionPaymentConfirmedEmail({ to, memberName, roomName, amountPence, start }) {
   const resend = getResend();
-  const dateStr = new Date(start).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+  const dateStr = new Date(start).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/London' });
   const amount = `£${(amountPence / 100).toFixed(2)}`;
   return resend.emails.send({
     from: FROM_EMAIL,
@@ -125,7 +125,7 @@ ${amount}
 
 async function sendSessionPaymentFailedEmail({ to, memberName, roomName, amountPence, start }) {
   const resend = getResend();
-  const dateStr = new Date(start).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+  const dateStr = new Date(start).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/London' });
   const amount = `£${(amountPence / 100).toFixed(2)}`;
   return resend.emails.send({
     from: FROM_EMAIL,
@@ -199,7 +199,7 @@ If this wasn't expected, or you have any questions, please contact Staff & Admin
 
 async function sendReminder({ to, memberName, roomName, start, hoursBefore }) {
   const resend = getResend();
-  const dateStr = new Date(start).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+  const dateStr = new Date(start).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/London' });
   return resend.emails.send({
     from: FROM_EMAIL,
     to: [to],
@@ -331,7 +331,7 @@ Sign in any time at ${appUrl} to get started.
 async function sendRotaUpdate({ to, staffName, shiftDate, dayOfWeek, timeRange, status, removed, rangeText }) {
   const resend = getResend();
   const statusText = { scheduled: `working ${timeRange || ''}`, closed: 'closed', annual_leave: 'on annual leave', tbc: 'TBC' }[status] || status;
-  const dateStr = rangeText || new Date(shiftDate).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const dateStr = rangeText || new Date(shiftDate).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/London' });
   const body = removed
     ? `Hi ${staffName},\n\nShifts on your rota have been removed: ${dateStr}.\n\n— Radiant Booking`
     : `Hi ${staffName},\n\nYour rota has been updated:\n\n${dateStr}${rangeText ? '' : ` — ${statusText}`}\n\n— Radiant Booking`;
@@ -341,7 +341,7 @@ async function sendRotaUpdate({ to, staffName, shiftDate, dayOfWeek, timeRange, 
 async function sendLeaveUpdate({ to, staffName, leaveDate, code, removed, rangeText }) {
   const resend = getResend();
   const codeLabel = { AL: 'Annual Leave', BH: 'Bank Holiday', SICK: 'Sick Leave', OTHER: 'Leave' }[code] || code;
-  const dateStr = rangeText || new Date(leaveDate).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const dateStr = rangeText || new Date(leaveDate).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/London' });
   const body = removed
     ? `Hi ${staffName},\n\nA leave entry has been removed from the calendar: ${dateStr} (${codeLabel}).\n\n— Radiant Booking`
     : `Hi ${staffName},\n\n${codeLabel} has been booked for you:\n\n${dateStr}\n\n— Radiant Booking`;
@@ -369,7 +369,7 @@ You can also review this from the Staff Area in the Radiant Booking Platform.
 async function sendLeaveDecision({ to, staffName, leaveDate, code, approved, reason, rangeText }) {
   const resend = getResend();
   const codeLabel = { AL: 'Annual Leave', BH: 'Bank Holiday', SICK: 'Sick Leave', OTHER: 'Leave' }[code] || code;
-  const dateStr = rangeText || new Date(leaveDate).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const dateStr = rangeText || new Date(leaveDate).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/London' });
   const body = approved
     ? `Hi ${staffName},\n\nYour ${codeLabel} request for ${dateStr} has been approved.\n\n— Radiant Booking`
     : `Hi ${staffName},\n\nYour ${codeLabel} request for ${dateStr} was not approved.${reason ? `\n\nReason: ${reason}` : ''}\n\n— Radiant Booking`;
@@ -410,8 +410,8 @@ async function sendComplianceDocsReceivedEmail({ to, memberName }) {
 async function sendExitNoticeReminder({ to, memberName, planTier, noticeDays, cycleEndDate, noticeDeadlineDate }) {
   const resend = getResend();
   const tierLabel = TIER_LABELS[planTier] || planTier;
-  const cycleEndStr = new Date(cycleEndDate).toLocaleDateString('en-GB', { dateStyle: 'long' });
-  const deadlineStr = new Date(noticeDeadlineDate).toLocaleDateString('en-GB', { dateStyle: 'long' });
+  const cycleEndStr = new Date(cycleEndDate).toLocaleDateString('en-GB', { dateStyle: 'long', timeZone: 'Europe/London' });
+  const deadlineStr = new Date(noticeDeadlineDate).toLocaleDateString('en-GB', { dateStyle: 'long', timeZone: 'Europe/London' });
   return resend.emails.send({
     from: FROM_EMAIL,
     to: [to],
@@ -549,8 +549,8 @@ const PRACTICE_MAPS_LINK = `https://www.google.com/maps/search/?api=1&query=${en
 
 async function sendPatientInviteEmail({ to, patientName, practitionerName, roomName, start, end, notes, icsContent }) {
   const resend = getResend();
-  const dateStr = new Date(start).toLocaleString('en-GB', { dateStyle: 'full', timeStyle: 'short' });
-  const endStr = new Date(end).toLocaleString('en-GB', { timeStyle: 'short' });
+  const dateStr = new Date(start).toLocaleString('en-GB', { dateStyle: 'full', timeStyle: 'short', timeZone: 'Europe/London' });
+  const endStr = new Date(end).toLocaleString('en-GB', { timeStyle: 'short', timeZone: 'Europe/London' });
   return resend.emails.send({
     from: FROM_EMAIL,
     to: [to],
