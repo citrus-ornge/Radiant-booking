@@ -3,6 +3,7 @@ const { sendInvite } = require('./_lib/email');
 const { requireAuth } = require('./_lib/auth');
 const { checkRateLimit } = require('./_lib/rateLimit');
 const { logAudit } = require('./_lib/audit');
+const { validateSessionBlock } = require('./_lib/sessionBlocks');
 
 module.exports = async (req, res) => {
   const supabase = getSupabase();
@@ -70,16 +71,16 @@ module.exports = async (req, res) => {
     if (plan_tier && lockedTiers.includes(plan_tier) && slots.length === 0) {
       return res.status(400).json({ error: 'Core and Resident invites need at least one agreed recurring slot' });
     }
-    // Rosie, 23 Aug: "residents and core can only have full or half days".
-    // Same check as api/recurring-slots.js — the client UI computes
-    // time_end from a Half/Full day duration now, but this endpoint had
-    // nothing stopping a direct API call bypassing that.
+    // Rosie confirmed directly: Half day is fixed at 8am-1pm or 1pm-6pm,
+    // Full day is fixed at 8am-6pm — no other start times or lengths are
+    // valid. Same check as api/recurring-slots.js and
+    // api/members-create.js — the client UI only offers these three
+    // exact blocks now, but this endpoint had nothing stopping a direct
+    // API call bypassing that.
     for (const s of slots) {
-      const [startH, startM] = s.time_start.split(':').map(Number);
-      const [endH, endM] = s.time_end.split(':').map(Number);
-      const durationHours = (endH * 60 + endM - (startH * 60 + startM)) / 60;
-      if (![4, 8].includes(durationHours)) {
-        return res.status(400).json({ error: `Core and Resident recurring slots must be exactly a half day (4hrs) or full day (8hrs) — ${s.day_of_week} ${s.time_start}–${s.time_end} isn't` });
+      const blockError = validateSessionBlock(s.time_start, s.time_end);
+      if (blockError) {
+        return res.status(400).json({ error: `Core and Resident recurring slots ${blockError} — ${s.day_of_week} affected` });
       }
       // Team review 26 Aug 2026: slots can recur every N weeks (weekly=1,
       // fortnightly=2, every 3rd week=3, etc.) — same validation as

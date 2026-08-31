@@ -3765,7 +3765,7 @@ async function addRecurringSlot() {
   const duration = parseInt(document.getElementById('mm-reserved-duration').value, 10);
   if (!day_of_week || !time_start || !duration) { showToast('⚠ Pick a day, start time and duration'); return; }
   const time_end = computeSlotEndTime(time_start, duration);
-  if (!time_end) { showToast('⚠ That start time would run past 20:00 for a ' + (duration === 8 ? 'full' : 'half') + ' day — pick an earlier start'); return; }
+  if (!time_end) { showToast('⚠ That combination isn\'t a valid session — Half day is 8am–1pm or 1pm–6pm, Full day is 8am–6pm'); return; }
   const intervalResult = readAndValidateSlotInterval('mm', day_of_week);
   if (!intervalResult) return;
   try {
@@ -7595,38 +7595,28 @@ function renderPendingInviteSlots() {
   updateInviteStandardFeeDisplay();
 }
 
-// Core/Resident recurring slots may only be a half day (4hrs) or full day
-// (8hrs) — Rosie, 23 Aug: "residents and core can only have full or half
-// days". Previously the builder had independent Start and End pickers,
-// which let admin create an arbitrary block (a real one slipped through:
-// 10:00–16:00, a 6-hour session that's neither). Computing end time from
-// start + a fixed duration makes an invalid length impossible to create
-// in the first place, rather than validating after the fact. Still
-// checks the result doesn't run past a sensible closing time (20:00),
-// since a Full day starting at, say, 16:00 would otherwise end at
-// midnight — returns null (with the caller showing a toast) rather than
-// silently allowing that.
-function computeSlotEndTime(startTime, durationHours) {
-  const [h, m] = startTime.split(':').map(Number);
-  const endH = h + durationHours;
-  if (endH > 20) return null;
-  return `${String(endH).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-}
-
-// Real clinic hours (8am–6pm), team review 26 Aug — corrected after
-// clarification: not a strict "must fit inside 8-1 or 1-6" requirement,
-// just every hourly start from 8am to 5pm offered for either duration,
-// morning/afternoon distinction doesn't matter. Purely a display
-// constraint, same as before — the half/full-day duration rule and fixed
-// per-slot weekly rates are completely unchanged. The existing 20:00
-// cutoff in computeSlotEndTime() still catches a genuinely nonsensical
-// combination (e.g. a full day starting at 17:00, which would run past
-// midnight) — deliberately left as-is, not touched.
-const ALL_HOURLY_STARTS = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00'];
-const VALID_SLOT_STARTS = {
-  4: ALL_HOURLY_STARTS,
-  8: ALL_HOURLY_STARTS,
+// Core/Resident recurring slots are fixed, standard-timetable blocks —
+// Rosie confirmed directly: Half day is 8am-1pm or 1pm-6pm (5 real hours
+// each), Full day is 8am-6pm (10 real hours). No other start times or
+// lengths are valid — matches the shared server-side check in
+// api/_lib/sessionBlocks.js exactly. Computing end time from a fixed
+// lookup (rather than a free-form end-time picker, or the earlier
+// flexible any-start/exact-duration model) makes an invalid block
+// impossible to create in the first place, rather than validating after
+// the fact.
+const SESSION_BLOCKS = {
+  4: { '08:00': '13:00', '13:00': '18:00' }, // Half day
+  8: { '08:00': '18:00' },                    // Full day
 };
+const VALID_SLOT_STARTS = {
+  4: Object.keys(SESSION_BLOCKS[4]),
+  8: Object.keys(SESSION_BLOCKS[8]),
+};
+
+function computeSlotEndTime(startTime, durationCode) {
+  const block = SESSION_BLOCKS[durationCode];
+  return (block && block[startTime]) || null;
+}
 
 function updateSlotStartOptions(prefix) {
   const durationEl = document.getElementById(`${prefix}-reserved-duration`);
@@ -7702,7 +7692,7 @@ function addPendingInviteSlot() {
   const duration = parseInt(document.getElementById('invite-reserved-duration').value, 10);
   if (!day_of_week || !time_start || !duration) { showToast('⚠ Pick a day, start time and duration'); return; }
   const time_end = computeSlotEndTime(time_start, duration);
-  if (!time_end) { showToast('⚠ That start time would run past 20:00 for a ' + (duration === 8 ? 'full' : 'half') + ' day — pick an earlier start'); return; }
+  if (!time_end) { showToast('⚠ That combination isn\'t a valid session — Half day is 8am–1pm or 1pm–6pm, Full day is 8am–6pm'); return; }
   const intervalResult = readAndValidateSlotInterval('invite', day_of_week);
   if (!intervalResult) return;
   pendingInviteSlots.push({ day_of_week, room_id, time_start, time_end, interval_weeks: intervalResult.interval_weeks, anchor_date: intervalResult.anchor_date });
@@ -7830,7 +7820,7 @@ function addPendingAddUserSlot() {
   const duration = parseInt(document.getElementById('au-reserved-duration').value, 10);
   if (!day_of_week || !time_start || !duration) { showToast('⚠ Pick a day, start time and duration'); return; }
   const time_end = computeSlotEndTime(time_start, duration);
-  if (!time_end) { showToast('⚠ That start time would run past 20:00 for a ' + (duration === 8 ? 'full' : 'half') + ' day — pick an earlier start'); return; }
+  if (!time_end) { showToast('⚠ That combination isn\'t a valid session — Half day is 8am–1pm or 1pm–6pm, Full day is 8am–6pm'); return; }
   const intervalResult = readAndValidateSlotInterval('au', day_of_week);
   if (!intervalResult) return;
   pendingAddUserSlots.push({ day_of_week, room_id, time_start, time_end, interval_weeks: intervalResult.interval_weeks, anchor_date: intervalResult.anchor_date });

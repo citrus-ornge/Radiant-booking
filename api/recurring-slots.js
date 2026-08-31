@@ -1,6 +1,7 @@
 const { getSupabase } = require('./_lib/supabase');
 const { requireAuth } = require('./_lib/auth');
 const { logAudit } = require('./_lib/audit');
+const { validateSessionBlock } = require('./_lib/sessionBlocks');
 
 // GET /api/recurring-slots?member_id=X  — list a member's recurring slots
 // POST /api/recurring-slots { member_id, day_of_week, time_start, time_end, room_id }  — admin only, add a slot
@@ -44,17 +45,14 @@ module.exports = async (req, res) => {
     if (!member_id || !day_of_week || !time_start || !time_end) {
       return res.status(400).json({ error: 'member_id, day_of_week, time_start and time_end are required' });
     }
-    // Rosie, 23 Aug: "residents and core can only have full or half days".
-    // The client UI now computes time_end from a Half/Full day duration
-    // rather than a free-form end-time picker (a real 6-hour block slipped
-    // through before that), but this endpoint had nothing stopping a
-    // direct API call from setting any arbitrary duration regardless —
-    // checked here too rather than trusting the client alone.
-    const [startH, startM] = time_start.split(':').map(Number);
-    const [endH, endM] = time_end.split(':').map(Number);
-    const durationHours = (endH * 60 + endM - (startH * 60 + startM)) / 60;
-    if (![4, 8].includes(durationHours)) {
-      return res.status(400).json({ error: 'Core and Resident recurring slots must be exactly a half day (4hrs) or full day (8hrs)' });
+    // Rosie confirmed directly: Half day is fixed at 8am-1pm or 1pm-6pm,
+    // Full day is fixed at 8am-6pm — no other start times or lengths are
+    // valid (this is standard timetable pricing, not a flexible-start
+    // model). The client UI only offers these three exact blocks now, but
+    // this endpoint had nothing stopping a direct API call bypassing that.
+    const blockError = validateSessionBlock(time_start, time_end);
+    if (blockError) {
+      return res.status(400).json({ error: `Core and Resident recurring slots ${blockError}` });
     }
 
     // Team review 26 Aug 2026: slots can recur every N weeks (weekly=1,
