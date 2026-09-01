@@ -5396,14 +5396,16 @@ async function showOnboardingRoomTerms() {
   const detailsEl = document.getElementById('onboarding-room-offer-details');
   const slots = m.recurring_slots || [];
   const tierLabelText = m && m.plan_tier === 'resident' ? 'Resident' : 'Core';
-  // Real gap found live (23 Aug): this screen showed the room/day/time
-  // being offered but never once mentioned what it actually costs —
-  // someone accepting a recurring slot had no way to know their monthly
-  // fee from this page at all. Reuses PLAN_TIER_MONTHLY_PENCE_DISPLAY
-  // (already built for Invite Users' own fee-override field) rather than
-  // a second copy of the same standard rates.
-  const standardPence = PLAN_TIER_MONTHLY_PENCE_DISPLAY[m.plan_tier];
-  const feePence = m.custom_monthly_fee_pence != null ? m.custom_monthly_fee_pence : standardPence;
+  // Real gap found live (26 Aug, via a live client dispute — Dwaine
+  // Ford): this screen showed the room/day/time being offered but used
+  // the flat PLAN_TIER_MONTHLY_PENCE_DISPLAY rate directly, never
+  // updated when the schedule-based calculation was built — every new
+  // signup saw the wrong flat rate (e.g. £449) regardless of their real
+  // agreed schedule (e.g. a single half-day slot, correctly £173.33).
+  // Custom overrides still take priority exactly as before.
+  const feePence = m.custom_monthly_fee_pence != null
+    ? m.custom_monthly_fee_pence
+    : calculateScheduleBasedMonthlyFeeDisplayPence(m.plan_tier, slots);
   const feeLine = feePence != null
     ? `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--r-stone,#e8e4dc);font-weight:600;">£${(feePence / 100).toFixed(2)} / month</div>`
     : '';
@@ -7551,29 +7553,41 @@ const WEEKS_PER_MONTH_DISPLAY = 52 / 12;
 // screen, just never carried over to this one display too. Called both
 // when the tier changes and every time a slot is added/removed, so it
 // stays live rather than needing a manual refresh.
+// Shared by Invite Users' fee preview AND the onboarding Room Offer
+// screen (26 Aug — a real, live client dispute surfaced that the latter
+// had never been updated to use this: it was still showing the flat
+// PLAN_TIER_MONTHLY_PENCE_DISPLAY rate directly, meaning every new
+// signup saw the wrong price regardless of their actual agreed
+// schedule). Takes an array of slots in the same shape member_
+// recurring_slots/pendingInviteSlots already use.
+function calculateScheduleBasedMonthlyFeeDisplayPence(tier, slots) {
+  if (!slots || slots.length === 0) return null;
+  const rates = WEEKLY_SLOT_RATES_PENCE_DISPLAY[tier];
+  if (!rates) return null;
+  let weeklyTotalPence = 0;
+  for (const slot of slots) {
+    const [startH, startM] = slot.time_start.split(':').map(Number);
+    const [endH, endM] = slot.time_end.split(':').map(Number);
+    const durationHours = (endH * 60 + endM - (startH * 60 + startM)) / 60;
+    const lengthKey = durationHours >= 8 ? 'full' : 'half';
+    const room = slot.room || (state.rooms || []).find(r => r.id === slot.room_id);
+    const categoryKey = (room && room.pricing_category === 'consultation') ? 'consultation' : 'clinical_wellness';
+    weeklyTotalPence += rates[lengthKey][categoryKey] / (slot.interval_weeks || 1);
+  }
+  return Math.round(weeklyTotalPence * WEEKS_PER_MONTH_DISPLAY);
+}
+
 function updateInviteStandardFeeDisplay() {
   const tier = document.getElementById('invite-tier').value;
   const fieldEl = document.getElementById('invite-fee-standard');
   if (!fieldEl || !['core', 'resident'].includes(tier)) return;
 
-  if (pendingInviteSlots.length === 0) {
+  const monthlyPence = calculateScheduleBasedMonthlyFeeDisplayPence(tier, pendingInviteSlots);
+  if (monthlyPence == null) {
     const flatFallback = PLAN_TIER_MONTHLY_PENCE_DISPLAY[tier];
     fieldEl.value = flatFallback != null ? `£${(flatFallback / 100).toFixed(2)} / month (add a slot below for the real rate)` : '—';
     return;
   }
-
-  const rates = WEEKLY_SLOT_RATES_PENCE_DISPLAY[tier];
-  let weeklyTotalPence = 0;
-  for (const slot of pendingInviteSlots) {
-    const [startH, startM] = slot.time_start.split(':').map(Number);
-    const [endH, endM] = slot.time_end.split(':').map(Number);
-    const durationHours = (endH * 60 + endM - (startH * 60 + startM)) / 60;
-    const lengthKey = durationHours >= 8 ? 'full' : 'half';
-    const room = state.rooms.find(r => r.id === slot.room_id);
-    const categoryKey = (room && room.pricing_category === 'consultation') ? 'consultation' : 'clinical_wellness';
-    weeklyTotalPence += rates[lengthKey][categoryKey] / (slot.interval_weeks || 1);
-  }
-  const monthlyPence = Math.round(weeklyTotalPence * WEEKS_PER_MONTH_DISPLAY);
   fieldEl.value = `£${(monthlyPence / 100).toFixed(2)} / month`;
 }
 
