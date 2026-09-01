@@ -7415,12 +7415,21 @@ async function cancelMemberSubscription() {
 function renderOutstandingBalanceRow(memberId, balance) {
   const row = document.getElementById('mm-outstanding-balance-row');
   if (!row) return;
+  const fmt = p => `£${(p / 100).toFixed(2)}`;
+  // Team review: "what do we do on exit if over or under" — the
+  // overpayment case previously showed the same generic "nothing
+  // outstanding" message as a genuine break-even, silently hiding a real
+  // overpayment from admin. A small threshold (50p) avoids flagging
+  // trivial rounding as if it were a meaningful refund situation.
+  const overpaidPence = balance && balance.averaging_raw_difference_pence < -50 ? -balance.averaging_raw_difference_pence : 0;
+
   if (!balance || balance.total_pence <= 0) {
     row.style.display = 'block';
-    row.innerHTML = `<div style="font-size:13px;color:var(--r-warm-gray);">No outstanding balance found on cancellation — nothing further to collect.</div>`;
+    row.innerHTML = overpaidPence > 0
+      ? `<div style="font-size:13px;color:var(--r-gold-dark,#8a6a1f);">⚠ This member appears to have overpaid by ${fmt(overpaidPence)} against the monthly-averaging schedule — not processed automatically; consider a refund directly via GoCardless if that seems right.</div>`
+      : `<div style="font-size:13px;color:var(--r-warm-gray);">No outstanding balance found on cancellation — nothing further to collect.</div>`;
     return;
   }
-  const fmt = p => `£${(p / 100).toFixed(2)}`;
   const parts = [];
   if (balance.averaging_shortfall_pence > 0) parts.push(`${fmt(balance.averaging_shortfall_pence)} monthly-fee shortfall`);
   if (balance.other_unpaid_pence > 0) parts.push(`${fmt(balance.other_unpaid_pence)} from unpaid bookings`);

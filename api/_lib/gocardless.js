@@ -171,7 +171,17 @@ async function calculateOutstandingBalanceAtCancellation(supabase, member) {
       }
     }
 
-    breakdown.averaging_shortfall_pence = Math.max(0, Math.round(expectedToDatePence - actuallyCollectedPence));
+    // Team review (26 Aug follow-up): "what do we do on exit if over or
+    // under" — the raw difference is preserved here (not clamped to zero
+    // until the very next line) specifically so an overpayment is visible
+    // to admin rather than silently discarded. This never triggers a
+    // refund automatically — same "a human decides" principle as the
+    // shortfall side — it just means admin sees the full picture on
+    // cancellation instead of a misleading "nothing outstanding" when
+    // someone is actually owed money back.
+    const rawDifferencePence = Math.round(expectedToDatePence - actuallyCollectedPence);
+    breakdown.averaging_raw_difference_pence = rawDifferencePence;
+    breakdown.averaging_shortfall_pence = Math.max(0, rawDifferencePence);
   }
 
   const { data: unpaidBookings } = await supabase
