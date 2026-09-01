@@ -1141,6 +1141,17 @@ textarea.form-input { resize: vertical; }
   </div>
 </div>
 
+<!-- View As banner (team review 26 Aug 2026) — fixed, always on top,
+     visible from every single view while active. The one and only way
+     write actions are blocked while viewing as someone else is the
+     blanket check inside api() below; this banner is purely the visual
+     indicator + the "get me out of here" button, not the safety
+     mechanism itself. -->
+<div id="view-as-banner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:300;background:var(--r-charcoal,#1A1A1A);color:#fff;padding:10px 20px;display:flex;align-items:center;justify-content:center;gap:14px;font-size:13.5px;box-shadow:0 2px 8px rgba(0,0,0,0.2);">
+  <span>👁 Viewing as <strong id="view-as-name">—</strong> — read-only, no actions will actually be taken</span>
+  <button class="btn btn-primary btn-sm" onclick="exitViewAs()" style="padding:4px 14px;">Exit — back to Admin</button>
+</div>
+
 <!-- ══════════════════ APP SHELL ══════════════════ -->
 <div class="app" id="app-shell" style="display:none;">
 
@@ -2361,6 +2372,7 @@ textarea.form-input { resize: vertical; }
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" style="border-color:var(--r-red);color:var(--r-red);margin-right:auto;" onclick="confirmDeleteManagedMember()">Delete Member</button>
+      <button class="btn btn-outline" onclick="closeModal('manage-member-modal');startViewAs(document.getElementById('mm-id').value)">👁 View As</button>
       <button class="btn btn-outline" onclick="closeModal('manage-member-modal')">Cancel</button>
       <button class="btn btn-primary" onclick="saveManagedMember()">Save Changes</button>
     </div>
@@ -2739,7 +2751,7 @@ let currentRole = 'admin'; // derived from the real member's user_type after log
 let currentSession = null;
 
 // ── LIVE APP STATE (populated from the real API) ──
-const state = { rooms: [], members: [], bookings: [], invites: [], currentMember: null, pendingLeaveRequests: [], myActivityEvents: [], conversations: [] };
+const state = { rooms: [], members: [], bookings: [], invites: [], currentMember: null, pendingLeaveRequests: [], myActivityEvents: [], conversations: [], isViewingAs: false, viewAsOriginal: null };
 
 // ── API HELPERS ──
 // Escapes user-controllable text before it's interpolated into innerHTML,
@@ -2755,6 +2767,17 @@ function esc(str) {
 }
 
 async function api(path, options = {}) {
+  // View As is read-only by design (team review 26 Aug 2026) — this is
+  // the ONE place that safety is actually enforced, deliberately a
+  // blanket check here rather than disabling individual buttons
+  // throughout the app, so there's no risk of missing one somewhere.
+  // Every real write while viewing as someone else is blocked, no
+  // exceptions.
+  const method = (options.method || 'GET').toUpperCase();
+  if (state.isViewingAs && method !== 'GET') {
+    showToast('👁 Read-only in View As mode — exit to make real changes');
+    throw new Error('Blocked: read-only while viewing as another member');
+  }
   const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
   if (currentSession && currentSession.access_token) {
     headers['Authorization'] = 'Bearer ' + currentSession.access_token;
@@ -5527,6 +5550,68 @@ function setupAdminView() {
   showView('dashboard');
 }
 
+// View As (team review 26 Aug 2026): "enable us to see what the user can
+// see and anything that's not correct... admin can click from into and
+// back into their instance really easily." Deliberately does NOT call
+// loadAppData() or enterAppShell() — both would re-fetch /api/me, which
+// always returns the actually-logged-in person (still the admin
+// underneath; only state.currentMember has been swapped client-side),
+// silently reverting straight back out of View As. Instead reuses
+// whatever's already loaded in state.bookings/conversations/etc — an
+// admin already has full access to every member's data for management
+// purposes, so re-rendering the existing client-side views with
+// state.currentMember pointed at the target shows their real bookings,
+// slots and documents with no separate fetch needed for most of it.
+async function startViewAs(memberId) {
+  if (!memberId) return;
+  try {
+    const result = await api(`/view-as?member_id=${memberId}`);
+    const target = result.member;
+
+    state.viewAsOriginal = { member: state.currentMember, role: currentRole };
+    state.currentMember = target;
+    state.isViewingAs = true;
+    currentRole = 'client';
+
+    const displayName = `${target.first_name || ''} ${target.last_name || ''}`.trim() || target.email;
+    document.getElementById('view-as-name').textContent = displayName;
+    document.getElementById('view-as-banner').style.display = 'flex';
+    document.getElementById('sidebar-name').textContent = (target.first_name || target.email) + ' ' + (target.last_name ? target.last_name[0] + '.' : '');
+    document.getElementById('sidebar-role').textContent = roleLabel(target.user_type, target.is_owner);
+    document.getElementById('sidebar-avatar').textContent = initialsFor(target);
+    document.getElementById('role-toggle').style.display = 'none';
+
+    setupClientView(target.user_type);
+    showClientView('bookings');
+    renderMyBookings();
+    showToast(`👁 Viewing as ${displayName}`);
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  }
+}
+
+function exitViewAs() {
+  if (!state.viewAsOriginal) return;
+  state.currentMember = state.viewAsOriginal.member;
+  currentRole = state.viewAsOriginal.role;
+  state.viewAsOriginal = null;
+  state.isViewingAs = false;
+
+  document.getElementById('view-as-banner').style.display = 'none';
+  const m = state.currentMember;
+  document.getElementById('sidebar-name').textContent = (m.first_name || m.email) + ' ' + (m.last_name ? m.last_name[0] + '.' : '');
+  document.getElementById('sidebar-role').textContent = roleLabel(m.user_type, m.is_owner);
+  document.getElementById('sidebar-avatar').textContent = initialsFor(m);
+
+  if (currentRole === 'admin') {
+    document.getElementById('role-toggle').style.display = 'flex';
+    setupAdminView();
+  } else {
+    setupClientView(currentRole);
+  }
+  showToast('✓ Back to your own account');
+}
+
 function setupClientView(type) {
   document.getElementById('admin-nav').style.display = 'none';
   document.getElementById('client-nav').style.display = 'block';
@@ -6064,6 +6149,7 @@ const AUDIT_ACTION_LABEL = {
   'billing.subscription_cancelled': 'Membership subscription cancelled',
   'billing.final_balance_collected': 'Final balance collected',
   'privacy_policy.acknowledged': 'Acknowledged Privacy Policy',
+  'admin.viewed_as_member': 'Viewed account (View As)',
   // Session / booking payments
   'billing.instant_pay_started': 'Started instant payment',
   'billing.instant_pay_fulfilled': 'Instant payment confirmed',
