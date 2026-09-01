@@ -4836,6 +4836,15 @@ async function doLogout() {
   await _sb.auth.signOut();
   currentSession = null;
   state.currentMember = null;
+  // Real gap found live (26 Aug): if an admin was in View As mode and
+  // logged out directly rather than clicking "Exit" first, the banner
+  // stayed visually stuck at display:flex — nothing here ever reset it,
+  // so it would incorrectly show again on the very next login too,
+  // for anyone on that same browser tab.
+  state.isViewingAs = false;
+  state.viewAsOriginal = null;
+  const viewAsBanner = document.getElementById('view-as-banner');
+  if (viewAsBanner) viewAsBanner.style.display = 'none';
   // Clear any in-progress, unsent invite state (see pendingInviteSlots'
   // comment) — sessionStorage otherwise survives until the tab itself
   // closes, which would let a half-finished invite leak into the next
@@ -4927,6 +4936,13 @@ async function doSignUp() {
 // ── SESSION BOOTSTRAP ──
 async function bootstrapSession(session) {
   currentSession = session;
+  // Defensive second reset (see doLogout for the primary one) — guarantees
+  // every fresh login starts genuinely clean regardless of how the
+  // browser tab got here, rather than relying on a single reset point.
+  state.isViewingAs = false;
+  state.viewAsOriginal = null;
+  const viewAsBannerEl = document.getElementById('view-as-banner');
+  if (viewAsBannerEl) viewAsBannerEl.style.display = 'none';
   let meData;
   try {
     meData = await api('/me');
