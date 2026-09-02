@@ -4,7 +4,7 @@ const { isNotificationEnabled } = require('./_lib/notificationSettings');
 const { createCalendarEvent, TEAM_CALENDAR_EMAIL } = require('./_lib/google');
 const { requireAuth } = require('./_lib/auth');
 const { checkRateLimit } = require('./_lib/rateLimit');
-const { calculateSessionChargeInPence, isIncludedInMembershipFee, isSlotOccurrenceIncluded } = require('./_lib/pricing');
+const { calculateSessionChargeInPence, isIncludedInMembershipFee, isSlotOccurrenceIncluded, isWithinEveningWindow, isEveningWindowAllowedDay } = require('./_lib/pricing');
 const { generateBookingIcs, bookingIcsUid } = require('./_lib/ics');
 // _lib/gocardless is deliberately NOT required at the top of this file.
 // It's only needed for the one payment-attempt branch inside POST, and
@@ -204,6 +204,17 @@ module.exports = async (req, res) => {
       if (roomRules.blackout_dates && roomRules.blackout_dates.includes(bookingDateStr)) {
         return res.status(400).json({ error: `${roomRules.name} is unavailable on ${bookingDateStr}` });
       }
+    }
+
+    // Evening Sessions hard block — team review, confirmed after real live
+    // testing surfaced the actual issue: it isn't that a 6-8pm booking on
+    // a non-Thursday/Friday should be priced differently, it's that it
+    // shouldn't be bookable at all outside those two days. The flat £35
+    // pricing (see isEveningSessionBooking, calculateSessionChargeInPence)
+    // still only ever applies Thu/Fri — this is the separate, actual
+    // availability restriction.
+    if (isWithinEveningWindow(start_time) && !isEveningWindowAllowedDay(start_time)) {
+      return res.status(400).json({ error: 'Evening Sessions (6pm-8pm) are only available on Thursdays and Fridays.' });
     }
 
     // Overlap check: reject if the room already has a confirmed/pending

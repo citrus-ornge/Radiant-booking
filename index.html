@@ -3084,20 +3084,28 @@ function refreshClientTimeSlotAvailability() {
   const dates = clientSelectedDates;
   const validStarts = AD_HOC_VALID_STARTS[duration];
   document.querySelectorAll('#client-time-slots .time-slot').forEach(el => {
-    const time = el.dataset.time || el.textContent.trim().replace(' (booked)', '').replace(/ \(not valid.*\)/, '');
+    const time = el.dataset.time || el.textContent.trim().replace(' (booked)', '').replace(/ \(not valid.*\)/, '').replace(/ \(Evening.*\)/, '');
     el.dataset.time = time;
     const invalidForBlock = validStarts && !validStarts.includes(time);
+    // Evening Sessions (6-8pm) hard block, Thu/Fri only — mirrors the
+    // real server-side check in api/bookings.js, so this shows as
+    // unavailable up front rather than only erroring after submission.
+    const isEveningHour = time === '18:00' || time === '19:00';
+    const evBlocked = isEveningHour && dates.length > 0 && dates.some(date => {
+      const dayName = new Date(date + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short' });
+      return !['Thu', 'Fri'].includes(dayName);
+    });
     let clash = false;
-    if (roomId && dates.length && !invalidForBlock) {
+    if (roomId && dates.length && !invalidForBlock && !evBlocked) {
       clash = dates.some(date => {
         const start = new Date(`${date}T${time}:00`);
         const end = new Date(start.getTime() + duration * 3600000);
         return roomHasClash(roomId, start.toISOString(), end.toISOString());
       });
     }
-    el.classList.toggle('booked', clash || invalidForBlock);
-    el.textContent = clash ? `${time} (booked)` : invalidForBlock ? `${time} (not valid for ${duration === 10 ? 'Full' : 'Half'} day)` : time;
-    if ((clash || invalidForBlock) && el.classList.contains('selected')) {
+    el.classList.toggle('booked', clash || invalidForBlock || evBlocked);
+    el.textContent = clash ? `${time} (booked)` : invalidForBlock ? `${time} (not valid for ${duration === 10 ? 'Full' : 'Half'} day)` : evBlocked ? `${time} (Evening — Thu/Fri only)` : time;
+    if ((clash || invalidForBlock || evBlocked) && el.classList.contains('selected')) {
       el.classList.remove('selected');
       selectedClientTime = null;
     }
