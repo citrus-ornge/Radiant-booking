@@ -249,7 +249,7 @@ module.exports = async (req, res) => {
           }));
           feeBreakdown = calculateFeeBreakdown(invite.plan_tier, slotsWithRoomInfo);
         }
-        await sendInvite({ to: oneEmail, userType: user_type, note: personal_note, inviteUrl, feeBreakdown });
+        await sendInvite({ to: oneEmail, userType: user_type, note: personal_note, inviteUrl, feeBreakdown, inviterName: `${requester.first_name || ''}`.trim() || null });
         email_sent = true;
       } catch (e) {
         // invite record still created/updated even if email delivery fails

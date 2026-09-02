@@ -210,20 +210,23 @@ async function sendReminder({ to, memberName, roomName, start, hoursBefore }) {
 
 const ROLE_LABELS = { administrator: 'Staff & Admin member', practitioner: 'practitioner', member: 'member', guest: 'guest' };
 
-async function sendInvite({ to, userType, note, inviteUrl, feeBreakdown }) {
+async function sendInvite({ to, userType, note, inviteUrl, feeBreakdown, inviterName }) {
   const resend = getResend();
   const roleText = ROLE_LABELS[userType] || userType;
-  // Team review: "especially the email invite... which they click to
-  // accept the offer" — so Core/Resident invitees see exactly how their
-  // fee is worked out before they ever click through, not just after.
+  // Team review: "nice tone, greetings and a bit more details" — for all
+  // Core/Resident invites, since that's the only case with a fee to
+  // explain. No name to greet by yet (that's set during onboarding, not
+  // known at invite time), so a warm generic opening rather than a name
+  // that would be wrong to guess at.
   const feeSection = feeBreakdown
-    ? `\n\nYour monthly room fee, worked out:\n${feeBreakdown.lines.map(l => `- ${l}`).join('\n')}\n£${(feeBreakdown.weeklyTotalPence / 100).toFixed(2)}/week × 4.33 weeks/month (52 ÷ 12) = £${(feeBreakdown.monthlyPence / 100).toFixed(2)}/month\n`
-    : '';
+    ? `\nAs part of your membership, you have room time held for you every week. Here's exactly how your monthly fee works out:\n\n${feeBreakdown.lines.map(l => `• ${l}`).join('\n')}\n\nWe convert your weekly rate into a single monthly figure using the standard weeks-per-month calculation (52 weeks ÷ 12 months = 4.33) rather than a flat "times 4" — since months don't divide evenly into weeks, this keeps things fair and consistent all year round, not just for your specific pattern:\n\n£${(feeBreakdown.weeklyTotalPence / 100).toFixed(2)}/week × 4.33 weeks/month = £${(feeBreakdown.monthlyPence / 100).toFixed(2)}/month\n\n`
+    : '\n';
+  const invitedByLine = inviterName ? `${inviterName} has invited you` : `You've been invited`;
   return resend.emails.send({
     from: FROM_EMAIL,
     to: [to],
-    subject: `You're invited to Radiant Booking`,
-    text: `You've been invited to join Radiant Booking as a ${roleText}.\n${note ? `\nNote: ${note}\n` : ''}${feeSection}\nAccept here: ${inviteUrl}\n\nThis invite expires in 7 days.`,
+    subject: `You're invited to join Radiant Booking`,
+    text: `Hi there,\n\n${invitedByLine} to join Radiant Booking as a ${roleText}, where you'll be able to manage your room bookings, documents and billing all in one place.\n${note ? `\nA note from the team: ${note}\n` : ''}${feeSection}Ready to get started? Just click below to accept your invitation and set up your account:\n\n${inviteUrl}\n\nThis invitation expires in 7 days, so don't leave it too long!\n\nWarm wishes,\nThe Radiant Team`,
   });
 }
 
