@@ -5409,11 +5409,23 @@ async function showOnboardingRoomTerms() {
   const feeLine = feePence != null
     ? `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--r-stone,#e8e4dc);font-weight:600;">£${(feePence / 100).toFixed(2)} / month</div>`
     : '';
+  // Team review: "we just need to tell them how it's worked out on
+  // onboarding and emails before accepting" — shown only for the
+  // standard rate (a custom override is a fixed negotiated figure, not
+  // derived from the rate card, so there's no working to show for it).
+  const breakdown = m.custom_monthly_fee_pence == null ? calculateFeeBreakdownDisplay(m.plan_tier, slots) : null;
+  const breakdownHtml = breakdown ? `
+    <div style="margin-top:10px;font-size:12.5px;color:var(--r-warm-gray);">
+      <div style="font-weight:600;margin-bottom:4px;">How this is worked out:</div>
+      ${breakdown.lines.map(l => `<div>${esc(l.text)}</div>`).join('')}
+      <div style="margin-top:4px;">£${(breakdown.weeklyTotalPence / 100).toFixed(2)}/week × 4.33 weeks/month (52 ÷ 12) = £${(breakdown.monthlyPence / 100).toFixed(2)}/month</div>
+    </div>` : '';
   detailsEl.innerHTML = `
     <div style="font-size:15px;font-weight:600;margin-bottom:10px;">${slots.map(s => `${esc(s.day_of_week)}, ${esc(slotDurationLabel(s.time_start, s.time_end) + slotFrequencyLabel(s))}`).join('<br>')}</div>
     <div style="color:var(--r-warm-gray);margin-bottom:4px;">${slots.map(s => `Room: ${esc(s.room ? s.room.name : 'To be confirmed')}`).join('<br>')}</div>
     <div style="color:var(--r-warm-gray);">${slots.length > 1 ? 'These slots are' : 'This slot is'} held for you every week as part of your ${esc(tierLabelText)} membership.</div>
     ${feeLine}
+    ${breakdownHtml}
   `;
 }
 
@@ -7584,6 +7596,41 @@ function calculateScheduleBasedMonthlyFeeDisplayPence(tier, slots) {
     weeklyTotalPence += rates[lengthKey][categoryKey] / (slot.interval_weeks || 1);
   }
   return Math.round(weeklyTotalPence * WEEKS_PER_MONTH_DISPLAY);
+}
+
+// Team review: "we just need to tell them how it's worked out on
+// onboarding and emails before accepting" — same underlying numbers as
+// calculateScheduleBasedMonthlyFeeDisplayPence above (not a second
+// calculation, just also returning the per-slot lines so the working can
+// actually be shown, not just the final total).
+function calculateFeeBreakdownDisplay(tier, slots) {
+  if (!slots || slots.length === 0) return null;
+  const rates = WEEKLY_SLOT_RATES_PENCE_DISPLAY[tier];
+  if (!rates) return null;
+  const lines = [];
+  let weeklyTotalPence = 0;
+  for (const slot of slots) {
+    const [startH, startM] = slot.time_start.split(':').map(Number);
+    const [endH, endM] = slot.time_end.split(':').map(Number);
+    const durationHours = (endH * 60 + endM - (startH * 60 + startM)) / 60;
+    const lengthKey = durationHours >= 8 ? 'full' : 'half';
+    const room = slot.room || (state.rooms || []).find(r => r.id === slot.room_id);
+    const categoryKey = (room && room.pricing_category === 'consultation') ? 'consultation' : 'clinical_wellness';
+    const ratePence = rates[lengthKey][categoryKey];
+    const intervalWeeks = slot.interval_weeks || 1;
+    const weeklyPence = ratePence / intervalWeeks;
+    weeklyTotalPence += weeklyPence;
+    const durationLabel = lengthKey === 'full' ? 'Full day' : 'Half day';
+    const roomLabel = room ? room.name : (categoryKey === 'consultation' ? 'Consultation' : 'Clinical/Wellness');
+    const freqLabel = intervalWeeks > 1 ? `, every ${intervalWeeks} weeks` : '';
+    lines.push({
+      text: intervalWeeks > 1
+        ? `${slot.day_of_week} ${durationLabel} (${roomLabel})${freqLabel}: £${(ratePence / 100).toFixed(2)} ÷ ${intervalWeeks} = £${(weeklyPence / 100).toFixed(2)}/week`
+        : `${slot.day_of_week} ${durationLabel} (${roomLabel}): £${(weeklyPence / 100).toFixed(2)}/week`,
+    });
+  }
+  const monthlyPence = Math.round(weeklyTotalPence * WEEKS_PER_MONTH_DISPLAY);
+  return { lines, weeklyTotalPence, monthlyPence };
 }
 
 function updateInviteStandardFeeDisplay() {

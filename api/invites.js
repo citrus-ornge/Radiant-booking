@@ -4,6 +4,7 @@ const { requireAuth } = require('./_lib/auth');
 const { checkRateLimit } = require('./_lib/rateLimit');
 const { logAudit } = require('./_lib/audit');
 const { validateSessionBlock } = require('./_lib/sessionBlocks');
+const { calculateFeeBreakdown } = require('./_lib/gocardless');
 
 module.exports = async (req, res) => {
   const supabase = getSupabase();
@@ -230,7 +231,25 @@ module.exports = async (req, res) => {
       const inviteUrl = `${baseUrl}/?invite=${invite.token}`;
       let email_sent = false;
       try {
-        await sendInvite({ to: oneEmail, userType: user_type, note: personal_note, inviteUrl });
+        // Team review: "especially the email invite... which they click
+        // to accept the offer" — reserved_slots only stores room_id, so
+        // the room's pricing_category needs fetching before the real
+        // breakdown can be computed (custom_monthly_fee_pence is a fixed
+        // negotiated figure, not derived from the rate card, so there's
+        // no working to show for it).
+        let feeBreakdown = null;
+        if (['core', 'resident'].includes(invite.plan_tier) && invite.custom_monthly_fee_pence == null && Array.isArray(invite.reserved_slots) && invite.reserved_slots.length > 0) {
+          const roomIds = [...new Set(invite.reserved_slots.map(s => s.room_id).filter(Boolean))];
+          const { data: rooms } = await supabase.from('rooms').select('id, name, pricing_category').in('id', roomIds);
+          const roomById = new Map((rooms || []).map(r => [r.id, r]));
+          const slotsWithRoomInfo = invite.reserved_slots.map(s => ({
+            ...s,
+            room_name: roomById.get(s.room_id) ? roomById.get(s.room_id).name : null,
+            pricing_category: roomById.get(s.room_id) ? roomById.get(s.room_id).pricing_category : null,
+          }));
+          feeBreakdown = calculateFeeBreakdown(invite.plan_tier, slotsWithRoomInfo);
+        }
+        await sendInvite({ to: oneEmail, userType: user_type, note: personal_note, inviteUrl, feeBreakdown });
         email_sent = true;
       } catch (e) {
         // invite record still created/updated even if email delivery fails

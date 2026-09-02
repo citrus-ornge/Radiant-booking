@@ -210,14 +210,20 @@ async function sendReminder({ to, memberName, roomName, start, hoursBefore }) {
 
 const ROLE_LABELS = { administrator: 'Staff & Admin member', practitioner: 'practitioner', member: 'member', guest: 'guest' };
 
-async function sendInvite({ to, userType, note, inviteUrl }) {
+async function sendInvite({ to, userType, note, inviteUrl, feeBreakdown }) {
   const resend = getResend();
   const roleText = ROLE_LABELS[userType] || userType;
+  // Team review: "especially the email invite... which they click to
+  // accept the offer" — so Core/Resident invitees see exactly how their
+  // fee is worked out before they ever click through, not just after.
+  const feeSection = feeBreakdown
+    ? `\n\nYour monthly room fee, worked out:\n${feeBreakdown.lines.map(l => `- ${l}`).join('\n')}\n£${(feeBreakdown.weeklyTotalPence / 100).toFixed(2)}/week × 4.33 weeks/month (52 ÷ 12) = £${(feeBreakdown.monthlyPence / 100).toFixed(2)}/month\n`
+    : '';
   return resend.emails.send({
     from: FROM_EMAIL,
     to: [to],
     subject: `You're invited to Radiant Booking`,
-    text: `You've been invited to join Radiant Booking as a ${roleText}.\n${note ? `\nNote: ${note}\n` : ''}\nAccept here: ${inviteUrl}\n\nThis invite expires in 7 days.`,
+    text: `You've been invited to join Radiant Booking as a ${roleText}.\n${note ? `\nNote: ${note}\n` : ''}${feeSection}\nAccept here: ${inviteUrl}\n\nThis invite expires in 7 days.`,
   });
 }
 

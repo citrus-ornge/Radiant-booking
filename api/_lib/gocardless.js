@@ -313,7 +313,42 @@ async function ensureMembershipSubscription(supabase, member) {
   }
 }
 
-module.exports = { getGoCardlessClient, PLAN_TIER_MONTHLY_PENCE, readRawBody, createOneOffPayment, createMembershipSubscription, customerLinksFor, persistNewCustomerId, ensureMembershipSubscription, handleMandateBecameActive, reconcileMemberMandate, calculateScheduleBasedMonthlyFeePence, calculateOutstandingBalanceAtCancellation };
+module.exports = { getGoCardlessClient, PLAN_TIER_MONTHLY_PENCE, readRawBody, createOneOffPayment, createMembershipSubscription, customerLinksFor, persistNewCustomerId, ensureMembershipSubscription, handleMandateBecameActive, reconcileMemberMandate, calculateScheduleBasedMonthlyFeePence, calculateOutstandingBalanceAtCancellation, calculateFeeBreakdown };
+
+// Team review: "so they see exactly how they are billed" — genuinely
+// dynamic, built from whichever real slots are passed in, not a
+// generic/example explanation. Mirrors the client-side
+// calculateFeeBreakdownDisplay in index.html exactly (same rates, same
+// >=8hr threshold, same ÷interval_weeks, same ×WEEKS_PER_MONTH) — used
+// by the invite email (api/_lib/email.js) so what someone reads before
+// ever clicking "Accept" matches, line for line, what they'll see again
+// on the onboarding Room Offer screen.
+function calculateFeeBreakdown(tier, slots) {
+  if (!slots || slots.length === 0) return null;
+  const rates = WEEKLY_SLOT_RATES_PENCE[tier];
+  if (!rates) return null;
+  const lines = [];
+  let weeklyTotalPence = 0;
+  for (const slot of slots) {
+    const [startH, startM] = slot.time_start.split(':').map(Number);
+    const [endH, endM] = slot.time_end.split(':').map(Number);
+    const durationHours = (endH * 60 + endM - (startH * 60 + startM)) / 60;
+    const lengthKey = durationHours >= 8 ? 'full' : 'half';
+    const categoryKey = slot.pricing_category === 'consultation' ? 'consultation' : 'clinical_wellness';
+    const ratePence = rates[lengthKey][categoryKey];
+    const intervalWeeks = slot.interval_weeks || 1;
+    const weeklyPence = ratePence / intervalWeeks;
+    weeklyTotalPence += weeklyPence;
+    const durationLabel = lengthKey === 'full' ? 'Full day' : 'Half day';
+    const roomLabel = slot.room_name || (categoryKey === 'consultation' ? 'Consultation' : 'Clinical/Wellness');
+    const freqLabel = intervalWeeks > 1 ? `, every ${intervalWeeks} weeks` : '';
+    lines.push(intervalWeeks > 1
+      ? `${slot.day_of_week} ${durationLabel} (${roomLabel})${freqLabel}: £${(ratePence / 100).toFixed(2)} ÷ ${intervalWeeks} = £${(weeklyPence / 100).toFixed(2)}/week`
+      : `${slot.day_of_week} ${durationLabel} (${roomLabel}): £${(weeklyPence / 100).toFixed(2)}/week`);
+  }
+  const monthlyPence = Math.round(weeklyTotalPence * WEEKS_PER_MONTH);
+  return { lines, weeklyTotalPence, monthlyPence };
+}
 
 // Everything that should happen the moment a mandate is confirmed active —
 // extracted from api/webhooks/gocardless.js so this exact logic can also
