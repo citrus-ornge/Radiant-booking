@@ -6989,10 +6989,20 @@ async function uploadComplianceDocument() {
 }
 
 async function downloadComplianceDocument(docId) {
+  // Classic popup-blocker trap: window.open() called AFTER an awaited
+  // fetch is no longer considered a direct response to the click by most
+  // browsers, and gets silently blocked — no error, nothing visibly
+  // happens, exactly matching "admin cannot open... on click of view".
+  // Fix: open a blank tab synchronously, right here, before any await —
+  // this preserves the trusted user-gesture context — then redirect that
+  // already-open tab once the real signed URL comes back.
+  const newTab = window.open('', '_blank');
   try {
     const result = await api(`/member-documents?id=${docId}&action=download`);
-    window.open(result.url, '_blank');
+    if (newTab) newTab.location.href = result.url;
+    else window.open(result.url, '_blank'); // popup was blocked even for the blank tab — fall back to a direct attempt
   } catch (e) {
+    if (newTab) newTab.close();
     showToast('⚠ ' + e.message);
   }
 }
