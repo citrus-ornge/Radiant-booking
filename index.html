@@ -5438,7 +5438,7 @@ async function showOnboardingRoomTerms() {
   detailsEl.innerHTML = `
     <div style="font-size:15px;font-weight:600;margin-bottom:10px;">${slots.map(s => `${esc(s.day_of_week)}, ${esc(slotDurationLabel(s.time_start, s.time_end) + slotFrequencyLabel(s))}`).join('<br>')}</div>
     <div style="color:var(--r-warm-gray);margin-bottom:4px;">${slots.map(s => `Room: ${esc(s.room ? s.room.name : 'To be confirmed')}`).join('<br>')}</div>
-    <div style="color:var(--r-warm-gray);">${slots.length > 1 ? 'These slots are' : 'This slot is'} held for you every week as part of your ${esc(tierLabelText)} membership.</div>
+    <div style="color:var(--r-warm-gray);">${slots.length > 1 ? 'These slots are' : 'This slot is'} held for you as part of your ${esc(tierLabelText)} membership.</div>
     ${feeLine}
     ${breakdownHtml}
   `;
@@ -5535,7 +5535,7 @@ function showOnboardingDone() {
     infoEl.style.display = 'block';
     const slots = m.recurring_slots || [];
     const slotHtml = slots.length > 0
-      ? `<strong>Your reserved session${slots.length > 1 ? 's' : ''}</strong><br>${slots.map(s => slotOneLineHtml(s)).join('<br>')}<br><span style="color:var(--r-warm-gray);">Held for you every week as part of your ${esc(m.plan_tier === 'resident' ? 'Resident' : 'Core')} membership.</span>`
+      ? `<strong>Your reserved session${slots.length > 1 ? 's' : ''}</strong><br>${slots.map(s => slotOneLineHtml(s)).join('<br>')}<br><span style="color:var(--r-warm-gray);">Held for you as part of your ${esc(m.plan_tier === 'resident' ? 'Resident' : 'Core')} membership.</span>`
       : `<strong>Your reserved session</strong><br><span style="color:var(--r-warm-gray);">As a ${esc(m.plan_tier === 'resident' ? 'Resident' : 'Core')} member, you'll have fixed recurring room slot(s). Staff & Admin will confirm the day(s), time(s) and room(s) with you shortly.</span>`;
     infoEl.innerHTML = (ddOutstanding
       ? slotHtml + `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--r-border);color:var(--r-gold-dark,#8a6a1f);"><strong>${ddInProgress ? '⏳ Provisionally held, being processed' : '⚠ Provisionally held, not yet fully confirmed'}</strong> — ${ddNote}</div>`

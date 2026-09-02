@@ -6,10 +6,10 @@
 // IMPORTANT: keep this in sync with TIER_DATA by hand. If the brochure rates
 // change, update both places.
 //
-// KNOWN GAP: the brochure only prices 1 Hour, 2 Hours, and Half Day (4hrs)
-// per session — there's no defined single-session rate for a 3-hour booking
-// or a full day (8hrs), even though both are options in the booking form's
-// Duration dropdown. calculateSessionChargeInPence returns null for these
+// KNOWN GAP: the brochure only prices 1 Hour, 2 Hours, Half Day, and Full
+// Day per session — there's still no defined single-session rate for a
+// 3-hour booking, even though it's an option in the booking form's
+// Duration dropdown. calculateSessionChargeInPence returns null for this
 // rather than guessing a number, and callers must treat null as "route to
 // manual invoicing", never as "free" or "estimate it".
 // Team review: ad-hoc Half day/Full day now mean the exact same fixed
