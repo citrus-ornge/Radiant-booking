@@ -12,11 +12,23 @@
 // Duration dropdown. calculateSessionChargeInPence returns null for these
 // rather than guessing a number, and callers must treat null as "route to
 // manual invoicing", never as "free" or "estimate it".
+// Team review: ad-hoc Half day/Full day now mean the exact same fixed
+// blocks as Core/Resident recurring slots (8am-1pm/1pm-6pm = 5hrs=300min,
+// 8am-6pm = 10hrs=600min) — previously keyed to 240min (4hrs), with no
+// price at all for Full day, meaning every single ad-hoc Full day (and
+// 3hr) booking fell back to a manual invoice rather than being charged
+// automatically. Values sourced directly from the published Membership &
+// Pricing rates (index.html TIER_DATA, the canonical reference for all
+// pricing math) — confirmed the existing 240min figures already exactly
+// matched "Half Day (50%)" for every tier, so they carry over unchanged
+// to the new 300min key; "1 Day/Week" is the matching source for the new
+// 600min (Full day) entries, which for Core/Resident also exactly
+// matches their existing recurring-slot full-day weekly rate.
 const RATES_PENCE_BY_DURATION_MINUTES = {
-  community: { 60: [2000, 1700], 120: [3500, 3000], 240: [4750, 4000] },
-  flex:      { 60: [1800, 1500], 120: [3200, 2700], 240: [4500, 3750] },
-  core:      { 60: [1700, 1400], 120: [2900, 2600], 240: [4250, 3500] },
-  resident:  { 60: [1500, 1200], 120: [3000, 2400], 240: [4000, 3250] },
+  community: { 60: [2000, 1700], 120: [3500, 3000], 300: [4750, 4000], 600: [9500, 8000] },
+  flex:      { 60: [1800, 1500], 120: [3200, 2700], 300: [4500, 3750], 600: [9000, 7500] },
+  core:      { 60: [1700, 1400], 120: [2900, 2600], 300: [4250, 3500], 600: [8500, 7000] },
+  resident:  { 60: [1500, 1200], 120: [3000, 2400], 300: [4000, 3250], 600: [8000, 6500] },
 };
 // Tuple index within each duration bracket above: [clinical_wellness, consultation]
 const CATEGORY_INDEX = { clinical_wellness: 0, consultation: 1 };

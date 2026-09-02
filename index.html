@@ -1871,7 +1871,7 @@ textarea.form-input { resize: vertical; }
                 </div>
               </div>
               <div class="form-row"><label class="form-label">Duration</label>
-                <select class="form-input" id="client-duration" onchange="refreshClientTimeSlotAvailability();toggleClientTopupRow();updateClientPricePreview();"><option value="1">1 hour</option><option value="2" selected>2 hours</option><option value="3">3 hours</option><option value="4">Half day (4hrs)</option><option value="8">Full day</option></select>
+                <select class="form-input" id="client-duration" onchange="refreshClientTimeSlotAvailability();toggleClientTopupRow();updateClientPricePreview();"><option value="1">1 hour</option><option value="2" selected>2 hours</option><option value="3">3 hours</option><option value="5">Half day</option><option value="10">Full day</option></select>
               </div>
               <div class="form-row" id="client-topup-row" style="display:none;background:var(--r-surface2);border-radius:8px;padding:12px;">
                 <label class="form-label">Attach to Existing Booking <span style="font-weight:400;color:var(--r-warm-gray);">(required for 1-hour top-ups)</span></label>
@@ -2079,11 +2079,11 @@ textarea.form-input { resize: vertical; }
       </div>
       <div class="form-row"><label class="form-label">Start Time</label>
         <select class="form-input" id="nb-time" onchange="toggleTopupRow()">
-          <option value="09:00">09:00</option><option value="10:00">10:00</option><option value="11:00">11:00</option><option value="12:00">12:00</option><option value="13:00">13:00</option><option value="14:00">14:00</option><option value="15:00">15:00</option><option value="16:00">16:00</option>
+          <option value="08:00">08:00</option><option value="09:00">09:00</option><option value="10:00">10:00</option><option value="11:00">11:00</option><option value="12:00">12:00</option><option value="13:00">13:00</option><option value="14:00">14:00</option><option value="15:00">15:00</option><option value="16:00">16:00</option><option value="17:00">17:00</option><option value="18:00">18:00</option><option value="19:00">19:00</option>
         </select>
       </div>
       <div class="form-row"><label class="form-label">Duration</label>
-        <select class="form-input" id="nb-duration" onchange="toggleTopupRow();refreshAdminTimeSlotAvailability();"><option value="1">1 hour</option><option value="2" selected>2 hours</option><option value="3">3 hours</option><option value="4">Half day</option><option value="8">Full day</option></select>
+        <select class="form-input" id="nb-duration" onchange="toggleTopupRow();refreshAdminTimeSlotAvailability();"><option value="1">1 hour</option><option value="2" selected>2 hours</option><option value="3">3 hours</option><option value="5">Half day</option><option value="10">Full day</option></select>
       </div>
       <div class="form-row" id="nb-topup-row" style="display:none;background:var(--r-surface2);border-radius:8px;padding:12px;">
         <label class="form-label">Attach to Existing Booking (required for 1-hour top-ups)</label>
@@ -2914,6 +2914,17 @@ function roomHasClash(roomId, startISO, endISO) {
   );
 }
 
+// Ad-hoc "Book a Room" Half day/Full day now mean the exact same fixed
+// blocks as Core/Resident recurring slots — team review: "make ad-hoc
+// Half day/Full day the exact same fixed blocks (8-1/1-6/8-6) as
+// recurring slots". Separate constant from the recurring-slot builder's
+// own VALID_SLOT_STARTS (keyed 4/8, a historical identifier at this
+// point rather than a literal duration) specifically to avoid touching
+// that already-verified, working code — this one's keyed by the actual
+// real duration in hours used here (5, 10), matching what this specific
+// picker's option values now are.
+const AD_HOC_VALID_STARTS = { 5: ['08:00', '13:00'], 10: ['08:00'] };
+
 function refreshAdminTimeSlotAvailability() {
   const roomId = document.getElementById('nb-room').value;
   const duration = parseFloat(document.getElementById('nb-duration').value);
@@ -2922,16 +2933,18 @@ function refreshAdminTimeSlotAvailability() {
   if (!sel) return;
   Array.from(sel.options).forEach(opt => {
     const time = opt.value;
+    const validStarts = AD_HOC_VALID_STARTS[duration];
+    const invalidForBlock = validStarts && !validStarts.includes(time);
     let clash = false;
-    if (roomId && dates.length) {
+    if (roomId && dates.length && !invalidForBlock) {
       clash = dates.some(date => {
         const start = new Date(`${date}T${time}:00`);
         const end = new Date(start.getTime() + duration * 3600000);
         return roomHasClash(roomId, start.toISOString(), end.toISOString());
       });
     }
-    opt.disabled = clash;
-    opt.textContent = time + (clash ? ' (already booked)' : '');
+    opt.disabled = clash || invalidForBlock;
+    opt.textContent = time + (clash ? ' (already booked)' : invalidForBlock ? ` (not valid for ${duration === 10 ? 'Full' : 'Half'} day)` : '');
   });
   if (sel.selectedOptions[0] && sel.selectedOptions[0].disabled) {
     const firstFree = Array.from(sel.options).find(o => !o.disabled);
@@ -2943,20 +2956,22 @@ function refreshClientTimeSlotAvailability() {
   const roomId = selectedClientRoomId;
   const duration = parseFloat(document.getElementById('client-duration').value);
   const dates = clientSelectedDates;
+  const validStarts = AD_HOC_VALID_STARTS[duration];
   document.querySelectorAll('#client-time-slots .time-slot').forEach(el => {
-    const time = el.dataset.time || el.textContent.trim().replace(' (booked)', '');
+    const time = el.dataset.time || el.textContent.trim().replace(' (booked)', '').replace(/ \(not valid.*\)/, '');
     el.dataset.time = time;
+    const invalidForBlock = validStarts && !validStarts.includes(time);
     let clash = false;
-    if (roomId && dates.length) {
+    if (roomId && dates.length && !invalidForBlock) {
       clash = dates.some(date => {
         const start = new Date(`${date}T${time}:00`);
         const end = new Date(start.getTime() + duration * 3600000);
         return roomHasClash(roomId, start.toISOString(), end.toISOString());
       });
     }
-    el.classList.toggle('booked', clash);
-    el.textContent = clash ? `${time} (booked)` : time;
-    if (clash && el.classList.contains('selected')) {
+    el.classList.toggle('booked', clash || invalidForBlock);
+    el.textContent = clash ? `${time} (booked)` : invalidForBlock ? `${time} (not valid for ${duration === 10 ? 'Full' : 'Half'} day)` : time;
+    if ((clash || invalidForBlock) && el.classList.contains('selected')) {
       el.classList.remove('selected');
       selectedClientTime = null;
     }
