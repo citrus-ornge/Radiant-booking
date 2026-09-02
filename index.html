@@ -5753,7 +5753,7 @@ async function startViewAs(memberId) {
     document.getElementById('role-toggle').style.display = 'none';
 
     setupClientView(target.user_type);
-    showClientView('bookings');
+    showClientView('my-bookings');
     renderMyBookings();
     showToast(`👁 Viewing as ${displayName}`);
   } catch (e) {
@@ -5892,6 +5892,16 @@ function showView(name, _fromHistory) {
 }
 
 function showClientView(name, _fromHistory) {
+  // Defensive guard mirroring showView's own — the exact bug just found
+  // in startViewAs() (calling showClientView('bookings'), which doesn't
+  // exist as a client view name) didn't error, it silently activated
+  // view-bookings (the admin All Bookings table) instead, since
+  // _activateView has no role awareness at all. Catches the same class
+  // of mistake here too, rather than only at the admin-side entry point.
+  if (ADMIN_ONLY_VIEWS.includes(name)) {
+    console.error(`Blocked: showClientView('${name}') — that's an admin-only view name, not a client one`);
+    name = 'my-bookings';
+  }
   _activateView(name, clientViews, '#client-nav');
   if (name === 'profile') renderProfilePage();
   if (name === 'notifications') markNotificationsSeen();
