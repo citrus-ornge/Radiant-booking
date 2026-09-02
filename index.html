@@ -1797,7 +1797,7 @@ textarea.form-input { resize: vertical; }
         <div id="pricing-tier-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;"></div>
 
         <div class="card" style="margin-top:20px;">
-          <div class="card-header"><div class="card-title">Evening Sessions (6pm–8pm, Thursdays & Fridays)</div></div>
+          <div class="card-header"><div class="card-title">Evening Sessions (6pm–8pm, any day)</div></div>
           <div style="padding:16px 22px;font-size:13.5px;line-height:1.6;">
             Available on a priority basis to Resident, Core and Flex members. Community members may book subject to availability. Minimum two-hour booking.<br>
             Clinical/Wellness Room: <strong>£35 total</strong> · Consultation Room: <strong>£35 total</strong>
@@ -8509,10 +8509,9 @@ function getClientBookingStartISO() {
 // must stay in sync. Only used for the price preview; the real charge is
 // always decided server-side.
 function isEveningSessionBookingDisplay(startTimeISO) {
-  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', weekday: 'short', hour: 'numeric', hourCycle: 'h23' }).formatToParts(new Date(startTimeISO));
-  const weekday = parts.find(p => p.type === 'weekday').value;
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: 'numeric', hourCycle: 'h23' }).formatToParts(new Date(startTimeISO));
   const hour = parseInt(parts.find(p => p.type === 'hour').value, 10);
-  return ['Thu', 'Fri'].includes(weekday) && hour >= 18 && hour < 20;
+  return hour >= 18 && hour < 20;
 }
 
 function updateClientPricePreview() {
@@ -8543,7 +8542,7 @@ function updateClientPricePreview() {
   const isEvening = durationValue === '2' && startISO && isEveningSessionBookingDisplay(startISO);
   if (isEvening) {
     el.style.display = 'block';
-    el.innerHTML = `<strong>£35.00</strong> — Evening Session flat rate (6–8pm, Thu/Fri), same for every membership tier`;
+    el.innerHTML = `<strong>£35.00</strong> — Evening Session flat rate (6–8pm, any day), same for every membership tier`;
     return;
   }
   // Team review 26 Aug 2026: real gap found while adding the evening

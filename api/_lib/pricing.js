@@ -46,12 +46,18 @@ const CATEGORY_INDEX = { clinical_wellness: 0, consultation: 1 };
 // could otherwise land on the wrong calendar day, or the wrong side of
 // 6pm, during British Summer Time).
 const EVENING_SESSION_FEE_PENCE = 3500;
+// Evening Sessions (team review follow-up): "the [day] is irrelevant, if
+// they are booking evening 6pm onwards it's £35" — confirmed explicitly:
+// any day of the week now, not just Thursdays/Fridays, but still exactly
+// the 2-hour, 6-8pm window. Uses Europe/London LOCAL time to determine
+// the hour, not raw UTC — the same lesson as the earlier live timezone
+// bug (a booking near midnight UTC could otherwise land on the wrong
+// side of 6pm during British Summer Time).
 function isEveningSessionBooking(startTimeISO, durationMinutes) {
   if (durationMinutes !== 120 || !startTimeISO) return false;
-  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', weekday: 'short', hour: 'numeric', hourCycle: 'h23' }).formatToParts(new Date(startTimeISO));
-  const weekday = parts.find(p => p.type === 'weekday').value;
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: 'numeric', hourCycle: 'h23' }).formatToParts(new Date(startTimeISO));
   const hour = parseInt(parts.find(p => p.type === 'hour').value, 10);
-  return ['Thu', 'Fri'].includes(weekday) && hour >= 18 && hour < 20;
+  return hour >= 18 && hour < 20;
 }
 
 function calculateSessionChargeInPence(planTier, durationMinutes, pricingCategory, startTimeISO) {
