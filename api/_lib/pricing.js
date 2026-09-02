@@ -36,7 +36,26 @@ const CATEGORY_INDEX = { clinical_wellness: 0, consultation: 1 };
 // Returns the price in pence for one session, or null if this exact
 // combination isn't priced in the brochure (unknown tier, unpriced
 // duration, or the room has no pricing_category set yet).
-function calculateSessionChargeInPence(planTier, durationMinutes, pricingCategory) {
+// Evening Sessions (team review): flat £35, any tier, any room category,
+// no discounts at all — but only for the actual defined evening slot
+// itself (exactly a 2-hour booking, Thursdays/Fridays 6-8pm) — confirmed
+// directly: "only 2 hours at £35 is the evening slot no matter what",
+// anything else reverts to normal tier-based pricing. Uses Europe/London
+// LOCAL time to determine day-of-week and hour, not raw UTC — the same
+// lesson as the earlier live timezone bug (a booking near midnight UTC
+// could otherwise land on the wrong calendar day, or the wrong side of
+// 6pm, during British Summer Time).
+const EVENING_SESSION_FEE_PENCE = 3500;
+function isEveningSessionBooking(startTimeISO, durationMinutes) {
+  if (durationMinutes !== 120 || !startTimeISO) return false;
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', weekday: 'short', hour: 'numeric', hourCycle: 'h23' }).formatToParts(new Date(startTimeISO));
+  const weekday = parts.find(p => p.type === 'weekday').value;
+  const hour = parseInt(parts.find(p => p.type === 'hour').value, 10);
+  return ['Thu', 'Fri'].includes(weekday) && hour >= 18 && hour < 20;
+}
+
+function calculateSessionChargeInPence(planTier, durationMinutes, pricingCategory, startTimeISO) {
+  if (isEveningSessionBooking(startTimeISO, durationMinutes)) return EVENING_SESSION_FEE_PENCE;
   const tierRates = RATES_PENCE_BY_DURATION_MINUTES[planTier];
   if (!tierRates) return null;
   const bracket = tierRates[durationMinutes];
@@ -46,7 +65,7 @@ function calculateSessionChargeInPence(planTier, durationMinutes, pricingCategor
   return bracket[idx];
 }
 
-module.exports = { calculateSessionChargeInPence, RATES_PENCE_BY_DURATION_MINUTES, isIncludedInMembershipFee, isSlotOccurrenceIncluded };
+module.exports = { calculateSessionChargeInPence, RATES_PENCE_BY_DURATION_MINUTES, isIncludedInMembershipFee, isSlotOccurrenceIncluded, isEveningSessionBooking };
 
 // Whether a given calendar date is actually an "occurrence" of a recurring
 // slot — team review 26 Aug 2026: practitioners can agree a slot that

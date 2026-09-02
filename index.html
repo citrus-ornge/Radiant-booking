@@ -8230,6 +8230,24 @@ function selectRoomOption(el, name, roomId) {
 // matches their included slot depends on their actual weekly booking
 // history, which isn't available here), so it's phrased as "likely" for
 // them rather than asserted as fact.
+// Matches exactly how the real booking's start_time gets constructed at
+// submission time (see confirmClientBooking) — so the preview checks the
+// same instant that will actually be charged, not an approximation.
+function getClientBookingStartISO() {
+  if (!clientSelectedDates || clientSelectedDates.length === 0 || !selectedClientTime) return null;
+  return new Date(`${clientSelectedDates[0]}T${selectedClientTime}:00`).toISOString();
+}
+
+// Client-side mirror of isEveningSessionBooking in api/_lib/pricing.js —
+// must stay in sync. Only used for the price preview; the real charge is
+// always decided server-side.
+function isEveningSessionBookingDisplay(startTimeISO) {
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', weekday: 'short', hour: 'numeric', hourCycle: 'h23' }).formatToParts(new Date(startTimeISO));
+  const weekday = parts.find(p => p.type === 'weekday').value;
+  const hour = parseInt(parts.find(p => p.type === 'hour').value, 10);
+  return ['Thu', 'Fri'].includes(weekday) && hour >= 18 && hour < 20;
+}
+
 function updateClientPricePreview() {
   const el = document.getElementById('client-price-preview');
   if (!el) return;
@@ -8254,7 +8272,22 @@ function updateClientPricePreview() {
       return;
     }
   }
-  const durationLabel = { '1': '1 Hour', '2': '2 Hours', '4': 'Half Day (50%)' }[durationValue];
+  const startISO = getClientBookingStartISO ? getClientBookingStartISO() : null;
+  const isEvening = durationValue === '2' && startISO && isEveningSessionBookingDisplay(startISO);
+  if (isEvening) {
+    el.style.display = 'block';
+    el.innerHTML = `<strong>£35.00</strong> — Evening Session flat rate (6–8pm, Thu/Fri), same for every membership tier`;
+    return;
+  }
+  // Team review 26 Aug 2026: real gap found while adding the evening
+  // check above — this mapping still used '4'/no-entry-for-8, the OLD
+  // ad-hoc duration values, never updated when Half day/Full day were
+  // re-keyed to 5/10 (the new fixed 8-1/1-6/8-6 blocks) — meaning this
+  // preview incorrectly showed "not in the rate table" for genuinely
+  // priced Half day/Full day bookings. '1 Day/Week' is the correct
+  // brochure row for Full day (confirmed and used identically for the
+  // real ad-hoc rate table itself).
+  const durationLabel = { '1': '1 Hour', '2': '2 Hours', '5': 'Half Day (50%)', '10': '1 Day/Week' }[durationValue];
   if (!durationLabel) {
     // 3-hour and full-day sessions have no brochure rate at all (same
     // documented gap as the server side) — say so plainly rather than

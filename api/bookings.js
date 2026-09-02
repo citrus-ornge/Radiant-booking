@@ -166,7 +166,7 @@ module.exports = async (req, res) => {
     if (needsCharge) {
       const { data: pricingRoom } = await supabase.from('rooms').select('pricing_category').eq('id', room_id).maybeSingle();
       const durationMins = Math.round((new Date(end_time) - new Date(start_time)) / 60000);
-      amountPence = calculateSessionChargeInPence(tierMember.plan_tier, durationMins, pricingRoom && pricingRoom.pricing_category);
+      amountPence = calculateSessionChargeInPence(tierMember.plan_tier, durationMins, pricingRoom && pricingRoom.pricing_category, start_time);
       finalPaymentStatus = amountPence == null ? 'pending_manual' : 'pending';
     }
 
