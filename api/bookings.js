@@ -220,6 +220,28 @@ module.exports = async (req, res) => {
       return res.status(409).json({ error: 'This room is already booked for part of that time window.' });
     }
 
+    // Admin room block hard-check — team review: "the ability for admin
+    // only to block out any slot... this is for admin the ability to
+    // just book timeout" for events, maintenance, closures. Hard block,
+    // confirmed directly: "members literally cannot book over it" — this
+    // is the actual enforcement; nothing client-side can be trusted to
+    // stop a direct API call on its own.
+    const { data: blockClashes, error: blockErr } = await supabase
+      .from('room_blocks')
+      .select('id, reason, is_private')
+      .eq('room_id', room_id)
+      .lt('start_time', end_time)
+      .gt('end_time', start_time);
+    if (blockErr) return res.status(500).json({ error: blockErr.message });
+    if (blockClashes && blockClashes.length > 0) {
+      // Reason only ever shown to admins making the booking themselves —
+      // a non-admin gets a plain "unavailable", matching is_private's
+      // intent even in this error message, not just in the calendar view.
+      const block = blockClashes[0];
+      const reasonSuffix = (isAdmin && block.reason && !block.is_private) ? `: ${block.reason}` : '';
+      return res.status(409).json({ error: `This room is unavailable for part of that time window${reasonSuffix}.` });
+    }
+
     const { data: booking, error } = await supabase
       .from('bookings')
       .insert({
