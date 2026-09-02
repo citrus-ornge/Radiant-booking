@@ -2201,6 +2201,20 @@ textarea.form-input { resize: vertical; }
           <option value="resident">Resident</option>
         </select>
       </div>
+      <div class="form-row" id="au-fee-row" style="display:none;background:var(--r-surface2);border-radius:8px;padding:12px;">
+        <label class="form-label" style="margin-bottom:4px;">Monthly Membership Fee</label>
+        <p style="font-size:12px;color:var(--r-warm-gray);margin:0 0 8px;">Standard rate for this tier is shown below — override it only for an agreed special deal.</p>
+        <div class="form-two">
+          <div class="form-row" style="margin:0;">
+            <label class="form-label" style="font-weight:400;">Standard rate</label>
+            <input class="form-input" id="au-fee-standard" disabled style="opacity:0.7;">
+          </div>
+          <div class="form-row" style="margin:0;">
+            <label class="form-label" style="font-weight:400;">Override <span style="color:var(--r-warm-gray);">(optional, in £)</span></label>
+            <input class="form-input" id="au-fee-override" type="number" min="0" step="0.01" placeholder="Leave blank to use standard rate">
+          </div>
+        </div>
+      </div>
       <div class="form-row" id="au-reserved-slot-row" style="display:none;background:var(--r-surface2);border-radius:8px;padding:12px;">
         <label class="form-label" style="margin-bottom:8px;">Agreed Recurring Session(s) (required for Core/Resident)</label>
         <div id="au-pending-slots" style="margin-bottom:10px;"></div>
@@ -7988,6 +8002,32 @@ function toggleAddUserSlotRow() {
   const show = ['core', 'resident'].includes(tier);
   if (row) row.style.display = show ? 'block' : 'none';
   if (show) renderPendingAddUserSlots();
+
+  // Team review: "the members area invite & add user doesn't have all
+  // the same required settings" — this fee row (standard rate + optional
+  // override) already existed for Invite Users but was simply missing
+  // here entirely.
+  const feeRow = document.getElementById('au-fee-row');
+  if (feeRow) {
+    feeRow.style.display = show ? 'block' : 'none';
+    if (show) {
+      updateAddUserStandardFeeDisplay();
+      document.getElementById('au-fee-override').value = '';
+    }
+  }
+}
+
+function updateAddUserStandardFeeDisplay() {
+  const tier = document.getElementById('au-tier').value;
+  const fieldEl = document.getElementById('au-fee-standard');
+  if (!fieldEl || !['core', 'resident'].includes(tier)) return;
+  const monthlyPence = calculateScheduleBasedMonthlyFeeDisplayPence(tier, pendingAddUserSlots);
+  if (monthlyPence == null) {
+    const flatFallback = PLAN_TIER_MONTHLY_PENCE_DISPLAY[tier];
+    fieldEl.value = flatFallback != null ? `£${(flatFallback / 100).toFixed(2)} / month (add a slot below for the real rate)` : '—';
+    return;
+  }
+  fieldEl.value = `£${(monthlyPence / 100).toFixed(2)} / month`;
 }
 
 function renderPendingAddUserSlots() {
@@ -7995,6 +8035,7 @@ function renderPendingAddUserSlots() {
   if (!container) return;
   if (pendingAddUserSlots.length === 0) {
     container.innerHTML = '<div style="font-size:12px;color:var(--r-warm-gray);">No slots added yet.</div>';
+    updateAddUserStandardFeeDisplay();
     return;
   }
   container.innerHTML = pendingAddUserSlots.map((s, i) => {
@@ -8005,6 +8046,7 @@ function renderPendingAddUserSlots() {
       <button type="button" class="btn btn-danger btn-sm" onclick="removePendingAddUserSlot(${i})">Remove</button>
     </div>`;
   }).join('');
+  updateAddUserStandardFeeDisplay();
 }
 
 function addPendingAddUserSlot() {
@@ -8038,11 +8080,25 @@ async function addUser() {
   const phone = document.getElementById('au-phone').value.trim();
   const user_type = document.getElementById('au-type').value;
   const plan_tier = user_type === 'practitioner' ? (document.getElementById('au-tier').value || null) : null;
+  const lockedTiers = ['core', 'resident'];
 
   if (!first_name || !last_name || !email) { showToast('⚠ First name, last name and email are required'); return; }
-  if (['core', 'resident'].includes(plan_tier) && pendingAddUserSlots.length === 0) {
+  if (lockedTiers.includes(plan_tier) && pendingAddUserSlots.length === 0) {
     showToast('⚠ Core and Resident need at least one agreed recurring slot — add one below');
     return;
+  }
+
+  // Same special-deal override as Invite Users — team review: "the
+  // members area invite & add user doesn't have all the same required
+  // settings", this was simply missing here entirely.
+  let custom_monthly_fee_pence;
+  if (lockedTiers.includes(plan_tier)) {
+    const overrideRaw = document.getElementById('au-fee-override').value;
+    if (overrideRaw.trim() !== '') {
+      const pounds = parseFloat(overrideRaw);
+      if (Number.isNaN(pounds) || pounds < 0) { showToast('⚠ Enter a valid override amount, or leave it blank to use the standard rate'); return; }
+      custom_monthly_fee_pence = Math.round(pounds * 100);
+    }
   }
 
   const btn = document.getElementById('add-user-submit-btn');
@@ -8051,7 +8107,7 @@ async function addUser() {
   try {
     const result = await api('/members-create', {
       method: 'POST',
-      body: JSON.stringify({ first_name, last_name, email, phone, user_type, plan_tier, reserved_slots: pendingAddUserSlots }),
+      body: JSON.stringify({ first_name, last_name, email, phone, user_type, plan_tier, reserved_slots: pendingAddUserSlots, custom_monthly_fee_pence }),
     });
     closeModal('add-user-modal');
     showToast(result.email_sent ? '✓ User added — set-password email sent!' : '✓ User added (email not sent — check Resend setup, they can still use Forgot Password)');
@@ -8060,6 +8116,7 @@ async function addUser() {
     document.getElementById('au-email').value = '';
     document.getElementById('au-phone').value = '';
     document.getElementById('au-tier').value = '';
+    document.getElementById('au-fee-override').value = '';
     pendingAddUserSlots = [];
     renderPendingAddUserSlots();
     await loadAppData();

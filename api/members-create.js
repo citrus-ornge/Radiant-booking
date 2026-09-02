@@ -33,7 +33,7 @@ module.exports = async (req, res) => {
     return res.status(403).json({ error: 'Only Staff & Admin can add users directly' });
   }
 
-  const { first_name, last_name, email, phone, user_type, plan_tier, reserved_slots } = req.body || {};
+  const { first_name, last_name, email, phone, user_type, plan_tier, reserved_slots, custom_monthly_fee_pence } = req.body || {};
   if (!first_name || !last_name || !email || !user_type) {
     return res.status(400).json({ error: 'first_name, last_name, email and user_type are required' });
   }
@@ -118,6 +118,7 @@ module.exports = async (req, res) => {
       onboarding_status: 'documents_pending',
       plan_tier: tier,
       plan_tier_started_at: ['core', 'resident'].includes(tier) ? new Date().toISOString() : null,
+      custom_monthly_fee_pence: ['core', 'resident'].includes(tier) && custom_monthly_fee_pence != null ? custom_monthly_fee_pence : null,
     })
     .select()
     .single();
@@ -143,9 +144,27 @@ module.exports = async (req, res) => {
     });
     if (linkErr) throw linkErr;
     const { sendAccountCreatedEmail } = require('./_lib/email');
+    // Same real fee breakdown as invites.js — reserved_slots only stores
+    // room_id, so pricing_category needs fetching first. custom_monthly_
+    // fee_pence is a fixed negotiated figure, not derived from the rate
+    // card, so there's no working to show for it.
+    let feeBreakdown = null;
+    if (['core', 'resident'].includes(tier) && custom_monthly_fee_pence == null && slots.length > 0) {
+      const { calculateFeeBreakdown } = require('./_lib/gocardless');
+      const roomIds = [...new Set(slots.map(s => s.room_id).filter(Boolean))];
+      const { data: rooms } = await supabase.from('rooms').select('id, name, pricing_category').in('id', roomIds);
+      const roomById = new Map((rooms || []).map(r => [r.id, r]));
+      const slotsWithRoomInfo = slots.map(s => ({
+        ...s,
+        room_name: roomById.get(s.room_id) ? roomById.get(s.room_id).name : null,
+        pricing_category: roomById.get(s.room_id) ? roomById.get(s.room_id).pricing_category : null,
+      }));
+      feeBreakdown = calculateFeeBreakdown(tier, slotsWithRoomInfo);
+    }
     await sendAccountCreatedEmail({
       to: email, firstName: first_name,
       actionLink: linkData.properties.action_link,
+      feeBreakdown,
     });
     email_sent = true;
   } catch (e) {

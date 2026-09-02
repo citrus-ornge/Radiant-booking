@@ -433,8 +433,17 @@ async function sendExitNoticeReminder({ to, memberName, planTier, noticeDays, cy
 // the token-based Invite flow, this account already exists and is already
 // active; the link just lets them set their own password via the app's
 // existing password-recovery UI (the same one behind "Forgot password?").
-async function sendAccountCreatedEmail({ to, firstName, actionLink }) {
+async function sendAccountCreatedEmail({ to, firstName, actionLink, feeBreakdown }) {
   const resend = getResend();
+  // Team review: "the members area invite & add user doesn't have all the
+  // same required settings" — Add User can create the exact same
+  // Core/Resident practitioner, with the exact same real fee, as an
+  // invite can, but this email never once mentioned it. Same warm
+  // explanation as sendInvite() now has, not a second, different version
+  // of it.
+  const feeSection = feeBreakdown
+    ? `\nAs part of your membership, you'll have room time held just for you every week — here's exactly how that turns into your monthly fee, so there's never any surprise:\n\n${feeBreakdown.lines.map(l => `• ${l}`).join('\n')}\n\nA quick word on the maths, since it trips people up sometimes: we work out your weekly rate, then convert it into one steady monthly amount using the same calculation every membership runs on — 52 weeks in a year ÷ 12 months = 4.33 weeks per month. We use that instead of simply multiplying by 4, because months don't actually divide evenly into weeks, and a flat "times 4" would quietly shortchange you over the course of a year. It works out fair for everyone, every month, whatever your own pattern looks like:\n\n£${(feeBreakdown.weeklyTotalPence / 100).toFixed(2)}/week × 4.33 weeks/month = £${(feeBreakdown.monthlyPence / 100).toFixed(2)}/month\n`
+    : '';
   return resend.emails.send({
     from: FROM_EMAIL,
     to: [to],
@@ -442,7 +451,7 @@ async function sendAccountCreatedEmail({ to, firstName, actionLink }) {
     text: `Hi ${firstName},
 
 An account has been set up for you on the Radiant Booking Platform.
-
+${feeSection}
 Set your password to get started: ${actionLink}
 
 Once you've set a password, you can sign in any time with your email address.
