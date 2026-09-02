@@ -5847,7 +5847,26 @@ function updateBackButton(name) {
   btn.style.display = homeViews.includes(name) ? 'none' : 'inline-flex';
 }
 
+// Genuinely admin-exclusive views — deliberately a narrower, separate
+// list from adminViews above (which conflates "shown in the admin nav"
+// with "admin-exclusive content": several of its entries — messages,
+// my-documents, profile, settings — are legitimately reachable by both
+// roles, just rendering differently). Real, live bug found during View
+// As: showView() had no permission check at all, relying purely on the
+// admin nav button being hidden — anything else that could call
+// showView('bookings') (a stray dashboard stat-card link, a URL hash, or
+// simply the browser console) would render the full admin All Bookings
+// view, complete with every member's real bookings and prices, to
+// whoever was in the client role at the time. Checked first, before
+// anything else in showView runs.
+const ADMIN_ONLY_VIEWS = ['bookings', 'rooms', 'members', 'invite', 'staff-area', 'audit-log'];
+
 function showView(name, _fromHistory) {
+  if (currentRole !== 'admin' && ADMIN_ONLY_VIEWS.includes(name)) {
+    console.error(`Blocked: showView('${name}') called outside the admin role`);
+    showClientView('my-bookings');
+    return;
+  }
   _activateView(name, adminViews, '#admin-nav');
   if (name === 'settings') loadNotificationSettings();
   if (name === 'notifications') markNotificationsSeen();
