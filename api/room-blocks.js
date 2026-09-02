@@ -35,33 +35,63 @@ module.exports = async (req, res) => {
     const { data, error } = await supabase
       .from('room_blocks')
       .select(isAdmin
-        ? 'id, room_id, start_time, end_time, reason, is_private, created_at, room:rooms(id, name), created_by_member:members!room_blocks_created_by_fkey(first_name, last_name)'
-        : 'id, room_id, start_time, end_time')
-      .order('start_time', { ascending: false });
+        ? 'id, room_id, start_time, end_time, day_of_week, time_start, time_end, interval_weeks, anchor_date, recurrence_end_date, reason, is_private, created_at, room:rooms(id, name), created_by_member:members!room_blocks_created_by_fkey(first_name, last_name)'
+        : 'id, room_id, start_time, end_time, day_of_week, time_start, time_end, interval_weeks, anchor_date, recurrence_end_date')
+      .order('created_at', { ascending: false });
     if (error) return res.status(500).json({ error: error.message });
     return res.status(200).json({ blocks: data });
   }
 
   if (req.method === 'POST') {
     if (requester.user_type !== 'administrator') return res.status(403).json({ error: 'Only Staff & Admin can block out a room' });
-    const { room_id, start_time, end_time, reason, is_private } = req.body || {};
-    if (!room_id || !start_time || !end_time) {
-      return res.status(400).json({ error: 'room_id, start_time and end_time are required' });
+    const { room_id, start_time, end_time, day_of_week, time_start, time_end, interval_weeks, anchor_date, recurrence_end_date, reason, is_private } = req.body || {};
+    if (!room_id) return res.status(400).json({ error: 'room_id is required' });
+
+    // Team review: "can we have recurring block" — same day_of_week/
+    // interval_weeks/anchor_date shape as member_recurring_slots,
+    // reusing isSlotOccurrenceIncluded rather than inventing a second
+    // recurrence system.
+    const isRecurring = !!day_of_week;
+    const insertRow = { room_id, reason: reason || null, is_private: !!is_private, created_by: requester.id };
+
+    if (isRecurring) {
+      if (!time_start || !time_end) return res.status(400).json({ error: 'time_start and time_end are required for a recurring block' });
+      if (time_end <= time_start) return res.status(400).json({ error: 'time_end must be after time_start' });
+      const intervalWeeksNum = interval_weeks != null ? parseInt(interval_weeks, 10) : 1;
+      if (!Number.isInteger(intervalWeeksNum) || intervalWeeksNum < 1 || intervalWeeksNum > 12) {
+        return res.status(400).json({ error: 'interval_weeks must be a whole number between 1 and 12' });
+      }
+      if (intervalWeeksNum > 1) {
+        if (!anchor_date) return res.status(400).json({ error: 'anchor_date (the first occurrence) is required for a block that repeats every ' + intervalWeeksNum + ' weeks' });
+        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const anchorDayName = dayNames[new Date(anchor_date + 'T00:00:00Z').getUTCDay()];
+        if (anchorDayName !== day_of_week) {
+          return res.status(400).json({ error: `anchor_date (${anchor_date}) falls on a ${anchorDayName}, not ${day_of_week}` });
+        }
+      }
+      Object.assign(insertRow, {
+        day_of_week, time_start, time_end,
+        interval_weeks: intervalWeeksNum,
+        anchor_date: intervalWeeksNum > 1 ? anchor_date : null,
+        recurrence_end_date: recurrence_end_date || null,
+      });
+    } else {
+      if (!start_time || !end_time) return res.status(400).json({ error: 'start_time and end_time are required for a one-off block' });
+      if (new Date(end_time) <= new Date(start_time)) return res.status(400).json({ error: 'end_time must be after start_time' });
+      Object.assign(insertRow, { start_time, end_time });
     }
-    if (new Date(end_time) <= new Date(start_time)) {
-      return res.status(400).json({ error: 'end_time must be after start_time' });
-    }
+
     const { data: block, error } = await supabase
       .from('room_blocks')
-      .insert({ room_id, start_time, end_time, reason: reason || null, is_private: !!is_private, created_by: requester.id })
-      .select('id, room_id, start_time, end_time, reason, is_private, created_at, room:rooms(id, name)')
+      .insert(insertRow)
+      .select('id, room_id, start_time, end_time, day_of_week, time_start, time_end, interval_weeks, anchor_date, recurrence_end_date, reason, is_private, created_at, room:rooms(id, name)')
       .single();
     if (error) return res.status(500).json({ error: error.message });
 
     await logAudit({
       actorId: requester.id, actorName: `${requester.first_name || ''} ${requester.last_name || ''}`.trim() || requester.email,
       action: 'room_block.created', entityType: 'room', entityId: room_id,
-      details: { start_time, end_time, reason, is_private: !!is_private },
+      details: isRecurring ? { day_of_week, time_start, time_end, interval_weeks, reason, is_private: !!is_private } : { start_time, end_time, reason, is_private: !!is_private },
     });
 
     return res.status(200).json({ block });

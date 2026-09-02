@@ -4,7 +4,7 @@ const { isNotificationEnabled } = require('./_lib/notificationSettings');
 const { createCalendarEvent, TEAM_CALENDAR_EMAIL } = require('./_lib/google');
 const { requireAuth } = require('./_lib/auth');
 const { checkRateLimit } = require('./_lib/rateLimit');
-const { calculateSessionChargeInPence, isIncludedInMembershipFee } = require('./_lib/pricing');
+const { calculateSessionChargeInPence, isIncludedInMembershipFee, isSlotOccurrenceIncluded } = require('./_lib/pricing');
 const { generateBookingIcs, bookingIcsUid } = require('./_lib/ics');
 // _lib/gocardless is deliberately NOT required at the top of this file.
 // It's only needed for the one payment-attempt branch inside POST, and
@@ -222,23 +222,43 @@ module.exports = async (req, res) => {
 
     // Admin room block hard-check — team review: "the ability for admin
     // only to block out any slot... this is for admin the ability to
-    // just book timeout" for events, maintenance, closures. Hard block,
-    // confirmed directly: "members literally cannot book over it" — this
-    // is the actual enforcement; nothing client-side can be trusted to
-    // stop a direct API call on its own.
-    const { data: blockClashes, error: blockErr } = await supabase
+    // just book timeout" for events, maintenance, closures, and "can we
+    // have recurring block" — a block can be one-off (start_time/end_time)
+    // or recurring (day_of_week/time_start/time_end/interval_weeks/
+    // anchor_date, same shape as member_recurring_slots, reusing
+    // isSlotOccurrenceIncluded rather than a second recurrence system).
+    // Hard block, confirmed directly: "members literally cannot book over
+    // it" — this is the actual enforcement; nothing client-side can be
+    // trusted to stop a direct API call on its own.
+    const { data: roomBlocksForCheck, error: rbFetchErr } = await supabase
       .from('room_blocks')
-      .select('id, reason, is_private')
-      .eq('room_id', room_id)
-      .lt('start_time', end_time)
-      .gt('end_time', start_time);
-    if (blockErr) return res.status(500).json({ error: blockErr.message });
-    if (blockClashes && blockClashes.length > 0) {
+      .select('id, start_time, end_time, day_of_week, time_start, time_end, interval_weeks, anchor_date, recurrence_end_date, reason, is_private')
+      .eq('room_id', room_id);
+    if (rbFetchErr) return res.status(500).json({ error: rbFetchErr.message });
+
+    const bookingStartLocal = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', weekday: 'long', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(start_time));
+    const bookingDayName = bookingStartLocal.find(p => p.type === 'weekday').value;
+    const bookingStartHM = `${bookingStartLocal.find(p => p.type === 'hour').value}:${bookingStartLocal.find(p => p.type === 'minute').value}`;
+    const bookingEndLocal = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(end_time));
+    const bookingEndHM = `${bookingEndLocal.find(p => p.type === 'hour').value}:${bookingEndLocal.find(p => p.type === 'minute').value}`;
+
+    const matchedBlock = (roomBlocksForCheck || []).find(rb => {
+      if (!rb.day_of_week) {
+        // One-off block: plain timestamp overlap.
+        return new Date(rb.start_time) < new Date(end_time) && new Date(rb.end_time) > new Date(start_time);
+      }
+      // Recurring block: day must match, then the daily time window must
+      // overlap, then this specific week must actually be an occurrence.
+      if (rb.day_of_week !== bookingDayName) return false;
+      if (!(bookingStartHM < rb.time_end && bookingEndHM > rb.time_start)) return false;
+      if (rb.recurrence_end_date && new Date(start_time) > new Date(rb.recurrence_end_date + 'T23:59:59')) return false;
+      return isSlotOccurrenceIncluded(rb, start_time);
+    });
+    if (matchedBlock) {
       // Reason only ever shown to admins making the booking themselves —
       // a non-admin gets a plain "unavailable", matching is_private's
       // intent even in this error message, not just in the calendar view.
-      const block = blockClashes[0];
-      const reasonSuffix = (isAdmin && block.reason && !block.is_private) ? `: ${block.reason}` : '';
+      const reasonSuffix = (isAdmin && matchedBlock.reason && !matchedBlock.is_private) ? `: ${matchedBlock.reason}` : '';
       return res.status(409).json({ error: `This room is unavailable for part of that time window${reasonSuffix}.` });
     }
 

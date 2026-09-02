@@ -1428,9 +1428,9 @@ textarea.form-input { resize: vertical; }
         <div class="card">
           <div class="table-scroll">
           <table>
-            <thead><tr><th>Room</th><th>Start</th><th>End</th><th>Reason</th><th>Visibility</th><th>Added by</th><th></th></tr></thead>
+            <thead><tr><th>Room</th><th>When</th><th>Reason</th><th>Visibility</th><th>Added by</th><th></th></tr></thead>
             <tbody id="room-blocks-table">
-              <tr><td colspan="7" style="text-align:center;color:var(--r-warm-gray);padding:20px;">Loading…</td></tr>
+              <tr><td colspan="6" style="text-align:center;color:var(--r-warm-gray);padding:20px;">Loading…</td></tr>
             </tbody>
           </table>
           </div>
@@ -2668,9 +2668,40 @@ textarea.form-input { resize: vertical; }
       <div class="form-row"><label class="form-label">Room</label>
         <select class="form-input" id="rb-room"></select>
       </div>
-      <div class="form-two">
-        <div class="form-row"><label class="form-label">Start</label><input type="datetime-local" class="form-input" id="rb-start"></div>
-        <div class="form-row"><label class="form-label">End</label><input type="datetime-local" class="form-input" id="rb-end"></div>
+      <div class="form-row">
+        <label class="form-label">Type</label>
+        <select class="form-input" id="rb-recurring-toggle" onchange="toggleRoomBlockRecurring()">
+          <option value="0">One-off — a specific date and time</option>
+          <option value="1">Recurring — every week (or every N weeks)</option>
+        </select>
+      </div>
+      <div id="rb-oneoff-fields">
+        <div class="form-two">
+          <div class="form-row"><label class="form-label">Start</label><input type="datetime-local" class="form-input" id="rb-start"></div>
+          <div class="form-row"><label class="form-label">End</label><input type="datetime-local" class="form-input" id="rb-end"></div>
+        </div>
+      </div>
+      <div id="rb-recurring-fields" style="display:none;">
+        <div class="form-two">
+          <select class="form-input" id="rb-day">
+            <option value="">Day…</option>
+            <option>Monday</option><option>Tuesday</option><option>Wednesday</option>
+            <option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option>
+          </select>
+          <div></div>
+        </div>
+        <div class="form-two" style="margin-top:8px;">
+          <div class="form-row" style="margin:0;"><label class="form-label" style="font-weight:400;">Start time</label><input type="time" class="form-input" id="rb-time-start"></div>
+          <div class="form-row" style="margin:0;"><label class="form-label" style="font-weight:400;">End time</label><input type="time" class="form-input" id="rb-time-end"></div>
+        </div>
+        <div class="form-two" style="margin-top:8px;">
+          <div class="form-row" style="margin:0;">
+            <label class="form-label" style="font-weight:400;">Repeats every (weeks)</label>
+            <input type="number" class="form-input" id="rb-interval" min="1" max="12" value="1" onchange="toggleRoomBlockAnchorRow()">
+          </div>
+          <div class="form-row" style="margin:0;" id="rb-anchor-row"><label class="form-label" style="font-weight:400;">First occurrence</label><input type="date" class="form-input" id="rb-anchor"></div>
+        </div>
+        <div class="form-row" style="margin-top:8px;"><label class="form-label" style="font-weight:400;">Stop repeating after <span style="color:var(--r-warm-gray);">(optional)</span></label><input type="date" class="form-input" id="rb-recurrence-end"></div>
       </div>
       <div class="form-row"><label class="form-label">Reason <span style="font-weight:400;color:var(--r-warm-gray);">(optional)</span></label><input type="text" class="form-input" id="rb-reason" placeholder="e.g. Staff Christmas party, room re-carpeting"></div>
       <div class="form-row">
@@ -2989,14 +3020,24 @@ function roomHasClash(roomId, startISO, endISO) {
   );
   if (bookingClash) return true;
   // Admin room blocks — team review: "hard block, members literally
-  // cannot book over it". Extending this single shared function covers
-  // both the client-facing grid and admin's New Booking dropdown at
-  // once, since both already call it for the existing booking-clash
-  // check.
-  return (state.roomBlocks || []).some(rb =>
-    rb.room_id === roomId &&
-    new Date(rb.start_time) < new Date(endISO) && new Date(rb.end_time) > new Date(startISO)
-  );
+  // cannot book over it", plus "can we have recurring block". Client-side
+  // mirror of the exact same dual-shape check in api/bookings.js — must
+  // stay in sync.
+  return (state.roomBlocks || []).some(rb => {
+    if (rb.room_id !== roomId) return false;
+    if (!rb.day_of_week) {
+      return new Date(rb.start_time) < new Date(endISO) && new Date(rb.end_time) > new Date(startISO);
+    }
+    const startParts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', weekday: 'long', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(startISO));
+    const dayName = startParts.find(p => p.type === 'weekday').value;
+    const startHM = `${startParts.find(p => p.type === 'hour').value}:${startParts.find(p => p.type === 'minute').value}`;
+    const endParts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(endISO));
+    const endHM = `${endParts.find(p => p.type === 'hour').value}:${endParts.find(p => p.type === 'minute').value}`;
+    if (rb.day_of_week !== dayName) return false;
+    if (!(startHM < rb.time_end && endHM > rb.time_start)) return false;
+    if (rb.recurrence_end_date && new Date(startISO) > new Date(rb.recurrence_end_date + 'T23:59:59')) return false;
+    return isSlotOccurrenceIncluded(rb, startISO);
+  });
 }
 
 // Ad-hoc "Book a Room" Half day/Full day now mean the exact same fixed
@@ -8273,28 +8314,76 @@ async function addRoom() {
 function openRoomBlockModal() {
   const sel = document.getElementById('rb-room');
   sel.innerHTML = state.rooms.map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join('');
+  document.getElementById('rb-recurring-toggle').value = '0';
   document.getElementById('rb-start').value = '';
   document.getElementById('rb-end').value = '';
+  document.getElementById('rb-day').value = '';
+  document.getElementById('rb-time-start').value = '';
+  document.getElementById('rb-time-end').value = '';
+  document.getElementById('rb-interval').value = '1';
+  document.getElementById('rb-anchor').value = '';
+  document.getElementById('rb-recurrence-end').value = '';
   document.getElementById('rb-reason').value = '';
   document.getElementById('rb-private').checked = false;
+  toggleRoomBlockRecurring();
+  toggleRoomBlockAnchorRow();
   openModal('block-room-modal');
+}
+
+// Team review: "can we have recurring block" — same day/interval/anchor
+// pattern as the member recurring-slot builder, just free-form start/end
+// time rather than the fixed Half day/Full day blocks (deliberately —
+// "doesn't need to have the hour restriction" for admin's own use).
+function toggleRoomBlockRecurring() {
+  const isRecurring = document.getElementById('rb-recurring-toggle').value === '1';
+  document.getElementById('rb-oneoff-fields').style.display = isRecurring ? 'none' : 'block';
+  document.getElementById('rb-recurring-fields').style.display = isRecurring ? 'block' : 'none';
+}
+
+function toggleRoomBlockAnchorRow() {
+  const interval = parseInt(document.getElementById('rb-interval').value, 10) || 1;
+  document.getElementById('rb-anchor-row').style.display = interval > 1 ? 'block' : 'none';
 }
 
 async function submitRoomBlock() {
   const room_id = document.getElementById('rb-room').value;
-  const startLocal = document.getElementById('rb-start').value;
-  const endLocal = document.getElementById('rb-end').value;
   const reason = document.getElementById('rb-reason').value.trim();
   const is_private = document.getElementById('rb-private').checked;
-  if (!room_id || !startLocal || !endLocal) { showToast('⚠ Pick a room, start and end time'); return; }
-  const start_time = new Date(startLocal).toISOString();
-  const end_time = new Date(endLocal).toISOString();
-  if (new Date(end_time) <= new Date(start_time)) { showToast('⚠ End time must be after start time'); return; }
+  const isRecurring = document.getElementById('rb-recurring-toggle').value === '1';
+  if (!room_id) { showToast('⚠ Pick a room'); return; }
+
+  let payload = { room_id, reason, is_private };
+
+  if (isRecurring) {
+    const day_of_week = document.getElementById('rb-day').value;
+    const time_start = document.getElementById('rb-time-start').value;
+    const time_end = document.getElementById('rb-time-end').value;
+    const interval_weeks = parseInt(document.getElementById('rb-interval').value, 10) || 1;
+    const anchor_date = document.getElementById('rb-anchor').value;
+    const recurrence_end_date = document.getElementById('rb-recurrence-end').value;
+    if (!day_of_week || !time_start || !time_end) { showToast('⚠ Pick a day, start time and end time'); return; }
+    if (time_end <= time_start) { showToast('⚠ End time must be after start time'); return; }
+    if (interval_weeks > 1 && !anchor_date) { showToast(`⚠ Pick the first occurrence date for a block that repeats every ${interval_weeks} weeks`); return; }
+    if (interval_weeks > 1) {
+      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const anchorDayName = dayNames[new Date(anchor_date + 'T00:00:00Z').getUTCDay()];
+      if (anchorDayName !== day_of_week) { showToast(`⚠ ${anchor_date} is a ${anchorDayName}, not a ${day_of_week}`); return; }
+    }
+    Object.assign(payload, { day_of_week, time_start, time_end, interval_weeks, anchor_date: anchor_date || null, recurrence_end_date: recurrence_end_date || null });
+  } else {
+    const startLocal = document.getElementById('rb-start').value;
+    const endLocal = document.getElementById('rb-end').value;
+    if (!startLocal || !endLocal) { showToast('⚠ Pick a start and end time'); return; }
+    const start_time = new Date(startLocal).toISOString();
+    const end_time = new Date(endLocal).toISOString();
+    if (new Date(end_time) <= new Date(start_time)) { showToast('⚠ End time must be after start time'); return; }
+    Object.assign(payload, { start_time, end_time });
+  }
 
   const btn = document.getElementById('rb-submit-btn');
   btn.disabled = true;
   try {
-    await api('/room-blocks', { method: 'POST', body: JSON.stringify({ room_id, start_time, end_time, reason, is_private }) });
+    await api('/room-blocks', { method: 'POST', body: JSON.stringify(payload) });
     closeModal('block-room-modal');
     showToast('✓ Room blocked');
     await loadAppData();
@@ -8309,18 +8398,21 @@ async function submitRoomBlock() {
 function renderRoomBlocksTable() {
   const tbody = document.getElementById('room-blocks-table');
   if (!tbody) return;
-  const blocks = (state.roomBlocks || []).slice().sort((a, b) => new Date(b.start_time) - new Date(a.start_time));
+  const blocks = (state.roomBlocks || []).slice().sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   if (blocks.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--r-warm-gray);padding:20px;">No room blocks set.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--r-warm-gray);padding:20px;">No room blocks set.</td></tr>`;
     return;
   }
   tbody.innerHTML = blocks.map(b => {
     const creatorName = b.created_by_member ? `${b.created_by_member.first_name || ''} ${b.created_by_member.last_name || ''}`.trim() : '—';
+    const isRecurring = !!b.day_of_week;
+    const whenCell = isRecurring
+      ? `${esc(b.day_of_week)}, ${esc(fmtSlotTime(b.time_start))}–${esc(fmtSlotTime(b.time_end))}${esc(slotFrequencyLabel(b))}${b.recurrence_end_date ? ` · until ${esc(b.recurrence_end_date)}` : ''}`
+      : `${esc(fmtDateTime(b.start_time))} – ${esc(fmtDateTime(b.end_time).split(' · ')[1] || '')}`;
     return `
     <tr>
       <td>${esc(b.room ? b.room.name : '—')}</td>
-      <td>${esc(fmtDateTime(b.start_time))}</td>
-      <td>${esc(fmtDateTime(b.end_time))}</td>
+      <td>${whenCell}</td>
       <td>${esc(b.reason || '—')}</td>
       <td>${b.is_private ? '🔒 Private' : 'Visible'}</td>
       <td>${esc(creatorName)}</td>
