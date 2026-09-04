@@ -6850,13 +6850,32 @@ let currentThreadWith = null;
 let lastKnownUnreadTotal = null; // null until first check, so we never chime on initial login load
 let messagePollHandle = null;
 
+// Real bug found 4 Sep 2026: playMessageChime() used to create a brand
+// new AudioContext every call and never resume() it. Browsers require an
+// AudioContext to be resumed within a genuine user gesture before it'll
+// produce audible sound — since the chime fires from a background poll
+// timer, not a click, the context stayed permanently suspended and
+// silently produced nothing. No error thrown (nothing to catch), just
+// zero sound, every time. Fixed by keeping ONE persistent context and
+// unlocking it on the very first real click/keypress anywhere on the
+// page — by the time a chime actually needs to play later, it's already
+// running.
+let _chimeCtx = null;
+function getChimeContext() {
+  if (!_chimeCtx) _chimeCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return _chimeCtx;
+}
+document.addEventListener('click', () => { try { getChimeContext().resume(); } catch (e) {} }, { once: true, capture: true });
+document.addEventListener('keydown', () => { try { getChimeContext().resume(); } catch (e) {} }, { once: true, capture: true });
+
 // A short two-tone bell, synthesized rather than an audio file — no asset
 // to host, no licensing to think about, works everywhere the app already
 // does. Reused wherever a "new message" sound is needed.
 function playMessageChime() {
   if (localStorage.getItem('radiant_chime_muted') === 'true') return;
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = getChimeContext();
+    if (ctx.state === 'suspended') ctx.resume();
     const now = ctx.currentTime;
     [[880, 0], [1108.73, 0.09]].forEach(([freq, delay]) => {
       const osc = ctx.createOscillator();
@@ -6916,7 +6935,11 @@ function startMessagePolling() {
   if (messagePollHandle) return;
   updateChimeToggleButton();
   checkForNewMessages();
-  messagePollHandle = setInterval(checkForNewMessages, 30000);
+  // Real gap found 4 Sep 2026: 30s made a genuine "chat" feel sluggish —
+  // reporting up to 20s to notice a reply. 8s is a reasonable middle
+  // ground (a real push/Realtime rewrite would be the proper long-term
+  // fix, but this is a safe, low-risk improvement in the meantime).
+  messagePollHandle = setInterval(checkForNewMessages, 8000);
 }
 
 async function refreshMessageBadge() {
@@ -7006,10 +7029,29 @@ async function sendThreadReply() {
   const body = input.value.trim();
   if (!body || !currentThreadWith) return;
   input.value = '';
+
+  // Real gap found 4 Sep 2026: this used to wait on POST /messages, THEN a
+  // full GET refetch of the whole thread, before the sender's own message
+  // appeared at all — two sequential round trips just to see what you
+  // just typed. Render it immediately; openThread's refetch below still
+  // runs to pick up the real id/timestamp and anything the other person
+  // sent in the meantime, but the sender isn't staring at nothing while
+  // that happens.
+  const container = document.getElementById('thread-messages');
+  const placeholder = document.createElement('div');
+  placeholder.style.cssText = 'align-self:flex-end;max-width:75%;opacity:0.6;';
+  placeholder.innerHTML = `<div style="background:var(--r-gold-light);padding:10px 14px;border-radius:12px;font-size:13.5px;">${esc(body)}</div>
+    <div style="font-size:11px;color:var(--r-warm-gray);margin-top:3px;text-align:right;">Sending…</div>`;
+  if (container.querySelector('div[style*="warm-gray"]')?.textContent === 'No messages yet — say hello!') container.innerHTML = '';
+  container.appendChild(placeholder);
+  container.scrollTop = container.scrollHeight;
+
   try {
     await api('/messages', { method: 'POST', body: JSON.stringify({ recipient_id: currentThreadWith, body }) });
     openThread(currentThreadWith);
   } catch (e) {
+    placeholder.remove();
+    input.value = body; // give it back so nothing typed is lost
     showToast('⚠ ' + e.message);
   }
 }
