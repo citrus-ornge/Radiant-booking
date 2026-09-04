@@ -2367,6 +2367,7 @@ textarea.form-input { resize: vertical; }
           <input type="date" class="form-input" id="mm-reserved-starts-from">
         </div>
         <button type="button" class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="addRecurringSlot()">+ Add this slot</button>
+        <button type="button" class="btn btn-outline btn-sm" style="margin-top:8px;margin-left:6px;" onclick="syncMemberRecurringBookings()">Sync bookings for these slots</button>
       </div>
       <div class="form-row" id="mm-compliance-docs-row" style="display:none;background:var(--r-surface2);border-radius:8px;padding:12px 14px;">
         <label class="form-label">Compliance Documents</label>
@@ -3962,6 +3963,21 @@ async function addRecurringSlot() {
     resetSlotIntervalFields('mm');
     await loadRecurringSlotsForModal(memberId);
     showToast('✓ Slot added');
+  } catch (e) {
+    showToast('⚠ ' + e.message);
+  }
+}
+
+async function syncMemberRecurringBookings() {
+  const memberId = document.getElementById('mm-id').value;
+  try {
+    const result = await api('/sync-recurring-bookings', { method: 'POST', body: JSON.stringify({ member_id: memberId }) });
+    const parts = [];
+    if (result.created.length > 0) parts.push(`${result.created.length} booking${result.created.length > 1 ? 's' : ''} created`);
+    if (result.skippedClashes.length > 0) parts.push(`${result.skippedClashes.length} skipped (room already booked)`);
+    if (result.failed.length > 0) parts.push(`${result.failed.length} failed`);
+    showToast(parts.length > 0 ? `✓ ${parts.join(', ')}` : 'Already up to date — nothing new to create');
+    await loadRecurringSlotsForModal(memberId);
   } catch (e) {
     showToast('⚠ ' + e.message);
   }

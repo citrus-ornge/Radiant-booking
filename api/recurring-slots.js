@@ -2,6 +2,7 @@ const { getSupabase } = require('./_lib/supabase');
 const { requireAuth } = require('./_lib/auth');
 const { logAudit } = require('./_lib/audit');
 const { validateSessionBlock } = require('./_lib/sessionBlocks');
+const { syncUpcomingSlotBookings } = require('./_lib/recurringBookingSync');
 
 // GET /api/recurring-slots?member_id=X  — list a member's recurring slots
 // POST /api/recurring-slots { member_id, day_of_week, time_start, time_end, room_id }  — admin only, add a slot
@@ -116,6 +117,7 @@ module.exports = async (req, res) => {
     });
 
     await syncSubscriptionAfterSlotChange(supabase, member_id);
+    await syncUpcomingBookingsAfterSlotChange(supabase, member_id);
 
     return res.status(200).json({ slot });
   }
@@ -125,7 +127,7 @@ module.exports = async (req, res) => {
     const slotId = req.query.id;
     if (!slotId) return res.status(400).json({ error: 'id is required' });
 
-    const { data: existing, error: findErr } = await supabase.from('member_recurring_slots').select('member_id, day_of_week').eq('id', slotId).maybeSingle();
+    const { data: existing, error: findErr } = await supabase.from('member_recurring_slots').select('member_id, day_of_week, time_start, time_end, room_id').eq('id', slotId).maybeSingle();
     if (findErr) return res.status(500).json({ error: findErr.message });
     if (!existing) return res.status(404).json({ error: 'Slot not found' });
 
@@ -140,6 +142,41 @@ module.exports = async (req, res) => {
       entityId: existing.member_id,
       details: { day_of_week: existing.day_of_week },
     });
+
+    // The slot itself is gone, but any future real bookings that were
+    // auto-created FROM it (see api/_lib/recurringBookingSync.js) would
+    // otherwise keep sitting there blocking the room for a slot that no
+    // longer exists — cancel exactly those (this member, this room, still
+    // in the future, matching this slot's day/time). Deliberately narrow
+    // rather than "any future booking for this member" — a genuine extra
+    // booking they made themselves, even one that happens to share this
+    // room, must not get swept up in a slot removal.
+    if (existing.room_id) {
+      const { data: futureOccurrences } = await supabase
+        .from('bookings')
+        .select('id, start_time')
+        .eq('member_id', existing.member_id)
+        .eq('room_id', existing.room_id)
+        .neq('status', 'cancelled')
+        .gt('start_time', new Date().toISOString());
+      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const matching = (futureOccurrences || []).filter(b => {
+        const d = new Date(b.start_time);
+        if (dayNames[d.getUTCDay()] !== existing.day_of_week) return false;
+        const hm = d.toISOString().slice(11, 19);
+        return hm === existing.time_start.slice(0, 8) || hm === existing.time_start;
+      });
+      if (matching.length > 0) {
+        await supabase.from('bookings').update({ status: 'cancelled' }).in('id', matching.map(b => b.id));
+        await logAudit({
+          actorId: requester.id,
+          actorName: `${requester.first_name || ''} ${requester.last_name || ''}`.trim() || requester.email,
+          action: 'booking.auto_cancelled_slot_removed',
+          entityType: 'member', entityId: existing.member_id,
+          details: { count: matching.length, dates: matching.map(b => b.start_time) },
+        });
+      }
+    }
 
     await syncSubscriptionAfterSlotChange(supabase, existing.member_id);
 
@@ -185,5 +222,25 @@ async function syncSubscriptionAfterSlotChange(supabase, memberId) {
     });
   } else if (result.failed) {
     console.error(`Failed to sync subscription amount for ${memberName} (${member.id}) after slot change:`, result.error);
+  }
+}
+
+// Populates the rolling window of real, calendar-blocking bookings for a
+// member's slots the moment one is added — see
+// api/_lib/recurringBookingSync.js for why this exists at all (a recurring
+// slot never used to create any actual booking beyond whichever single
+// week someone happened to book by hand). Errors logged, not surfaced to
+// the admin's request — adding the slot itself already succeeded, and
+// clashes/failures here are things to review, not reasons to fail the add.
+async function syncUpcomingBookingsAfterSlotChange(supabase, memberId) {
+  const { data: member, error } = await supabase.from('members').select('id, plan_tier').eq('id', memberId).maybeSingle();
+  if (error || !member) return;
+  try {
+    const result = await syncUpcomingSlotBookings(supabase, member);
+    if (result.skippedClashes.length > 0 || result.failed.length > 0) {
+      console.error(`Recurring slot sync for member ${memberId}: ${result.created.length} created, ${result.skippedClashes.length} clashes skipped, ${result.failed.length} failed`, result.skippedClashes, result.failed);
+    }
+  } catch (e) {
+    console.error(`Recurring slot booking sync failed for member ${memberId}:`, e.message);
   }
 }
