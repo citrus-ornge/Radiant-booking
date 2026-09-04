@@ -102,10 +102,16 @@ module.exports = { calculateSessionChargeInPence, RATES_PENCE_BY_DURATION_MINUTE
 // matching the exact old "every single week" behaviour for any slot that
 // hasn't set a different interval.
 function isSlotOccurrenceIncluded(slot, dateOrISOString) {
+  const target = new Date(dateOrISOString);
+  // starts_from is a genuine lower bound (the first real date this slot is
+  // in effect from) — distinct from anchor_date below, which only sets
+  // which weeks match an every-N-week pattern's parity and has no lower
+  // bound of its own. Checked first, and independently of interval_weeks,
+  // since a plain weekly slot can have a starts_from too.
+  if (slot.starts_from && target < new Date(slot.starts_from + 'T00:00:00Z')) return false;
   if (!slot.interval_weeks || slot.interval_weeks <= 1) return true;
   if (!slot.anchor_date) return true; // shouldn't happen given validation, but don't wrongly exclude on missing data
   const anchor = new Date(slot.anchor_date + 'T00:00:00Z');
-  const target = new Date(dateOrISOString);
   const msPerWeek = 7 * 24 * 3600 * 1000;
   const weeksBetween = Math.round((target - anchor) / msPerWeek);
   return ((weeksBetween % slot.interval_weeks) + slot.interval_weeks) % slot.interval_weeks === 0;

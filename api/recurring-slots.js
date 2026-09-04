@@ -32,7 +32,7 @@ module.exports = async (req, res) => {
     }
     const { data, error } = await supabase
       .from('member_recurring_slots')
-      .select('id, day_of_week, time_start, time_end, room_id, interval_weeks, anchor_date, room:rooms(id, name)')
+      .select('id, day_of_week, time_start, time_end, room_id, interval_weeks, anchor_date, starts_from, room:rooms(id, name)')
       .eq('member_id', memberId)
       .order('day_of_week');
     if (error) return res.status(500).json({ error: error.message });
@@ -41,7 +41,7 @@ module.exports = async (req, res) => {
 
   if (req.method === 'POST') {
     if (!isAdmin) return res.status(403).json({ error: 'Only Staff & Admin can set recurring slots' });
-    const { member_id, day_of_week, time_start, time_end, room_id, interval_weeks, anchor_date } = req.body || {};
+    const { member_id, day_of_week, time_start, time_end, room_id, interval_weeks, anchor_date, starts_from } = req.body || {};
     if (!member_id || !day_of_week || !time_start || !time_end) {
       return res.status(400).json({ error: 'member_id, day_of_week, time_start and time_end are required' });
     }
@@ -77,14 +77,32 @@ module.exports = async (req, res) => {
       anchorDateValue = anchor_date;
     }
 
+    // starts_from (optional): the first real calendar date this slot is in
+    // effect from — e.g. a member changing days who wants their new slot
+    // to genuinely start next Monday, not retroactively cover this week.
+    // Distinct from anchor_date above, which only sets every-N-week parity.
+    let startsFromValue = null;
+    if (starts_from) {
+      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const startsFromDayName = dayNames[new Date(starts_from + 'T00:00:00Z').getUTCDay()];
+      if (startsFromDayName !== day_of_week) {
+        return res.status(400).json({ error: `starts_from (${starts_from}) falls on a ${startsFromDayName}, not ${day_of_week} — pick the actual first ${day_of_week} this slot starts from` });
+      }
+      const todayStr = new Date().toISOString().slice(0, 10);
+      if (starts_from < todayStr) {
+        return res.status(400).json({ error: `starts_from (${starts_from}) is in the past` });
+      }
+      startsFromValue = starts_from;
+    }
+
     const { data: target, error: targetErr } = await supabase.from('members').select('id, first_name, last_name, plan_tier').eq('id', member_id).maybeSingle();
     if (targetErr) return res.status(500).json({ error: targetErr.message });
     if (!target) return res.status(404).json({ error: 'Member not found' });
 
     const { data: slot, error } = await supabase
       .from('member_recurring_slots')
-      .insert({ member_id, day_of_week, time_start, time_end, room_id: room_id || null, interval_weeks: intervalWeeksNum, anchor_date: anchorDateValue })
-      .select('id, day_of_week, time_start, time_end, room_id, interval_weeks, anchor_date, room:rooms(id, name)')
+      .insert({ member_id, day_of_week, time_start, time_end, room_id: room_id || null, interval_weeks: intervalWeeksNum, anchor_date: anchorDateValue, starts_from: startsFromValue })
+      .select('id, day_of_week, time_start, time_end, room_id, interval_weeks, anchor_date, starts_from, room:rooms(id, name)')
       .single();
     if (error) return res.status(500).json({ error: error.message });
 
@@ -94,8 +112,10 @@ module.exports = async (req, res) => {
       action: 'recurring_slot.added',
       entityType: 'member',
       entityId: member_id,
-      details: { day_of_week, time_start, time_end, room_id, interval_weeks: intervalWeeksNum, anchor_date: anchorDateValue, target_name: `${target.first_name || ''} ${target.last_name || ''}`.trim() },
+      details: { day_of_week, time_start, time_end, room_id, interval_weeks: intervalWeeksNum, anchor_date: anchorDateValue, starts_from: startsFromValue, target_name: `${target.first_name || ''} ${target.last_name || ''}`.trim() },
     });
+
+    await syncSubscriptionAfterSlotChange(supabase, member_id);
 
     return res.status(200).json({ slot });
   }
@@ -121,8 +141,49 @@ module.exports = async (req, res) => {
       details: { day_of_week: existing.day_of_week },
     });
 
+    await syncSubscriptionAfterSlotChange(supabase, existing.member_id);
+
     return res.status(200).json({ deleted: true });
   }
 
   return res.status(405).json({ error: 'Method not allowed' });
 };
+
+// Real gap found 4 Sep 2026: adding/removing a recurring slot never used to
+// touch billing at all — the calendar and profile would show the new
+// schedule immediately, but an existing GoCardless subscription just kept
+// charging whatever it was already set to, forever. Called after every
+// add/remove so the fee actually matches the schedule the member can see.
+// Silent on skip/no-op (no existing subscription yet, fee unchanged,
+// Community/Flex) — only logs when the amount genuinely changes or the
+// GoCardless call fails, since those are the only outcomes worth an admin
+// knowing about.
+async function syncSubscriptionAfterSlotChange(supabase, memberId) {
+  const { data: member, error } = await supabase
+    .from('members')
+    .select('id, first_name, last_name, plan_tier, gocardless_subscription_id, custom_monthly_fee_pence')
+    .eq('id', memberId)
+    .maybeSingle();
+  if (error || !member) return;
+
+  let syncMembershipSubscriptionAmount;
+  try {
+    ({ syncMembershipSubscriptionAmount } = require('./_lib/gocardless'));
+  } catch (e) {
+    console.error(`Payments not configured — couldn't sync subscription amount for member ${memberId}:`, e.message);
+    return;
+  }
+
+  const result = await syncMembershipSubscriptionAmount(supabase, member);
+  const memberName = `${member.first_name || ''} ${member.last_name || ''}`.trim() || member.id;
+
+  if (result.updated) {
+    await logAudit({
+      actorId: null, actorName: 'System (slot change)', action: 'billing.subscription_amount_synced',
+      entityType: 'member', entityId: member.id,
+      details: { from_pence: result.fromPence, to_pence: result.toPence, trigger: 'recurring_slot_change' },
+    });
+  } else if (result.failed) {
+    console.error(`Failed to sync subscription amount for ${memberName} (${member.id}) after slot change:`, result.error);
+  }
+}

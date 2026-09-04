@@ -135,7 +135,7 @@ module.exports = async (req, res) => {
     if (['core', 'resident'].includes(tierMember.plan_tier)) {
       const { data: slots, error: slotsErr } = await supabase
         .from('member_recurring_slots')
-        .select('day_of_week, time_start, time_end, room_id, interval_weeks, anchor_date')
+        .select('day_of_week, time_start, time_end, room_id, interval_weeks, anchor_date, starts_from')
         .eq('member_id', tierMember.id || member_id);
       if (slotsErr) return res.status(500).json({ error: slotsErr.message });
       recurringSlots = slots || [];

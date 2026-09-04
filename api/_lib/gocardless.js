@@ -76,16 +76,24 @@ const WEEKS_PER_MONTH = 52 / 12; // 4.3333... — the standard, mathematically f
 async function calculateScheduleBasedMonthlyFeePence(supabase, member) {
   if (!['core', 'resident'].includes(member.plan_tier)) return null;
 
-  const { data: slots, error } = await supabase
+  const { data: allSlots, error } = await supabase
     .from('member_recurring_slots')
-    .select('time_start, time_end, interval_weeks, room:rooms(pricing_category)')
+    .select('time_start, time_end, interval_weeks, starts_from, room:rooms(pricing_category)')
     .eq('member_id', member.id);
-  if (error || !slots || slots.length === 0) {
+  if (error || !allSlots || allSlots.length === 0) {
     // Fallback for the edge case of a Core/Resident member with no
     // recurring slot on record at all (shouldn't happen — one is required
     // at invite time — but a flat fallback beats a zero/NaN subscription).
     return PLAN_TIER_MONTHLY_PENCE[member.plan_tier];
   }
+  // A slot with a future starts_from isn't part of the fee yet — it
+  // shouldn't be charged for before it's actually begun. Whatever runs
+  // syncMembershipSubscriptionAmount() periodically (the daily cron) will
+  // pick up the fee increase once that date arrives, same as any other
+  // schedule change.
+  const today = new Date().toISOString().slice(0, 10);
+  const slots = allSlots.filter(s => !s.starts_from || s.starts_from <= today);
+  if (slots.length === 0) return PLAN_TIER_MONTHLY_PENCE[member.plan_tier];
 
   const rates = WEEKLY_SLOT_RATES_PENCE[member.plan_tier];
   let weeklyTotalPence = 0;
@@ -313,7 +321,42 @@ async function ensureMembershipSubscription(supabase, member) {
   }
 }
 
-module.exports = { getGoCardlessClient, PLAN_TIER_MONTHLY_PENCE, readRawBody, createOneOffPayment, createMembershipSubscription, customerLinksFor, persistNewCustomerId, ensureMembershipSubscription, handleMandateBecameActive, reconcileMemberMandate, calculateScheduleBasedMonthlyFeePence, calculateOutstandingBalanceAtCancellation, calculateFeeBreakdown };
+// Real gap found 4 Sep 2026 while investigating a Direct Debit question:
+// editing a Core/Resident member's recurring slots (add/remove, via
+// api/recurring-slots.js) updates the calendar and their profile
+// immediately, but NEVER touched their existing GoCardless subscription —
+// if the new schedule is worth a different weekly total, the member goes
+// on being charged the OLD amount forever. This is the fix: recalculates
+// the real schedule-based fee and, if it's actually changed, updates the
+// live subscription to match. Idempotent (no-ops if the amount is already
+// correct) and safe to call after every slot add/remove, and again daily
+// from the safety-net cron in case a slot's starts_from date arrives with
+// nobody having touched anything that day.
+// Returns { skipped: true, reason } | { updated: true, fromPence, toPence } | { failed: true, error }.
+async function syncMembershipSubscriptionAmount(supabase, member) {
+  if (!['core', 'resident'].includes(member.plan_tier)) return { skipped: true, reason: 'not_eligible_tier' };
+  if (!member.gocardless_subscription_id) return { skipped: true, reason: 'no_subscription' };
+
+  const newAmountPence = member.custom_monthly_fee_pence != null
+    ? member.custom_monthly_fee_pence
+    : await calculateScheduleBasedMonthlyFeePence(supabase, member);
+  if (!newAmountPence) return { skipped: true, reason: 'not_eligible_tier' };
+
+  try {
+    const client = getGoCardlessClient();
+    const subscription = await client.subscriptions.find(member.gocardless_subscription_id);
+    const currentAmountPence = parseInt(subscription.amount, 10);
+    if (currentAmountPence === newAmountPence) return { skipped: true, reason: 'already_correct' };
+
+    await client.subscriptions.update(member.gocardless_subscription_id, { amount: String(newAmountPence) });
+    return { updated: true, fromPence: currentAmountPence, toPence: newAmountPence };
+  } catch (e) {
+    const detail = (e.errors && e.errors.length) ? e.errors.map(x => [x.field, x.message || x.reason].filter(Boolean).join(': ')).join('; ') : e.message;
+    return { failed: true, error: detail };
+  }
+}
+
+module.exports = { getGoCardlessClient, PLAN_TIER_MONTHLY_PENCE, readRawBody, createOneOffPayment, createMembershipSubscription, customerLinksFor, persistNewCustomerId, ensureMembershipSubscription, syncMembershipSubscriptionAmount, handleMandateBecameActive, reconcileMemberMandate, calculateScheduleBasedMonthlyFeePence, calculateOutstandingBalanceAtCancellation, calculateFeeBreakdown };
 
 // Team review: "so they see exactly how they are billed" — genuinely
 // dynamic, built from whichever real slots are passed in, not a

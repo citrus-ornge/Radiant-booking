@@ -2362,6 +2362,10 @@ textarea.form-input { resize: vertical; }
             <input type="date" class="form-input" id="mm-reserved-anchor">
           </div>
         </div>
+        <div style="margin-top:8px;">
+          <label class="form-label" style="font-size:10.5px;">Starts from <span style="font-weight:400;">(optional — leave blank to start immediately; use this when a member is changing days and the new slot shouldn't count until a specific future date)</span></label>
+          <input type="date" class="form-input" id="mm-reserved-starts-from">
+        </div>
         <button type="button" class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="addRecurringSlot()">+ Add this slot</button>
       </div>
       <div class="form-row" id="mm-compliance-docs-row" style="display:none;background:var(--r-surface2);border-radius:8px;padding:12px 14px;">
@@ -3469,10 +3473,16 @@ function fmtSlotTime(t) { return t ? t.slice(0, 5) : ''; }
 // occurrence of a recurring slot that repeats every N weeks (weekly=1,
 // fortnightly=2, every 3rd week=3, etc.) rather than every single week.
 function isSlotOccurrenceIncluded(slot, date) {
+  const target = new Date(date);
+  // starts_from is a genuine lower bound (the first real date this slot is
+  // in effect from) — distinct from anchor_date below, which only sets
+  // every-N-week parity and has no lower bound of its own. Checked first,
+  // independently of interval_weeks, since a plain weekly slot can have a
+  // starts_from too.
+  if (slot.starts_from && target < new Date(slot.starts_from + 'T00:00:00Z')) return false;
   if (!slot.interval_weeks || slot.interval_weeks <= 1) return true;
   if (!slot.anchor_date) return true;
   const anchor = new Date(slot.anchor_date + 'T00:00:00Z');
-  const target = new Date(date);
   const msPerWeek = 7 * 24 * 3600 * 1000;
   const weeksBetween = Math.round((target - anchor) / msPerWeek);
   return ((weeksBetween % slot.interval_weeks) + slot.interval_weeks) % slot.interval_weeks === 0;
@@ -3800,6 +3810,7 @@ function openManageMember(id) {
   roomSel.value = '';
   document.getElementById('mm-reserved-start').value = '';
   document.getElementById('mm-reserved-duration').value = '';
+  document.getElementById('mm-reserved-starts-from').value = '';
   toggleMmReservedSlot();
   loadRecurringSlotsForModal(m.id);
 
@@ -3921,7 +3932,7 @@ async function loadRecurringSlotsForModal(memberId) {
       ? '<div style="font-size:12px;color:var(--r-warm-gray);">No slots set yet — add one below.</div>'
       : slots.map(s => `
         <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--r-border);font-size:13px;">
-          <span>${esc(s.day_of_week)}, ${esc(slotDurationLabel(s.time_start, s.time_end) + slotFrequencyLabel(s))}${s.room ? ' · ' + esc(s.room.name) : ''}</span>
+          <span>${esc(s.day_of_week)}, ${esc(slotDurationLabel(s.time_start, s.time_end) + slotFrequencyLabel(s))}${s.room ? ' · ' + esc(s.room.name) : ''}${s.starts_from ? ` <span style="color:var(--r-gold);">(starts ${esc(s.starts_from)})</span>` : ''}</span>
           <button type="button" class="btn btn-danger btn-sm" onclick="deleteRecurringSlot('${s.id}', '${memberId}')">Remove</button>
         </div>`).join('');
   } catch (e) {
@@ -3935,17 +3946,19 @@ async function addRecurringSlot() {
   const room_id = document.getElementById('mm-reserved-room').value || null;
   const time_start = document.getElementById('mm-reserved-start').value;
   const duration = parseInt(document.getElementById('mm-reserved-duration').value, 10);
+  const starts_from = document.getElementById('mm-reserved-starts-from').value || null;
   if (!day_of_week || !time_start || !duration) { showToast('⚠ Pick a day, start time and duration'); return; }
   const time_end = computeSlotEndTime(time_start, duration);
   if (!time_end) { showToast('⚠ That combination isn\'t a valid session — Half day is 8am–1pm or 1pm–6pm, Full day is 8am–6pm'); return; }
   const intervalResult = readAndValidateSlotInterval('mm', day_of_week);
   if (!intervalResult) return;
   try {
-    await api('/recurring-slots', { method: 'POST', body: JSON.stringify({ member_id: memberId, day_of_week, time_start, time_end, room_id, interval_weeks: intervalResult.interval_weeks, anchor_date: intervalResult.anchor_date }) });
+    await api('/recurring-slots', { method: 'POST', body: JSON.stringify({ member_id: memberId, day_of_week, time_start, time_end, room_id, interval_weeks: intervalResult.interval_weeks, anchor_date: intervalResult.anchor_date, starts_from }) });
     document.getElementById('mm-reserved-day').value = '';
     document.getElementById('mm-reserved-room').value = '';
     document.getElementById('mm-reserved-start').value = '';
     document.getElementById('mm-reserved-duration').value = '';
+    document.getElementById('mm-reserved-starts-from').value = '';
     resetSlotIntervalFields('mm');
     await loadRecurringSlotsForModal(memberId);
     showToast('✓ Slot added');
@@ -4170,13 +4183,13 @@ function renderMyBookings() {
     if (needsDD && !alreadyShowingPaymentBanner) {
       const isReservedTier = ['core', 'resident'].includes(m.plan_tier);
       // In progress (submitted to the bank, awaiting activation — this can
-      // genuinely take about a business day) reads very differently from
+      // genuinely take up to 5 days) reads very differently from
       // never started — don't tell someone who's already done it that
       // nothing's set up.
       const inProgress = ['pending_customer_approval', 'pending_submission', 'submitted'].includes(m.mandate_status);
       const headline = inProgress ? '⏳ Direct Debit being processed' : '⚠ Direct Debit not set up';
       const body = inProgress
-        ? `Submitted and waiting on your bank — usually active within about 1 business day.${isReservedTier ? ' Your recurring slot is provisionally held in the meantime.' : ''}`
+        ? `Submitted and waiting on your bank — can take up to 5 days to process.${isReservedTier ? ' Your recurring slot is provisionally held in the meantime.' : ''}`
         : (isReservedTier ? 'Your recurring slot is provisionally held, but not confirmed on our side until this is done.' : 'Needed before your session charges can be collected automatically.');
       ddBannerEl.style.display = 'block';
       ddBannerEl.innerHTML = `
@@ -5652,7 +5665,7 @@ function showOnboardingDone() {
   const ddOutstanding = m && ['community', 'flex', 'core', 'resident'].includes(m.plan_tier) && m.mandate_status !== 'active';
   const ddInProgress = m && ['pending_customer_approval', 'pending_submission', 'submitted'].includes(m.mandate_status);
   const ddNote = ddInProgress
-    ? 'Direct Debit submitted and being processed by your bank — usually active within about 1 business day.'
+    ? 'Direct Debit submitted and being processed by your bank — can take up to 5 days to process.'
     : 'Direct Debit still needs setting up. You can do this any time from My Profile.';
   // Team review 26 Aug 2026: mention the compliance-doc requirement here
   // too, "so it's visible right when someone finishes signing up" — but
@@ -7021,8 +7034,8 @@ function renderProfilePage() {
     const statusLabels = {
       active: '<span style="color:var(--r-green, #4a7c59);">✓ Active</span> — your Direct Debit is set up.',
       pending_customer_approval: 'Setup started — waiting on your bank authorisation.',
-      pending_submission: 'Being processed by your bank — usually active within about 1 business day.',
-      submitted: 'Submitted to your bank — usually active within about 1 business day.',
+      pending_submission: 'Being processed by your bank — can take up to 5 days to process.',
+      submitted: 'Submitted to your bank — can take up to 5 days to process.',
       failed: '<span style="color:var(--r-red);">⚠ Setup failed</span> — please try again.',
       cancelled: 'Cancelled. Set up Direct Debit again to enable billing.',
       expired: '<span style="color:var(--r-red);">⚠ Expired</span> — please set up Direct Debit again.',
@@ -7534,7 +7547,7 @@ function showPaymentRequiredModal(booking, otherUnpaidCount) {
   const roomName = booking.room ? booking.room.name : 'this room';
   document.getElementById('payment-required-body').innerHTML = `
     <p style="margin:0 0 14px;font-size:14px;">Your booking for <strong>${esc(roomName)}</strong> is confirmed, but this room can't be used until payment is made — <strong>${amount}</strong> is due${otherUnpaidCount > 0 ? ` (plus ${otherUnpaidCount} more booking${otherUnpaidCount > 1 ? 's' : ''} awaiting payment)` : ''}.</p>
-    <p style="margin:0 0 4px;font-size:13px;color:var(--r-warm-gray);">Pay instantly via your banking app (usually seconds, funds same/next business day), or set up Direct Debit for future bookings to be charged automatically — but Direct Debit itself takes a bank authorisation step and won't cover this booking today.</p>
+    <p style="margin:0 0 4px;font-size:13px;color:var(--r-warm-gray);">Pay instantly via your banking app (usually seconds, funds same/next business day), or set up Direct Debit for future bookings to be charged automatically — but Direct Debit itself takes a bank authorisation step (up to 5 days) and won't cover this booking today.</p>
   `;
   document.getElementById('payment-required-booking-id').value = booking.id;
   openModal('payment-required-modal');
