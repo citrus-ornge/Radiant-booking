@@ -160,8 +160,33 @@ module.exports = async (req, res) => {
 
     const includedInMembership = await isIncludedInMembershipFee(supabase, tierMember, recurringSlots, { room_id, start_time });
 
+    // Rosie, 4 Sep 2026: Direct Debit can now take up to 5 days to process.
+    // A Core/Resident member's first-ever session would normally be free
+    // (covered by their monthly subscription) — but if that first session
+    // is happening less than a week from now, the mandate may well not
+    // have activated in time to be collecting anything yet. Rather than
+    // let that session go uncharged on the strength of a subscription that
+    // might not exist yet, treat it as a genuine chargeable session, same
+    // as booking outside an agreed slot would be. Only affects the FIRST
+    // booking ever — once they have any booking on record, normal
+    // membership-inclusion rules apply as usual.
+    let firstBookingChargeOverride = false;
+    if (['core', 'resident'].includes(tierMember.plan_tier) && includedInMembership) {
+      const daysUntilSession = (new Date(start_time) - new Date()) / 86400000;
+      if (daysUntilSession < 7) {
+        const { count: priorBookingCount, error: priorErr } = await supabase
+          .from('bookings')
+          .select('id', { count: 'exact', head: true })
+          .eq('member_id', tierMember.id || member_id)
+          .neq('status', 'cancelled');
+        if (priorErr) return res.status(500).json({ error: priorErr.message });
+        if (!priorBookingCount || priorBookingCount === 0) firstBookingChargeOverride = true;
+      }
+    }
+
     const needsCharge = is_topup || ['flex', 'community'].includes(tierMember.plan_tier)
-      || (['core', 'resident'].includes(tierMember.plan_tier) && !includedInMembership);
+      || (['core', 'resident'].includes(tierMember.plan_tier) && !includedInMembership)
+      || firstBookingChargeOverride;
 
     if (needsCharge) {
       const { data: pricingRoom } = await supabase.from('rooms').select('pricing_category').eq('id', room_id).maybeSingle();
