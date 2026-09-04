@@ -3929,16 +3929,62 @@ async function loadRecurringSlotsForModal(memberId) {
   try {
     const result = await api(`/recurring-slots?member_id=${memberId}`);
     const slots = result.slots || [];
-    container.innerHTML = slots.length === 0
-      ? '<div style="font-size:12px;color:var(--r-warm-gray);">No slots set yet — add one below.</div>'
-      : slots.map(s => `
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--r-border);font-size:13px;">
-          <span>${esc(s.day_of_week)}, ${esc(slotDurationLabel(s.time_start, s.time_end) + slotFrequencyLabel(s))}${s.room ? ' · ' + esc(s.room.name) : ''}${s.starts_from ? ` <span style="color:var(--r-gold);">(starts ${esc(s.starts_from)})</span>` : ''}</span>
-          <button type="button" class="btn btn-danger btn-sm" onclick="deleteRecurringSlot('${s.id}', '${memberId}')">Remove</button>
-        </div>`).join('');
+    if (slots.length === 0) {
+      container.innerHTML = '<div style="font-size:12px;color:var(--r-warm-gray);">No slots set yet — add one below.</div>';
+      return;
+    }
+    const tier = document.getElementById('mm-plan-tier').value;
+    const breakdown = calculateFeeBreakdownDisplay(tier, slots);
+    const feeHtml = breakdown
+      ? `<div style="font-size:12.5px;background:var(--r-surface);border-radius:6px;padding:8px 10px;margin-bottom:10px;">
+          ${breakdown.lines.map(l => `<div>${esc(l.text)}</div>`).join('')}
+          <div style="font-weight:600;margin-top:4px;border-top:1px solid var(--r-border);padding-top:4px;">£${(breakdown.monthlyPence / 100).toFixed(2)}/month total</div>
+        </div>`
+      : '';
+    container.innerHTML = feeHtml + slots.map(s => {
+      const nextDates = nextSlotOccurrenceDates(s, 3);
+      const datesLabel = nextDates.length > 0
+        ? `<div style="font-size:11.5px;color:var(--r-warm-gray);margin-top:2px;">Next: ${nextDates.join(', ')}</div>`
+        : '<div style="font-size:11.5px;color:var(--r-red);margin-top:2px;">⚠ No upcoming dates found — check bookings exist (Sync bookings below)</div>';
+      return `
+        <div style="padding:6px 0;border-bottom:1px solid var(--r-border);font-size:13px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <span>${esc(s.day_of_week)}, ${esc(slotDurationLabel(s.time_start, s.time_end) + slotFrequencyLabel(s))}${s.room ? ' · ' + esc(s.room.name) : ''}${s.starts_from ? ` <span style="color:var(--r-gold);">(starts ${esc(s.starts_from)})</span>` : ''}</span>
+            <button type="button" class="btn btn-danger btn-sm" onclick="deleteRecurringSlot('${s.id}', '${memberId}')">Remove</button>
+          </div>
+          ${datesLabel}
+        </div>`;
+    }).join('');
   } catch (e) {
     container.innerHTML = `<div style="font-size:12px;color:var(--r-red);">⚠ ${esc(e.message)}</div>`;
   }
+}
+
+// Real, actual calendar dates for a slot's next few occurrences — not
+// just the pattern description ("every 2 weeks"), the literal dates that
+// pattern lands on, respecting starts_from and anchor_date parity exactly
+// like isSlotOccurrenceIncluded does. Distinct from whether a real booking
+// row exists for that date (see api/_lib/recurringBookingSync.js) — this
+// is just "what dates would this slot's pattern include", for admin to
+// see at a glance without cross-checking the calendar separately.
+function nextSlotOccurrenceDates(slot, count) {
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const targetDayIdx = dayNames.indexOf(slot.day_of_week);
+  if (targetDayIdx < 0) return [];
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const cursor = new Date(today);
+  const offset = (targetDayIdx - cursor.getUTCDay() + 7) % 7;
+  cursor.setUTCDate(cursor.getUTCDate() + offset);
+  const dates = [];
+  // Sanity cap (2 years of weeks) so a data issue can't spin this forever.
+  for (let i = 0; i < 104 && dates.length < count; i++, cursor.setUTCDate(cursor.getUTCDate() + 7)) {
+    const dateStr = cursor.toISOString().slice(0, 10);
+    if (isSlotOccurrenceIncluded(slot, dateStr)) {
+      dates.push(cursor.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }));
+    }
+  }
+  return dates;
 }
 
 async function addRecurringSlot() {

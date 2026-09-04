@@ -33,7 +33,7 @@ module.exports = async (req, res) => {
     }
     const { data, error } = await supabase
       .from('member_recurring_slots')
-      .select('id, day_of_week, time_start, time_end, room_id, interval_weeks, anchor_date, starts_from, room:rooms(id, name)')
+      .select('id, day_of_week, time_start, time_end, room_id, interval_weeks, anchor_date, starts_from, room:rooms(id, name, pricing_category)')
       .eq('member_id', memberId)
       .order('day_of_week');
     if (error) return res.status(500).json({ error: error.message });
@@ -103,7 +103,7 @@ module.exports = async (req, res) => {
     const { data: slot, error } = await supabase
       .from('member_recurring_slots')
       .insert({ member_id, day_of_week, time_start, time_end, room_id: room_id || null, interval_weeks: intervalWeeksNum, anchor_date: anchorDateValue, starts_from: startsFromValue })
-      .select('id, day_of_week, time_start, time_end, room_id, interval_weeks, anchor_date, starts_from, room:rooms(id, name)')
+      .select('id, day_of_week, time_start, time_end, room_id, interval_weeks, anchor_date, starts_from, room:rooms(id, name, pricing_category)')
       .single();
     if (error) return res.status(500).json({ error: error.message });
 
